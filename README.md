@@ -98,8 +98,10 @@ elsewhere. Restart the server after each dashboard build (asset names change).
 
 ## Plans, free trial and WhatsApp
 
-Every new company starts on a **free trial**: 5 days, 200 emails and 100 WhatsApp
-messages (`TRIAL_DAYS`, `TRIAL_EMAILS`, `TRIAL_WHATSAPP_MESSAGES`). When it ends, sending
+Every new company starts on a **free trial**: 5 days, 200 emails, and up to 100 WhatsApp
+messages a day (`TRIAL_DAYS`, `TRIAL_EMAILS`, `TRIAL_WHATSAPP_PER_DAY`). A WhatsApp campaign
+bigger than a day's allowance continues the next day; one that couldn't finish before the
+trial ends is refused up front. When it ends, sending
 stops on its own: WhatsApp is unlinked and its keys deleted, scheduled campaigns are
 cancelled, automations paused, and the company sees "Your free trial has ended".
 Their data stays. A reminder goes out the day before.

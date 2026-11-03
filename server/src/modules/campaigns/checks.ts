@@ -6,7 +6,7 @@ import { isDomainReady } from '../domains/service.js';
 import { CORE_KEYS, findUnknownTags } from '../email/render.js';
 import { senderUsageLast24h } from '../mailboxes/service.js';
 import { monthlyUsage } from '../sending/start-campaign.js';
-import { trialEnded, whatsappAllowanceLeft, whatsappWebAllowed } from '../plans/entitlements.js';
+import { trialEnded, whatsappTrialCapacity, whatsappWebAllowed } from '../plans/entitlements.js';
 
 export type CheckLevel = 'ok' | 'warning' | 'error';
 export interface Check {
@@ -180,7 +180,7 @@ export async function whatsappChecks(input: {
   if (input.tenant.status !== 'ACTIVE') add({ id: 'account', level: 'error', title: 'Sending is paused for your account.', note: input.tenant.pausedReason ?? undefined });
   if (trialEnded(input.tenant)) add({ id: 'trial', level: 'error', title: 'Your free trial has ended.', note: 'Upgrade to keep sending. Your contacts and messages are safe.' });
   else if (!whatsappWebAllowed(input.tenant)) add({ id: 'feature', level: 'error', title: 'WhatsApp sending isn’t available on this account.' });
-  const allowance = await whatsappAllowanceLeft(input.tenant);
+  const cap = await whatsappTrialCapacity(input.tenant);
 
   const session = await getSession(input.tenantId);
   if (session.status === 'CONNECTED') add({ id: 'sender', level: 'ok', title: `Sending from ${session.phone ?? 'your WhatsApp'}.` });
@@ -202,16 +202,20 @@ export async function whatsappChecks(input: {
   if (!recipients) add({ id: 'audience', level: 'error', title: 'Nobody in this audience agreed to WhatsApp messages.', note: 'Only contacts marked “Agreed to WhatsApp” with a phone number get WhatsApp campaigns.' });
   else {
     add({ id: 'audience', level: 'ok', title: `${recipients.toLocaleString('en-IN')} recipient${recipients > 1 ? 's' : ''}.`, note: 'Only contacts who agreed to WhatsApp messages.' });
-    if (allowance !== null) {
-      if (recipients > allowance) add({ id: 'trial_limit', level: 'error', title: `Your trial has ${allowance} WhatsApp message${allowance === 1 ? '' : 's'} left.`, note: `This campaign needs ${recipients.toLocaleString('en-IN')}. Choose a smaller list, or upgrade.` });
-      else add({ id: 'trial_limit', level: 'ok', title: `Trial: ${allowance - recipients} WhatsApp messages left after this.`, note: 'The free trial includes a small number of messages to try things out.' });
+    if (cap !== null) {
+      if (recipients > cap.beforeTrialEnds) {
+        add({ id: 'trial_limit', level: 'error', title: `Too many for the rest of your trial.`, note: `The trial sends up to ${cap.perDay} WhatsApp messages a day, so ${cap.beforeTrialEnds} more fit before it ends. This campaign needs ${recipients.toLocaleString('en-IN')}. Choose a smaller list, or upgrade.` });
+      } else {
+        add({ id: 'trial_limit', level: 'ok', title: `Trial: up to ${cap.perDay} WhatsApp messages a day.`, note: recipients > cap.leftToday ? `${cap.leftToday} go out today; the rest continue tomorrow.` : `${cap.leftToday} left today.` });
+      }
     }
     const usage = await whatsappUsageLast24h(input.tenantId);
-    const today = Math.max(0, session.dailyLimit - usage.sent);
+    const dailyLimit = Math.min(session.dailyLimit, cap?.perDay ?? Infinity);
+    const today = Math.max(0, dailyLimit - usage.sent);
     const minutes = Math.ceil((Math.min(recipients, today) * session.intervalSeconds) / 60);
     if (recipients > today) {
-      const days = Math.ceil((recipients - today) / session.dailyLimit) + 1;
-      add({ id: 'daily_limit', level: 'warning', title: `This will take about ${days} days to send.`, note: `Your number sends up to ${session.dailyLimit} a day, one every ${session.intervalSeconds} seconds, to lower the risk of a ban.` });
+      const days = Math.ceil((recipients - today) / dailyLimit) + 1;
+      add({ id: 'daily_limit', level: 'warning', title: `This will take about ${days} days to send.`, note: `Your number sends up to ${dailyLimit} a day, one every ${session.intervalSeconds} seconds, to lower the risk of a ban.` });
     } else {
       add({ id: 'pace', level: 'ok', title: `Takes about ${minutes < 60 ? `${Math.max(1, minutes)} min` : `${Math.round(minutes / 6) / 10} hours`} to send.`, note: `One message every ${session.intervalSeconds} seconds.` });
     }

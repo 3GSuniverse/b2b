@@ -1,4 +1,4 @@
-import { and, count, eq, inArray } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { env } from '../../config/env.js';
 import { messages, type tenants } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
@@ -23,19 +23,33 @@ export function whatsappWebAllowed(t: TenantPlanFields, now = new Date()) {
   return trialActive(t, now) || t.whatsappWebEnabled;
 }
 
-/** WhatsApp messages a trial company has used: queued ones count, so a big campaign can't overshoot. */
-export async function trialWhatsAppUsed(tenantId: string) {
-  const [row] = await db
-    .select({ n: count() })
-    .from(messages)
-    .where(and(eq(messages.tenantId, tenantId), eq(messages.channel, 'WHATSAPP'), inArray(messages.status, ['QUEUED', 'SENT', 'DELIVERED'])));
-  return row?.n ?? 0;
+/** During a trial a number sends at most this many WhatsApp messages a day; otherwise null (no trial cap). */
+export function trialWhatsAppPerDay(t: TenantPlanFields) {
+  return t.plan === 'TRIAL' && !t.whatsappWebEnabled ? env.TRIAL_WHATSAPP_PER_DAY : null;
 }
 
-/** How many WhatsApp messages are left, or null when there's no trial cap. */
-export async function whatsappAllowanceLeft(t: TenantPlanFields & { id: string }) {
-  if (t.plan !== 'TRIAL' || t.whatsappWebEnabled) return null;
-  return Math.max(0, env.TRIAL_WHATSAPP_MESSAGES - (await trialWhatsAppUsed(t.id)));
+async function whatsappCounts(tenantId: string, now: Date) {
+  const since = new Date(now.getTime() - 86_400_000);
+  const [row] = await db
+    .select({
+      sentToday: sql<number>`count(*) filter (where ${messages.sentAt} >= ${since.toISOString()}::timestamptz)::int`,
+      pending: sql<number>`count(*) filter (where ${messages.status} = 'QUEUED')::int`,
+    })
+    .from(messages)
+    .where(and(eq(messages.tenantId, tenantId), eq(messages.channel, 'WHATSAPP')));
+  return { sentToday: row?.sentToday ?? 0, pending: row?.pending ?? 0 };
+}
+
+/**
+ * How many more WhatsApp messages a trial can still get out before it ends, at the daily cap:
+ * per day × days left, minus today's sends and anything already waiting. Null when there's no trial cap.
+ */
+export async function whatsappTrialCapacity(t: TenantPlanFields & { id: string }, now = new Date()) {
+  const perDay = trialWhatsAppPerDay(t);
+  if (perDay === null) return null;
+  const { sentToday, pending } = await whatsappCounts(t.id, now);
+  const days = Math.max(0, Math.ceil(((t.trialEndsAt?.getTime() ?? now.getTime()) - now.getTime()) / 86_400_000));
+  return { perDay, sentToday, pending, leftToday: Math.max(0, perDay - sentToday), beforeTrialEnds: Math.max(0, perDay * days - sentToday - pending) };
 }
 
 export function daysLeft(t: TenantPlanFields, now = new Date()) {
@@ -51,8 +65,7 @@ export async function planDto(t: TenantPlanFields & { id: string }) {
     trialEndsAt: t.trialEndsAt,
     trialEnded: trialEnded(t, now),
     daysLeft: daysLeft(t, now),
-    whatsapp:
-      t.plan === 'TRIAL' ? { limit: env.TRIAL_WHATSAPP_MESSAGES, used: await trialWhatsAppUsed(t.id) } : null,
+    whatsapp: t.plan === 'TRIAL' ? { perDay: env.TRIAL_WHATSAPP_PER_DAY, sentToday: (await whatsappCounts(t.id, now)).sentToday } : null,
     emailLimit: t.plan === 'TRIAL' ? env.TRIAL_EMAILS : null,
   };
 }

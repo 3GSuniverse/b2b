@@ -206,7 +206,7 @@ export function TrialBanner() {
       </div>
     );
   }
-  const waLeft = p.whatsapp ? Math.max(0, p.whatsapp.limit - p.whatsapp.used) : null;
+  const waLeft = p.whatsapp ? Math.max(0, p.whatsapp.perDay - p.whatsapp.sentToday) : null;
   const urgent = (p.daysLeft ?? 9) <= 1;
   return (
     <div className={cn('flex flex-wrap items-center gap-x-5 gap-y-2 rounded-[14px] border px-4 py-2.5 text-[13px]', urgent ? 'border-[#f3c9a8] bg-warm-soft text-warm-strong' : 'border-line bg-surface text-ink-2')}>
@@ -216,7 +216,7 @@ export function TrialBanner() {
       </span>
       {waLeft !== null && (
         <span className="tnum">
-          {n(waLeft)} of {n(p.whatsapp!.limit)} WhatsApp messages left
+          {n(waLeft)} of {n(p.whatsapp!.perDay)} WhatsApp messages left today
         </span>
       )}
       {p.emailLimit !== null && <span className="tnum">{n(p.emailLimit)} emails included</span>}

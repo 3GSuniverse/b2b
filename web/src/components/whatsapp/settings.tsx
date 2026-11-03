@@ -123,13 +123,13 @@ export function WhatsAppSettings() {
       {trial?.whatsapp && (
         <div className="flex flex-col gap-2 rounded-[14px] border border-line bg-surface px-4 py-3.5">
           <div className="flex items-baseline justify-between gap-3 text-[13px]">
-            <span className="font-semibold">Trial messages</span>
+            <span className="font-semibold">Free trial: up to {n(trial.whatsapp.perDay)} WhatsApp messages a day</span>
             <span className="tnum text-muted">
-              {n(trial.whatsapp.used)} of {n(trial.whatsapp.limit)} used
+              {n(trial.whatsapp.sentToday)} sent in the last 24 hours
             </span>
           </div>
-          <ProgressBar value={trial.whatsapp.used} max={trial.whatsapp.limit} label="Trial WhatsApp messages used" tone={trial.whatsapp.used / trial.whatsapp.limit > 0.8 ? 'warm' : 'accent'} />
-          <span className="text-xs text-muted">The trial includes a few WhatsApp messages to try it with real customers. Each number can be used for one trial. When the trial ends, the number is unlinked automatically.</span>
+          <ProgressBar value={trial.whatsapp.sentToday} max={trial.whatsapp.perDay} label="Trial WhatsApp messages sent today" tone={trial.whatsapp.sentToday / trial.whatsapp.perDay > 0.8 ? 'warm' : 'accent'} />
+          <span className="text-xs text-muted">Bigger campaigns continue the next day by themselves, until the trial ends. Each number can be used for one trial. When the trial ends, the number is unlinked automatically.</span>
         </div>
       )}
       <RiskNote />
@@ -181,8 +181,8 @@ export function WhatsAppSettings() {
       <Panel className="flex flex-col gap-5 p-5 sm:p-6">
         <PanelHeader title="Sending pace" description="Slower is safer. Campaigns bigger than the daily limit continue the next day by themselves." />
         <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="Messages per day" hint="Between 20 and 500. New numbers: start around 100." error={errOf('dailyLimit')}>
-            {(p) => <Input {...p} type="number" min={20} max={500} value={limits.dailyLimit} onChange={(e) => setLimits({ ...limits, dailyLimit: Number(e.target.value) })} />}
+          <Field label="Messages per day" hint={wa.trialPerDay ? `Up to ${wa.trialPerDay} during the free trial.` : 'Between 20 and 500. New numbers: start around 100.'} error={errOf('dailyLimit')}>
+            {(p) => <Input {...p} type="number" min={20} max={wa.trialPerDay ?? 500} value={limits.dailyLimit} onChange={(e) => setLimits({ ...limits, dailyLimit: Number(e.target.value) })} />}
           </Field>
           <Field label="Seconds between messages" hint="At least 6. We recommend 10 or more." error={errOf('intervalSeconds')}>
             {(p) => <Input {...p} type="number" min={6} max={120} value={limits.intervalSeconds} onChange={(e) => setLimits({ ...limits, intervalSeconds: Number(e.target.value) })} />}

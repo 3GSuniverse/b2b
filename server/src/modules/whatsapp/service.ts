@@ -8,7 +8,7 @@ import { notify } from '../notifications/service.js';
 import { bumpCounter } from '../sending/counters.js';
 import { DeferSend, finalizeMessage, maybeCompleteCampaign, type SendOutcome } from '../sending/send-message.js';
 import { getQr } from './bus.js';
-import { trialEnded, whatsappWebAllowed } from '../plans/entitlements.js';
+import { trialEnded, trialWhatsAppPerDay, whatsappWebAllowed } from '../plans/entitlements.js';
 import { getWhatsAppGateway, WhatsAppError, type WhatsAppGateway } from './gateway.js';
 
 /** WhatsApp's own limit for one text message. */
@@ -43,13 +43,16 @@ export async function whatsappUsageLast24h(tenantId: string, now = new Date()) {
 
 export async function whatsappStatusDto(tenantId: string) {
   const s = await getSession(tenantId);
+  const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+  const trialPerDay = tenant ? trialWhatsAppPerDay(tenant) : null;
   const usage = await whatsappUsageLast24h(tenantId);
   const qr = s.status === 'CONNECTING' ? await getQr(tenantId) : null;
   return {
     status: s.status,
     phone: s.phone,
     displayName: s.displayName,
-    dailyLimit: s.dailyLimit,
+    dailyLimit: Math.min(s.dailyLimit, trialPerDay ?? Infinity),
+    trialPerDay,
     intervalSeconds: s.intervalSeconds,
     sentLast24h: usage.sent,
     lastError: s.lastError,
@@ -240,9 +243,10 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
 
   // Pacing: one message every N seconds per number, and a daily cap
   const usage = await whatsappUsageLast24h(msg.tenantId, now);
-  if (usage.sent >= session.dailyLimit) {
+  const dailyLimit = Math.min(session.dailyLimit, trialWhatsAppPerDay(msg.tenant) ?? Infinity);
+  if (usage.sent >= dailyLimit) {
     const until = new Date((usage.oldest?.getTime() ?? now.getTime()) + 86_400_000 + 60_000);
-    throw new DeferSend(until, `Daily WhatsApp limit of ${session.dailyLimit} reached`);
+    throw new DeferSend(until, `Daily WhatsApp limit of ${dailyLimit} reached`);
   }
   if (usage.last && now.getTime() - usage.last.getTime() < session.intervalSeconds * 1000) {
     throw new DeferSend(new Date(usage.last.getTime() + session.intervalSeconds * 1000), 'pacing');

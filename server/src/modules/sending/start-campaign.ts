@@ -3,7 +3,7 @@ import { db } from '../../lib/db.js';
 import { campaigns, messages, senders } from '../../db/schema.js';
 import { enqueueEmails, enqueueWhatsApp, type EnqueueFn } from '../../queues/index.js';
 import { countEmailAudience, countWhatsAppAudience, iterateEmailAudience, iterateWhatsAppAudience } from '../audience/resolve.js';
-import { trialEnded, whatsappAllowanceLeft, whatsappWebAllowed } from '../plans/entitlements.js';
+import { trialEnded, whatsappTrialCapacity, whatsappWebAllowed } from '../plans/entitlements.js';
 import { whatsappSessions } from '../../db/schema.js';
 import { isDomainReady } from '../domains/service.js';
 
@@ -161,11 +161,15 @@ export async function startWhatsAppCampaign(campaignId: string, opts: { enqueue?
   const session = await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.tenantId, campaign.tenantId) });
   if (session?.status !== 'CONNECTED') throw new CampaignError('Link your WhatsApp number first, in Settings → WhatsApp', 'whatsapp_not_ready');
   if (!campaign.text?.trim()) throw new CampaignError('The message is empty', 'no_content');
-  const left = await whatsappAllowanceLeft(campaign.tenant);
-  if (left !== null) {
+  // A trial sends at most N a day; refuse a campaign that couldn't finish before the trial ends
+  const cap = await whatsappTrialCapacity(campaign.tenant, now);
+  if (cap !== null) {
     const needed = await countWhatsAppAudience(db, campaign.tenantId, campaign.audience);
-    if (needed > left) {
-      throw new CampaignError(`Your trial has ${left} WhatsApp message${left === 1 ? '' : 's'} left and this needs ${needed}. Choose a smaller list.`, 'trial_limit');
+    if (needed > cap.beforeTrialEnds) {
+      throw new CampaignError(
+        `Your trial sends up to ${cap.perDay} WhatsApp messages a day and can fit ${cap.beforeTrialEnds} more before it ends. This needs ${needed}. Choose a smaller list.`,
+        'trial_limit',
+      );
     }
   }
 

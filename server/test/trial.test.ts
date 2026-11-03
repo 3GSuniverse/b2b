@@ -8,7 +8,9 @@ import { trialActive, whatsappWebAllowed } from '../src/modules/plans/entitlemen
 import { runTrialLifecycle } from '../src/modules/plans/trial-lifecycle.js';
 import { processSendJob } from '../src/modules/sending/send-message.js';
 import { startCampaign } from '../src/modules/sending/start-campaign.js';
-import { onConnected } from '../src/modules/whatsapp/service.js';
+import { onConnected, processWhatsAppJob } from '../src/modules/whatsapp/service.js';
+import { MemoryWhatsAppGateway } from '../src/modules/whatsapp/gateway.js';
+import { DeferSend } from '../src/modules/sending/send-message.js';
 import { MemoryEmailProvider } from '../src/modules/email/memory-provider.js';
 import { api, signup } from './api-helpers.js';
 import { makeCampaign, makeContact, makeTenant, resetDb } from './helpers.js';
@@ -33,14 +35,14 @@ async function trialCompany(endsInMs = 3 * DAY) {
 }
 
 describe('a new company starts on a 5-day trial', () => {
-  it('with 200 emails, 100 WhatsApp messages and WhatsApp included', async () => {
+  it('with 200 emails and up to 100 WhatsApp messages a day', async () => {
     const { cookie, json } = await signup(app);
     const t = await db.query.tenants.findFirst({ where: eq(tenants.id, json.tenant.id) });
     expect(t).toMatchObject({ plan: 'TRIAL', monthlyQuota: 200 });
     expect(t!.trialEndsAt!.getTime() - Date.now()).toBeGreaterThan(4.9 * DAY);
     const me = (await api(app, cookie).get('/api/auth/me')).json().tenant;
     expect(me.features.whatsapp).toBe(true);
-    expect(me.plan).toMatchObject({ plan: 'TRIAL', trialEnded: false, daysLeft: 5, whatsapp: { limit: 100, used: 0 }, emailLimit: 200 });
+    expect(me.plan).toMatchObject({ plan: 'TRIAL', trialEnded: false, daysLeft: 5, whatsapp: { perDay: 100, sentToday: 0 }, emailLimit: 200 });
   });
 
   it('only paid companies (or the operator override) lose or keep WhatsApp Web accordingly', () => {
@@ -54,17 +56,41 @@ describe('a new company starts on a 5-day trial', () => {
   });
 });
 
-describe('the trial WhatsApp allowance', () => {
-  it('refuses a campaign bigger than what’s left, before anything is queued', async () => {
-    const { tenant } = await trialCompany();
+describe('the trial WhatsApp allowance: 100 a day', () => {
+  async function usedToday(tenantId: string, n: number) {
+    const [old] = await db.insert(campaigns).values({ tenantId, channel: 'WHATSAPP', name: 'old', status: 'SENT', text: 'hi' }).returning();
+    await db.insert(messages).values(Array.from({ length: n }, (_, i) => ({ tenantId, campaignId: old!.id, channel: 'WHATSAPP' as const, toAddress: `+9180000${String(i).padStart(5, '0')}`, status: 'SENT' as const, sentAt: new Date() })));
+  }
+
+  it('refuses a campaign that couldn’t finish before the trial ends', async () => {
+    const { tenant } = await trialCompany(20 * 3_600_000); // last day
     await db.insert(whatsappSessions).values({ tenantId: tenant.id, status: 'CONNECTED', phone: '+919000000001' });
-    // 98 already used in an earlier campaign
-    const [old] = await db.insert(campaigns).values({ tenantId: tenant.id, channel: 'WHATSAPP', name: 'old', status: 'SENT', text: 'hi' }).returning();
-    await db.insert(messages).values(Array.from({ length: 98 }, (_, i) => ({ tenantId: tenant.id, campaignId: old!.id, channel: 'WHATSAPP' as const, toAddress: `+9180000${String(i).padStart(5, '0')}`, status: 'SENT' as const, sentAt: new Date() })));
+    await usedToday(tenant.id, 98);
     for (let i = 0; i < 3; i++) await makeContact(tenant.id, { phone: `+91900000001${i}`, whatsappStatus: 'SUBSCRIBED' });
     const [c] = await db.insert(campaigns).values({ tenantId: tenant.id, channel: 'WHATSAPP', name: 'new', text: 'Hi' }).returning();
-    await expect(startCampaign(c!.id, { enqueueWhatsApp: noQueue })).rejects.toThrow('Your trial has 2 WhatsApp messages left and this needs 3');
+    await expect(startCampaign(c!.id, { enqueueWhatsApp: noQueue })).rejects.toThrow('can fit 2 more before it ends. This needs 3');
     expect((await db.query.campaigns.findFirst({ where: eq(campaigns.id, c!.id) }))!.status).toBe('DRAFT');
+  });
+
+  it('with days left, the same campaign is fine: today’s cap is hit, the rest goes tomorrow', async () => {
+    const { tenant } = await trialCompany(3 * DAY);
+    await db.insert(whatsappSessions).values({ tenantId: tenant.id, status: 'CONNECTED', phone: '+919000000001', dailyLimit: 200, intervalSeconds: 0 });
+    await usedToday(tenant.id, 100);
+    await makeContact(tenant.id, { phone: '+919000000010', whatsappStatus: 'SUBSCRIBED' });
+    const [c] = await db.insert(campaigns).values({ tenantId: tenant.id, channel: 'WHATSAPP', name: 'new', text: 'Hi' }).returning();
+    await startCampaign(c!.id, { enqueueWhatsApp: noQueue });
+    const [m] = await db.select().from(messages).where(eq(messages.campaignId, c!.id));
+    // the number's own setting says 200, but the trial caps it at 100
+    const err = await processWhatsAppJob(m!.id, new MemoryWhatsAppGateway()).catch((e) => e);
+    expect(err).toBeInstanceOf(DeferSend);
+    expect(err.message).toBe('Daily WhatsApp limit of 100 reached');
+  });
+
+  it('a trial can’t raise its own daily limit above 100', async () => {
+    const { cookie } = await signup(app);
+    const c = api(app, cookie);
+    expect((await c.patch('/api/whatsapp', { dailyLimit: 150 })).json().details.fields.dailyLimit).toBe('The free trial allows up to 100 a day');
+    expect((await c.get('/api/whatsapp')).json().whatsapp).toMatchObject({ dailyLimit: 100, trialPerDay: 100 });
   });
 });
 

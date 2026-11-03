@@ -1,9 +1,10 @@
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { auditLogs, whatsappSessions } from '../../db/schema.js';
+import { auditLogs, tenants, whatsappSessions } from '../../db/schema.js';
+import { trialWhatsAppPerDay } from '../plans/entitlements.js';
 import { db } from '../../lib/db.js';
-import { parseBody } from '../../lib/http.js';
+import { AppError, parseBody } from '../../lib/http.js';
 import { requireAuth, requireRole, tenantOf } from '../auth/guard.js';
 import { publishCommand } from './bus.js';
 import { assertEnabled, DAILY_LIMIT_RANGE, getSession, whatsappStatusDto } from './service.js';
@@ -45,6 +46,11 @@ export async function whatsappRoutes(app: FastifyInstance) {
     const tenantId = tenantOf(req);
     await assertEnabled(tenantId);
     const b = parseBody(settingsBody, req.body);
+    const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+    const perDay = tenant ? trialWhatsAppPerDay(tenant) : null;
+    if (perDay !== null && b.dailyLimit !== undefined && b.dailyLimit > perDay) {
+      throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { dailyLimit: `The free trial allows up to ${perDay} a day` } });
+    }
     await getSession(tenantId);
     const patch = Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined));
     if (Object.keys(patch).length) await db.update(whatsappSessions).set(patch).where(eq(whatsappSessions.tenantId, tenantId));

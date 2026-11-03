@@ -50,7 +50,7 @@ describe('WhatsApp Web is only for free trials', () => {
   it('when on: status, start linking, daily limit settings', async () => {
     const { cookie } = await signup(app); // new companies are on a trial, which includes WhatsApp
     const c = api(app, cookie);
-    expect((await c.get('/api/whatsapp')).json().whatsapp).toMatchObject({ status: 'DISCONNECTED', dailyLimit: 200, intervalSeconds: 10, qr: null });
+    expect((await c.get('/api/whatsapp')).json().whatsapp).toMatchObject({ status: 'DISCONNECTED', dailyLimit: 100, intervalSeconds: 10, qr: null }); // trial: 100 a day
     expect((await c.post('/api/whatsapp/connect')).json().whatsapp.status).toBe('CONNECTING');
     expect((await c.patch('/api/whatsapp', { dailyLimit: 5000 })).statusCode).toBe(400);
     expect((await c.patch('/api/whatsapp', { dailyLimit: 100, intervalSeconds: 15 })).json().whatsapp).toMatchObject({ dailyLimit: 100, intervalSeconds: 15 });
