@@ -19,6 +19,11 @@ const schema = z.object({
   SES_CONFIGURATION_SET: z.string().default('sandesh-events'),
 
   SEND_RATE_PER_SECOND: z.coerce.number().positive().default(1),
+
+  // "ses" sends for real; "log" keeps emails in memory and prints them (dev/tests)
+  EMAIL_PROVIDER: z.enum(['ses', 'log']).default('log'),
+  // If set, SNS notifications from any other topic are rejected
+  SES_SNS_TOPIC_ARN: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

@@ -1,0 +1,43 @@
+import { and, asc, eq, lte } from 'drizzle-orm';
+import { db } from '../../lib/db.js';
+import { campaigns } from '../../db/schema.js';
+import type { EnqueueFn } from '../../queues/index.js';
+import { CampaignError, startCampaign } from '../sending/start-campaign.js';
+
+export interface TickResult {
+  started: string[];
+  failed: { campaignId: string; reason: string }[];
+}
+
+/**
+ * Runs every minute. Starts every scheduled campaign whose time has come.
+ * If the server was down at the scheduled time, the campaign starts on the
+ * first tick after it comes back — it is late, never lost.
+ */
+export async function runSchedulerTick(opts: { now?: Date; enqueue?: EnqueueFn } = {}): Promise<TickResult> {
+  const now = opts.now ?? new Date();
+  const due = await db
+    .select({ id: campaigns.id })
+    .from(campaigns)
+    .where(and(eq(campaigns.status, 'SCHEDULED'), lte(campaigns.scheduledAt, now)))
+    .orderBy(asc(campaigns.scheduledAt))
+    .limit(50);
+
+  const result: TickResult = { started: [], failed: [] };
+  for (const { id } of due) {
+    try {
+      await startCampaign(id, { now, enqueue: opts.enqueue });
+      result.started.push(id);
+    } catch (err) {
+      if (err instanceof CampaignError && err.code === 'not_startable') continue; // someone else started it
+      const reason = err instanceof Error ? err.message : String(err);
+      // Leave it visible on the dashboard with the reason, instead of retrying forever
+      await db
+        .update(campaigns)
+        .set({ status: 'FAILED', lastError: reason })
+        .where(and(eq(campaigns.id, id), eq(campaigns.status, 'SCHEDULED')));
+      result.failed.push({ campaignId: id, reason });
+    }
+  }
+  return result;
+}

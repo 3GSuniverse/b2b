@@ -329,6 +329,7 @@ export const campaigns = pgTable(
     unsubscribed: integer().notNull().default(0),
     suppressed: integer().notNull().default(0),
     failed: integer().notNull().default(0),
+    lastError: text(), // why a scheduled campaign could not start (quota, paused tenant…)
   },
   (t) => [index().on(t.tenantId, t.status), index().on(t.status, t.scheduledAt)],
 );

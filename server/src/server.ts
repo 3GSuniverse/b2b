@@ -1,14 +1,16 @@
 import { buildApp } from './app.js';
 import { env } from './config/env.js';
 import { closeDatabase } from './lib/db.js';
-import { redis } from './lib/redis.js';
+import { closeRedis } from './lib/redis.js';
+import { closeQueues } from './queues/index.js';
 
 const app = await buildApp();
 
 async function shutdown(signal: string) {
   app.log.info(`${signal} received, shutting down`);
   await app.close();
-  await Promise.allSettled([closeDatabase(), redis.quit()]);
+  await closeQueues();
+  await Promise.allSettled([closeDatabase(), closeRedis()]);
   process.exit(0);
 }
 
