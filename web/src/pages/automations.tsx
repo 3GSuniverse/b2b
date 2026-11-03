@@ -136,14 +136,14 @@ export function AutomationsPage() {
         }
       />
       {q.isPending ? (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
           <Skeleton className="h-56 rounded-[var(--radius-panel)]" />
           <Skeleton className="h-56 rounded-[var(--radius-panel)]" />
         </div>
       ) : (
         <>
           {list.length > 0 && (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
               {list.map((a) => (
                 <AutomationCard key={a.id} a={a} />
               ))}
@@ -152,7 +152,7 @@ export function AutomationsPage() {
           {(!has('trip_date') || !has('birthday') || list.length === 0) && (
             <section className="flex flex-col gap-3">
               <h2 className="text-[15px] font-semibold">{list.length ? 'Ideas' : 'Start with one of these'}</h2>
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
                 {!has('trip_date') && <Recipe icon={<Plane className="h-5 w-5" />} title="Trip reminder" body="3 days before each traveller’s trip date, at 9 AM: what to carry, pickup time, who to call." to="/automations/new?recipe=trip" />}
                 {!has('birthday') && <Recipe icon={<CakeSlice className="h-5 w-5" />} title="Birthday wishes" body="On each customer’s birthday, every year, at 8:30 AM. A warm note, maybe a small offer." to="/automations/new?recipe=birthday" />}
                 {list.length === 0 && (

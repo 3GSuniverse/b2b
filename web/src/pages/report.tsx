@@ -35,7 +35,7 @@ function Funnel({ c, tracked }: { c: Campaign; tracked: boolean }) {
       <PanelHeader title="How far it got" description={tracked ? 'Opens are a rough guide: some apps hide them, others open every email automatically.' : 'Opens and clicks aren’t tracked when sending from Gmail.'} />
       <ol className="flex flex-col gap-3.5">
         {steps.map((st, i) => (
-          <li key={st.label} className="grid grid-cols-[110px_minmax(0,1fr)] items-center gap-4 sm:grid-cols-[140px_minmax(0,1fr)_150px]">
+          <li key={st.label} className="grid grid-cols-[minmax(0,1fr)] grid-cols-[110px_minmax(0,1fr)] items-center gap-4 sm:grid-cols-[140px_minmax(0,1fr)_150px]">
             <span className="text-[13px] font-semibold">{st.label}</span>
             <div className="relative h-8 overflow-hidden rounded-[8px] bg-line-soft">
               <div
@@ -195,7 +195,7 @@ export function ReportPage() {
         ))}
       </Panel>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         <div className="flex min-w-0 flex-col gap-6">
           <Funnel c={c} tracked={tracked} />
 

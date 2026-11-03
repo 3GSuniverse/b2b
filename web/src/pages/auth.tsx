@@ -61,7 +61,7 @@ function SidePanel() {
 
 function AuthLayout({ title, subtitle, children, footer }: { title: string; subtitle: ReactNode; children: ReactNode; footer: ReactNode }) {
   return (
-    <div className="grid min-h-screen gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+    <div className="grid grid-cols-[minmax(0,1fr)] min-h-screen gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
       <div className="flex flex-col px-2 py-4 sm:px-8 lg:px-14">
         <Logo />
         <main className="flex flex-1 flex-col justify-center py-12">

@@ -196,7 +196,7 @@ export function ContactsPage() {
             <Tabs label="Filter by status" value={status} onChange={(v) => setParam({ status: v === 'ALL' ? null : v, page: null })} tabs={tabs} />
           </div>
           <div className="flex flex-wrap items-center gap-3 border-b border-line-soft px-5 py-4 sm:px-6">
-            <div className="min-w-0 flex-1 sm:max-w-sm">
+            <div className="w-full min-w-0 sm:w-auto sm:max-w-sm sm:flex-1">
               <Input
                 leading={<Search className="h-4 w-4" />}
                 placeholder="Search name, email or phone"
@@ -206,7 +206,7 @@ export function ContactsPage() {
                 className="h-10"
               />
             </div>
-            <NativeSelect value={listId} onChange={(e) => setParam({ list: e.target.value || null, page: null })} aria-label="Filter by list" className="h-10 w-auto min-w-44">
+            <NativeSelect value={listId} onChange={(e) => setParam({ list: e.target.value || null, page: null })} aria-label="Filter by list" className="h-10 min-w-0 flex-1 sm:w-auto sm:min-w-44 sm:flex-none">
               <option value="">All lists</option>
               {lists.data?.lists.map((l) => (
                 <option key={l.id} value={l.id}>

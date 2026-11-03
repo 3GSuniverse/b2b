@@ -77,7 +77,7 @@ function Pick({ className, children, ...props }: SelectHTMLAttributes<HTMLSelect
 
 function Line({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid gap-2 py-4 sm:grid-cols-[96px_minmax(0,1fr)] sm:items-baseline">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-2 py-4 sm:grid-cols-[96px_minmax(0,1fr)] sm:items-baseline">
       <span className="text-[13px] font-semibold text-muted">{label}</span>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-2 text-[17px] leading-relaxed">{children}</div>
     </div>
@@ -318,7 +318,7 @@ export function AutomationEditorPage() {
         </div>
       </header>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,4fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,4fr)]">
         <div className="flex flex-col gap-6">
           <Panel className="px-5 py-2 sm:px-7">
             <div className="divide-y divide-line-soft">

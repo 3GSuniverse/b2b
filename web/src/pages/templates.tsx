@@ -67,7 +67,7 @@ export function TemplatesPage() {
         }
       />
       {q.isPending ? (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 3 }, (_, i) => (
             <Skeleton key={i} className="h-[300px] rounded-[var(--radius-panel)]" />
           ))}
@@ -79,7 +79,7 @@ export function TemplatesPage() {
           </EmptyState>
         </Panel>
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((t) => (
             <Panel key={t.id} className="group relative flex flex-col overflow-hidden transition-shadow hover:shadow-[var(--shadow-lift)]">
               <EmailThumbnail html={t.html} height={210} />

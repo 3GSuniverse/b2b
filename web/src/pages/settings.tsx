@@ -591,7 +591,7 @@ function Company() {
           </Button>
         </div>
       </Panel>
-      <Panel className="grid gap-4 p-5 text-[13px] sm:grid-cols-3 sm:p-6">
+      <Panel className="grid grid-cols-[minmax(0,1fr)] gap-4 p-5 text-[13px] sm:grid-cols-3 sm:p-6">
         <div className="flex flex-col gap-1">
           <span className="text-muted">Time zone</span>
           <span className="font-semibold">India ({a.timezone})</span>
@@ -619,7 +619,7 @@ export function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" />
-      <div className="grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
         <nav aria-label="Settings" className="flex gap-1 overflow-x-auto lg:sticky lg:top-6 lg:flex-col">
           {SECTIONS.map(({ id, label, icon: Icon }) => (
             <NavLink

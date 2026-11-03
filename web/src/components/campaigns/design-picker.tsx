@@ -72,7 +72,7 @@ export function DesignGallery({ onPick, selectedKey, busy }: { onPick: (d: Desig
   const { yours, ready, loading } = useDesigns();
   if (loading) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }, (_, i) => (
           <Skeleton key={i} className="h-[264px] rounded-[14px]" />
         ))}
@@ -84,7 +84,7 @@ export function DesignGallery({ onPick, selectedKey, busy }: { onPick: (d: Desig
       {yours.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-[15px] font-semibold">Your templates</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {yours.map((d) => (
               <Card key={d.key} d={d} selected={selectedKey === d.key} onPick={onPick} busy={busy} />
             ))}
@@ -93,7 +93,7 @@ export function DesignGallery({ onPick, selectedKey, busy }: { onPick: (d: Desig
       )}
       <section className="flex flex-col gap-3">
         <h2 className="text-[15px] font-semibold">Ready-made designs</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {ready.map((d) => (
             <Card key={d.key} d={d} selected={selectedKey === d.key} onPick={onPick} busy={busy} />
           ))}

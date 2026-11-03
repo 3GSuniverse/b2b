@@ -365,7 +365,7 @@ function RecentCampaigns({ o }: { o: Overview }) {
             const finished = c.status === 'SENT' || c.status === 'SENDING';
             return (
               <li key={c.id}>
-                <Link to={campaignHref(c)} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 rounded-[12px] px-3 py-3 hover:bg-hover sm:grid-cols-[minmax(0,1fr)_120px_88px_88px]">
+                <Link to={campaignHref(c)} className="grid grid-cols-[minmax(0,1fr)] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 rounded-[12px] px-3 py-3 hover:bg-hover sm:grid-cols-[minmax(0,1fr)_120px_88px_88px]">
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <span className="truncate text-sm font-semibold">{c.name}</span>
                     <span className="text-xs text-muted">
@@ -478,7 +478,7 @@ function OverviewSkeleton() {
     <div className="flex flex-col gap-6" aria-busy aria-label="Loading overview">
       <Skeleton className="h-9 w-72" />
       <Skeleton className="h-[132px] rounded-[var(--radius-panel)]" />
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-3">
         <Skeleton className="h-[380px] rounded-[var(--radius-panel)] lg:col-span-2" />
         <Skeleton className="h-[380px] rounded-[var(--radius-panel)]" />
       </div>
@@ -522,7 +522,7 @@ export function OverviewPage() {
       <Setup o={o} />
       <Kpis o={o} />
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
           <ActivityChart o={o} />
           <RecentCampaigns o={o} />

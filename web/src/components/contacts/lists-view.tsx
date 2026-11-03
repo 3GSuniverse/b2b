@@ -54,7 +54,7 @@ export function ListsView({ lists, onOpen }: { lists?: ContactList[]; onOpen: (i
           </EmptyState>
         </Panel>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {lists.map((l) => (
             <Panel key={l.id} className="group relative flex flex-col gap-4 p-5 transition-shadow hover:shadow-[var(--shadow-lift)]">
               <div className="flex items-start justify-between gap-3">
