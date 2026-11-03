@@ -96,6 +96,23 @@ npm run start:worker                        # sending, scheduling, automations
 The server looks for the dashboard in `../web/dist`; set `WEB_DIST` to point
 elsewhere. Restart the server after each dashboard build (asset names change).
 
+## WhatsApp (interim: WhatsApp Web)
+
+Until the official WhatsApp route (Meta Cloud API through a Solution Partner) is set up,
+a company can link its own number the way WhatsApp Web does. **This is unofficial**:
+WhatsApp can block numbers that send in bulk this way. It is off for every company and
+only the operator can switch it on, from the server:
+
+```bash
+cd server
+npm run feature -- whatsapp-web <company slug or owner email> on    # or off
+```
+
+Then in the dashboard: Settings → WhatsApp → Link WhatsApp, and scan the QR code from the
+phone (Linked devices → Link a device). The **worker** holds the connection, so it must be
+running. Sending is paced (default one message every 10 seconds, 200 a day per number),
+only goes to contacts who agreed to WhatsApp, and a reply of STOP unsubscribes them.
+
 ## API
 
 All `/api` routes use a session cookie set at sign-in. Writes must be JSON.
