@@ -20,6 +20,7 @@ import {
   sendingDomains,
   templates,
   tenants,
+  trackedLinks,
   users,
 } from '../src/db/schema.js';
 import { env } from '../src/config/env.js';
@@ -54,6 +55,30 @@ const daysAgo = (d: number, h = 10) => {
   return t;
 };
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+
+/** Starter designs with their [PLACEHOLDERS] filled in, so the demo looks like real sent mail. */
+function fill(html: string, trip = 'Goa beaches') {
+  const values: Record<string, string> = {
+    'HERO IMAGE': '',
+    'TRIP NAME': trip,
+    PRICE: '₹18,500',
+    DATES: '12–15 Dec',
+    DATE: '12 Dec',
+    LINK: 'https://kurukshetra-travels.in/trips',
+    PHONE: '+91 98480 22338',
+    SEASON: 'Winter',
+    OFFER: '10% off for returning travellers',
+    'YOUR NAME': 'GunaSekhar',
+  };
+  return html
+    .replace(/\[ONE OR TWO SENTENCES[^\]]*\]/g, `Four days of ${trip}: hotel by the beach, a sunset cruise and all breakfasts included.`)
+    .replace(/\[WRITE AS YOU WOULD[^\]]*\]/g, 'We have a few seats left on our winter tours and wanted you to hear about them first.')
+    .replace(/\[A LINE ABOUT THE SEASON[^\]]*\]/g, 'The best weather of the year is here.')
+    .replace(/\[ANYTHING ELSE[^\]]*\]/g, 'A light jacket for the evenings.')
+    .replace(/\[OPTIONAL: ([^\[\]]*)\[OFFER\]([^\]]*)\]/g, `$1${values.OFFER}$2`)
+    .replace(/\[PACKAGE (\d+)\]/g, (_m, i) => ['Goa', 'Kerala', 'Kashmir', 'Rajasthan'][Number(i) - 1] ?? 'Andaman')
+    .replace(/\[([A-Z][A-Z ]+)\]/g, (m, k: string) => values[k] ?? m);
+}
 
 async function main() {
   const reset = process.argv.includes('--reset');
@@ -182,7 +207,7 @@ async function main() {
         senderId: sender!.id,
         subject: `{first_name|Hello}, ${p.name.toLowerCase()}`,
         previewText: 'Limited seats',
-        html: byStarter('offer-spotlight').html,
+        html: fill(byStarter('offer-spotlight').html, p.name.split(':')[0]),
         audience: { listIds: [listRows[1]!.id] },
         startedAt: start,
         completedAt: new Date(start.getTime() + 25 * 60_000),
@@ -216,6 +241,13 @@ async function main() {
       };
     });
     if (msgs.length) await db.insert(messages).values(msgs);
+    if (clicked) {
+      const main = Math.round(clicked * 0.7);
+      await db.insert(trackedLinks).values([
+        { campaignId: c!.id, url: 'https://kurukshetra-travels.in/trips', clicks: main },
+        { campaignId: c!.id, url: 'https://wa.me/919848022338', clicks: clicked - main },
+      ]);
+    }
     const unsub = Math.round(delivered * 0.004);
     await db
       .update(campaigns)
@@ -243,7 +275,7 @@ async function main() {
       senderId: sender!.id,
       subject: '{first_name|Hello}, plan Sankranti with family',
       previewText: 'Four packages under ₹25,000',
-      html: byStarter('package-grid').html,
+      html: fill(byStarter('package-grid').html),
       audience: { listIds: [listRows[0]!.id] },
       scheduledAt: daysAgo(-4, 9),
       createdById: user!.id,

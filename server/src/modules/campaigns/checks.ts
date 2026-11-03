@@ -51,7 +51,7 @@ function emptyExpr(key: string): SQL | null {
 }
 
 // Starter designs mark what to replace with [CAPS IN BRACKETS]; sending one by mistake is embarrassing
-const PLACEHOLDER = /\[[A-Z][A-Z0-9 ,.'’—–&/:_-]{1,120}\]/g;
+const PLACEHOLDER = /\[[A-Z][A-Z0-9 ]{2,}[^\]\n<>]{0,150}\]/g;
 
 /**
  * The "Ready-to-send checks" panel. Errors block sending; warnings are advice.
