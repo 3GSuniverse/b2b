@@ -45,7 +45,7 @@ function publicUser(u: { id: string; name: string; email: string; role: string }
   return { id: u.id, name: u.name, email: u.email, role: u.role };
 }
 
-function publicTenant(t: { id: string; name: string; slug: string; status: string; timezone: string; monthlyQuota: number; pausedReason: string | null }) {
+function publicTenant(t: { id: string; name: string; slug: string; status: string; timezone: string; monthlyQuota: number; pausedReason: string | null; whatsappWebEnabled: boolean }) {
   return {
     id: t.id,
     name: t.name,
@@ -54,6 +54,7 @@ function publicTenant(t: { id: string; name: string; slug: string; status: strin
     timezone: t.timezone,
     monthlyQuota: t.monthlyQuota,
     pausedReason: t.pausedReason,
+    features: { whatsapp: t.whatsappWebEnabled },
   };
 }
 

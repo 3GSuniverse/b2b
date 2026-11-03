@@ -4,12 +4,16 @@ import { campaigns, contacts, lists, messageEvents, messages, senders, templates
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import type { EnqueueFn } from '../../queues/index.js';
-import { emailAudienceWhere } from '../audience/resolve.js';
+import { tenants } from '../../db/schema.js';
+import { emailAudienceWhere, whatsappAudienceWhere } from '../audience/resolve.js';
+import { normalizePhone } from '../contacts/normalize.js';
+import { getSession, renderWhatsApp } from '../whatsapp/service.js';
+import { enqueueWhatsAppTest } from '../../queues/index.js';
 import { getEmailProvider, SendError } from '../email/index.js';
 import { buildMergeVars, renderEmail } from '../email/render.js';
 import { getMailboxProviderFactory } from '../mailboxes/gmail-provider.js';
 import { CampaignError, startCampaign } from '../sending/start-campaign.js';
-import { campaignChecks } from './checks.js';
+import { campaignChecks, whatsappChecks } from './checks.js';
 
 // ---------------------------------------------------------------------
 //  Validation
@@ -29,6 +33,7 @@ export const audienceSchema = z.object({
 
 export const campaignBody = z.object({
   name: z.string().trim().min(1, 'Give the campaign a name').max(120),
+  channel: z.enum(['EMAIL', 'WHATSAPP']).optional(), // set when creating; ignored on edits
   senderId: z.string().nullable().optional(),
   templateId: z.string().nullable().optional(),
   subject: z.string().trim().max(200).nullable().optional(),
@@ -153,6 +158,15 @@ export async function getCampaign(tenantId: string, id: string) {
 
 export async function createCampaign(tenantId: string, userId: string, input: z.infer<typeof campaignBody>) {
   await assertRefs(tenantId, input);
+  if (input.channel === 'WHATSAPP') {
+    const t = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId), columns: { whatsappWebEnabled: true } });
+    if (!t?.whatsappWebEnabled) throw new AppError(403, 'feature_not_enabled', 'WhatsApp sending isn’t switched on for this account');
+    const [row] = await db
+      .insert(campaigns)
+      .values({ tenantId, channel: 'WHATSAPP', name: input.name, text: input.text ?? null, audience: input.audience ?? null, createdById: userId })
+      .returning();
+    return getCampaign(tenantId, row!.id);
+  }
   let content = { subject: input.subject ?? null, previewText: input.previewText ?? null, html: input.html ?? null, text: input.text ?? null };
   if (input.templateId && !content.html) {
     const t = (await db.query.templates.findFirst({ where: eq(templates.id, input.templateId) }))!;
@@ -176,7 +190,8 @@ export async function updateCampaign(tenantId: string, id: string, input: Partia
     throw new AppError(409, 'not_editable', `A ${c.status.toLowerCase()} campaign can’t be edited. Duplicate it instead.`);
   }
   await assertRefs(tenantId, input);
-  const patch = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
+  const { channel: _ignored, ...rest } = input;
+  const patch = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined));
   if (Object.keys(patch).length) await db.update(campaigns).set(patch).where(eq(campaigns.id, id));
   return getCampaign(tenantId, id);
 }
@@ -229,13 +244,30 @@ async function checkInputFor(tenantId: string, id: string) {
       previewText: c.previewText,
       audience: c.audience,
       sender: c.sender,
+      channel: c.channel,
+      text: c.text,
     },
   };
+}
+
+/** Checks for either channel. */
+async function checksFor(input: Awaited<ReturnType<typeof checkInputFor>>['input']) {
+  return input.channel === 'WHATSAPP' ? whatsappChecks({ ...input, tenant: input.tenant }) : campaignChecks(input);
 }
 
 /** Renders the email as one real recipient would see it, plus the ready-to-send checks. */
 export async function previewCampaign(tenantId: string, id: string, contactId?: string) {
   const { c, input } = await checkInputFor(tenantId, id);
+  if (c.channel === 'WHATSAPP') {
+    const [contact] = contactId
+      ? await db.select().from(contacts).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId))).limit(1)
+      : await db.select().from(contacts).where(whatsappAudienceWhere(tenantId, c.audience)).orderBy(contacts.createdAt).limit(1);
+    return {
+      previewAs: contact ? { id: contact.id, email: contact.email, firstName: contact.firstName, phone: contact.phone } : null,
+      rendered: c.text ? { subject: '', html: '', text: renderWhatsApp(c.text, contact ?? null, c.tenant) } : null,
+      ...(await checksFor(input)),
+    };
+  }
   // Plain select (not db.query): the audience filter has subqueries on other tables
   const [contact] = contactId
     ? await db.select().from(contacts).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId))).limit(1)
@@ -246,12 +278,27 @@ export async function previewCampaign(tenantId: string, id: string, contactId?: 
     c.subject && c.html
       ? renderEmail({ subject: c.subject, html: c.html, text: c.text, previewText: c.previewText }, vars, c.tenant)
       : null;
-  const checks = await campaignChecks(input);
+  const checks = await checksFor(input);
   return {
     previewAs: contact ? { id: contact.id, email: contact.email, firstName: contact.firstName } : null,
     rendered,
     ...checks,
   };
+}
+
+/** WhatsApp test: queued for the worker, which holds the connection. Personalised like the first recipient. */
+export async function sendTestWhatsApp(tenantId: string, id: string, phones: string[]) {
+  const { c } = await checkInputFor(tenantId, id);
+  if (c.channel !== 'WHATSAPP') throw new AppError(400, 'wrong_channel', 'This is an email campaign');
+  if (!c.text?.trim()) throw new AppError(400, 'no_content', 'Write the message first');
+  const session = await getSession(tenantId);
+  if (session.status !== 'CONNECTED') throw new AppError(400, 'whatsapp_not_connected', 'Link your WhatsApp number first, in Settings → WhatsApp');
+  const normalized = phones.map((p) => normalizePhone(p));
+  if (normalized.some((p) => !p)) throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { phones: 'Enter valid phone numbers' } });
+  const [sample] = await db.select().from(contacts).where(whatsappAudienceWhere(tenantId, c.audience)).orderBy(contacts.createdAt).limit(1);
+  const text = `[Test] ${renderWhatsApp(c.text, sample ?? null, c.tenant)}`;
+  for (const p of normalized) await enqueueWhatsAppTest(tenantId, p!, text);
+  return { queued: normalized as string[], previewAs: sample?.phone ?? null };
 }
 
 export async function sendTestEmail(tenantId: string, id: string, to: string[]) {
@@ -303,7 +350,7 @@ export async function sendTestEmail(tenantId: string, id: string, to: string[]) 
 
 async function assertSendable(tenantId: string, id: string) {
   const { input } = await checkInputFor(tenantId, id);
-  const r = await campaignChecks(input);
+  const r = await checksFor(input);
   if (!r.canSend) {
     const first = r.checks.find((c) => c.level === 'error')!;
     throw new AppError(422, 'checks_failed', first.title, { checks: r.checks });

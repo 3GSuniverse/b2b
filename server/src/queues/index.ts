@@ -9,7 +9,11 @@ export const QUEUES = {
   scheduler: 'scheduler',
   // Large CSV imports, processed in the background
   imports: 'contact-import',
+  // WhatsApp Web sends: one job per message, paced per linked number
+  whatsappSend: 'whatsapp-send',
 } as const;
+
+export type WhatsAppJob = { kind: 'message'; messageId: string } | { kind: 'test'; tenantId: string; to: string; text: string };
 
 export interface EmailSendJob {
   messageId: string; // the Message row holds everything else
@@ -21,6 +25,29 @@ export const EMAIL_SEND_ATTEMPTS = 5;
 let emailSendQueue: Queue<EmailSendJob> | undefined;
 let schedulerQueue: Queue | undefined;
 let importQueue: Queue<{ importId: string }> | undefined;
+let whatsappQueue: Queue<WhatsAppJob> | undefined;
+
+export function getWhatsAppQueue(): Queue<WhatsAppJob> {
+  whatsappQueue ??= new Queue<WhatsAppJob>(QUEUES.whatsappSend, {
+    connection: createRedis(),
+    defaultJobOptions: {
+      attempts: 4,
+      backoff: { type: 'exponential', delay: 60_000 },
+      removeOnComplete: { age: 24 * 3600, count: 10_000 },
+      removeOnFail: { age: 7 * 24 * 3600 },
+    },
+  });
+  return whatsappQueue;
+}
+
+export async function enqueueWhatsApp(messageIds: string[]): Promise<void> {
+  if (messageIds.length === 0) return;
+  await getWhatsAppQueue().addBulk(messageIds.map((messageId) => ({ name: 'send', data: { kind: 'message' as const, messageId }, opts: { jobId: messageId } })));
+}
+
+export async function enqueueWhatsAppTest(tenantId: string, to: string, text: string) {
+  await getWhatsAppQueue().add('test', { kind: 'test', tenantId, to, text }, { attempts: 1 });
+}
 
 export function getImportQueue(): Queue<{ importId: string }> {
   importQueue ??= new Queue(QUEUES.imports, {
@@ -63,5 +90,5 @@ export async function enqueueEmails(messageIds: string[]): Promise<void> {
 export type EnqueueFn = typeof enqueueEmails;
 
 export async function closeQueues() {
-  await Promise.allSettled([emailSendQueue?.close(), schedulerQueue?.close(), importQueue?.close()]);
+  await Promise.allSettled([emailSendQueue?.close(), schedulerQueue?.close(), importQueue?.close(), whatsappQueue?.close()]);
 }

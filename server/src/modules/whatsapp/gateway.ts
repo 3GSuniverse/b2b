@@ -1,0 +1,56 @@
+/**
+ * How messages leave through a company's linked WhatsApp number.
+ * The real implementation (Baileys, WhatsApp Web) lives in the worker process;
+ * tests use the in-memory one.
+ */
+export interface WhatsAppGateway {
+  sendText(tenantId: string, phoneE164: string, text: string): Promise<{ id: string }>;
+  /** Whether this number has a WhatsApp account. */
+  exists(tenantId: string, phoneE164: string): Promise<boolean>;
+}
+
+export class WhatsAppError extends Error {
+  constructor(
+    message: string,
+    /** Permanent errors fail the message; others are retried. */
+    readonly permanent: boolean,
+    readonly code = 'whatsapp_error',
+  ) {
+    super(message);
+    this.name = 'WhatsAppError';
+  }
+}
+
+let current: WhatsAppGateway | undefined;
+export function setWhatsAppGateway(g: WhatsAppGateway | undefined) {
+  current = g;
+}
+export function getWhatsAppGateway(): WhatsAppGateway {
+  if (!current) throw new WhatsAppError('WhatsApp isn’t running in this process', false, 'no_gateway');
+  return current;
+}
+
+/** +919848022338 → 919848022338@s.whatsapp.net */
+export const toJid = (phoneE164: string) => `${phoneE164.replace(/\D/g, '')}@s.whatsapp.net`;
+/** 919848022338@s.whatsapp.net (or …:12@s.whatsapp.net) → +919848022338 */
+export const fromJid = (jid: string) => `+${jid.split('@')[0]!.split(':')[0]}`;
+
+/** For tests: records what would have been sent. */
+export class MemoryWhatsAppGateway implements WhatsAppGateway {
+  sent: { tenantId: string; to: string; text: string; id: string }[] = [];
+  notOnWhatsApp = new Set<string>();
+  failNext: WhatsAppError | null = null;
+  async sendText(tenantId: string, to: string, text: string) {
+    if (this.failNext) {
+      const e = this.failNext;
+      this.failNext = null;
+      throw e;
+    }
+    const id = `wamid-${this.sent.length + 1}-${Math.random().toString(36).slice(2, 8)}`;
+    this.sent.push({ tenantId, to, text, id });
+    return { id };
+  }
+  async exists(_tenantId: string, phone: string) {
+    return !this.notOnWhatsApp.has(phone);
+  }
+}

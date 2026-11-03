@@ -19,6 +19,7 @@ import {
   scheduleCampaign,
   sendCampaignNow,
   sendTestEmail,
+  sendTestWhatsApp,
   unscheduleCampaign,
   updateCampaign,
 } from './service.js';
@@ -36,6 +37,7 @@ const testBody = z.object({
     .max(5, 'Send a test to up to 5 addresses'),
 });
 const previewBody = z.object({ contactId: z.string().optional() });
+const testPhonesBody = z.object({ phones: z.array(z.string().trim().min(6)).min(1, 'Enter at least one number').max(3, 'Send a test to up to 3 numbers') });
 
 export async function campaignRoutes(app: FastifyInstance) {
   app.get('/api/campaigns', { preHandler: requireAuth }, async (req) => listCampaigns(tenantOf(req), parseBody(listCampaignsQuery, req.query)));
@@ -67,7 +69,11 @@ export async function campaignRoutes(app: FastifyInstance) {
   app.post<IdParams>(
     '/api/campaigns/:id/test',
     { preHandler: requireAuth, config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } },
-    async (req) => sendTestEmail(tenantOf(req), req.params.id, parseBody(testBody, req.body).emails),
+    async (req) => {
+      const b = req.body as { phones?: unknown } | undefined;
+      if (b && Array.isArray(b.phones)) return sendTestWhatsApp(tenantOf(req), req.params.id, parseBody(testPhonesBody, req.body).phones);
+      return sendTestEmail(tenantOf(req), req.params.id, parseBody(testBody, req.body).emails);
+    },
   );
 
   app.post<IdParams>('/api/campaigns/:id/schedule', { preHandler: requireAuth }, async (req) => ({

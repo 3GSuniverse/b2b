@@ -1,8 +1,9 @@
 import { and, count, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from '../../lib/db.js';
 import { campaigns, messages, senders } from '../../db/schema.js';
-import { enqueueEmails, type EnqueueFn } from '../../queues/index.js';
-import { countEmailAudience, iterateEmailAudience } from '../audience/resolve.js';
+import { enqueueEmails, enqueueWhatsApp, type EnqueueFn } from '../../queues/index.js';
+import { countEmailAudience, iterateEmailAudience, iterateWhatsAppAudience } from '../audience/resolve.js';
+import { whatsappSessions } from '../../db/schema.js';
 import { isDomainReady } from '../domains/service.js';
 
 export class CampaignError extends Error {
@@ -15,7 +16,8 @@ export class CampaignError extends Error {
       | 'no_sender'
       | 'sender_not_verified'
       | 'no_content'
-      | 'quota_exceeded',
+      | 'quota_exceeded'
+      | 'whatsapp_not_ready',
   ) {
     super(message);
     this.name = 'CampaignError';
@@ -44,8 +46,10 @@ export async function monthlyUsage(tenantId: string, now = new Date(), timezone 
  */
 export async function startCampaign(
   campaignId: string,
-  opts: { enqueue?: EnqueueFn; now?: Date } = {},
+  opts: { enqueue?: EnqueueFn; enqueueWhatsApp?: EnqueueFn; now?: Date } = {},
 ): Promise<{ recipients: number }> {
+  const head = await db.query.campaigns.findFirst({ where: eq(campaigns.id, campaignId), columns: { channel: true } });
+  if (head?.channel === 'WHATSAPP') return startWhatsAppCampaign(campaignId, { enqueue: opts.enqueueWhatsApp, now: opts.now });
   const enqueue = opts.enqueue ?? enqueueEmails;
   const now = opts.now ?? new Date();
 
@@ -134,6 +138,45 @@ export async function startCampaign(
     })
     .where(eq(campaigns.id, campaignId));
 
+  return { recipients: n };
+}
+
+/**
+ * WhatsApp version of startCampaign: one message per contact who agreed to WhatsApp,
+ * sent from the company's linked number. Pacing and the daily cap happen in the worker.
+ */
+export async function startWhatsAppCampaign(campaignId: string, opts: { enqueue?: EnqueueFn; now?: Date } = {}) {
+  const enqueue = opts.enqueue ?? enqueueWhatsApp;
+  const now = opts.now ?? new Date();
+  const campaign = await db.query.campaigns.findFirst({ where: eq(campaigns.id, campaignId), with: { tenant: true } });
+  if (!campaign) throw new CampaignError('Campaign not found', 'not_found');
+  if (campaign.status !== 'DRAFT' && campaign.status !== 'SCHEDULED') throw new CampaignError(`Campaign is ${campaign.status.toLowerCase()}`, 'not_startable');
+  if (campaign.tenant.status !== 'ACTIVE') throw new CampaignError('Sending is paused for this account', 'tenant_not_active');
+  if (!campaign.tenant.whatsappWebEnabled) throw new CampaignError('WhatsApp sending isn’t switched on for this account', 'whatsapp_not_ready');
+  const session = await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.tenantId, campaign.tenantId) });
+  if (session?.status !== 'CONNECTED') throw new CampaignError('Link your WhatsApp number first, in Settings → WhatsApp', 'whatsapp_not_ready');
+  if (!campaign.text?.trim()) throw new CampaignError('The message is empty', 'no_content');
+
+  const claimed = await db
+    .update(campaigns)
+    .set({ status: 'SENDING', startedAt: now, lastError: null })
+    .where(and(eq(campaigns.id, campaignId), inArray(campaigns.status, ['DRAFT', 'SCHEDULED'])))
+    .returning({ id: campaigns.id });
+  if (claimed.length === 0) throw new CampaignError('Campaign already started', 'not_startable');
+
+  for await (const batch of iterateWhatsAppAudience(db, campaign.tenantId, campaign.audience)) {
+    const inserted = await db
+      .insert(messages)
+      .values(batch.map((c) => ({ tenantId: campaign.tenantId, campaignId, contactId: c.id, channel: 'WHATSAPP' as const, toAddress: c.phone })))
+      .onConflictDoNothing()
+      .returning({ id: messages.id });
+    await enqueue(inserted.map((m) => m.id));
+  }
+  const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(messages).where(eq(messages.campaignId, campaignId));
+  await db
+    .update(campaigns)
+    .set({ recipients: n, ...(n === 0 ? { status: 'SENT' as const, completedAt: new Date() } : {}) })
+    .where(eq(campaigns.id, campaignId));
   return { recipients: n };
 }
 

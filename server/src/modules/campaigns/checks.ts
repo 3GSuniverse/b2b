@@ -160,3 +160,53 @@ export async function campaignChecks(input: CheckInput): Promise<{ checks: Check
 
   return { checks, canSend: !checks.some((c) => c.level === 'error'), recipients };
 }
+
+/** "Before you send" for WhatsApp campaigns. */
+export async function whatsappChecks(input: {
+  tenantId: string;
+  tenant: { status: string; pausedReason: string | null; whatsappWebEnabled: boolean };
+  text: string | null;
+  audience: Audience | null;
+}): Promise<{ checks: Check[]; canSend: boolean; recipients: number }> {
+  const { countWhatsAppAudience } = await import('../audience/resolve.js');
+  const { getSession, whatsappUsageLast24h, WHATSAPP_MAX_LENGTH } = await import('../whatsapp/service.js');
+  const checks: Check[] = [];
+  const add = (c: Check) => checks.push(c);
+
+  if (input.tenant.status !== 'ACTIVE') add({ id: 'account', level: 'error', title: 'Sending is paused for your account.', note: input.tenant.pausedReason ?? undefined });
+  if (!input.tenant.whatsappWebEnabled) add({ id: 'feature', level: 'error', title: 'WhatsApp sending isn’t switched on for this account.' });
+
+  const session = await getSession(input.tenantId);
+  if (session.status === 'CONNECTED') add({ id: 'sender', level: 'ok', title: `Sending from ${session.phone ?? 'your WhatsApp'}.` });
+  else add({ id: 'sender', level: 'error', title: 'Link your WhatsApp number first.', note: 'Settings → WhatsApp, then scan the QR code with your phone.' });
+
+  const text = input.text?.trim() ?? '';
+  if (!text) add({ id: 'content', level: 'error', title: 'Write the message.' });
+  else if (text.length > WHATSAPP_MAX_LENGTH) add({ id: 'content', level: 'error', title: 'The message is too long for WhatsApp.', note: `${text.length} of ${WHATSAPP_MAX_LENGTH} characters.` });
+
+  const placeholders = [...new Set(text.match(PLACEHOLDER) ?? [])];
+  if (placeholders.length) add({ id: 'placeholders', level: 'error', title: `${placeholders.length} placeholder${placeholders.length > 1 ? 's' : ''} still in the message.`, note: `Replace ${placeholders.join(', ')} before sending.` });
+
+  const fields = await db.select({ key: customFields.key }).from(customFields).where(eq(customFields.tenantId, input.tenantId));
+  const unknown = findUnknownTags(text, [...CORE_KEYS, ...fields.map((f) => f.key)]);
+  if (unknown.length) add({ id: 'unknown_tags', level: 'error', title: `${unknown.map((u) => `{${u}}`).join(', ')} ${unknown.length > 1 ? 'aren’t fields' : 'isn’t a field'} you have.`, note: 'Fix the spelling, or add a fallback like {first_name|there}.' });
+  add({ id: 'stop', level: 'ok', title: 'People can reply STOP to stop messages.', note: 'They’re unsubscribed from WhatsApp automatically.' });
+
+  const recipients = await countWhatsAppAudience(db, input.tenantId, input.audience);
+  if (!recipients) add({ id: 'audience', level: 'error', title: 'Nobody in this audience agreed to WhatsApp messages.', note: 'Only contacts marked “Agreed to WhatsApp” with a phone number get WhatsApp campaigns.' });
+  else {
+    add({ id: 'audience', level: 'ok', title: `${recipients.toLocaleString('en-IN')} recipient${recipients > 1 ? 's' : ''}.`, note: 'Only contacts who agreed to WhatsApp messages.' });
+    const usage = await whatsappUsageLast24h(input.tenantId);
+    const today = Math.max(0, session.dailyLimit - usage.sent);
+    const minutes = Math.ceil((Math.min(recipients, today) * session.intervalSeconds) / 60);
+    if (recipients > today) {
+      const days = Math.ceil((recipients - today) / session.dailyLimit) + 1;
+      add({ id: 'daily_limit', level: 'warning', title: `This will take about ${days} days to send.`, note: `Your number sends up to ${session.dailyLimit} a day, one every ${session.intervalSeconds} seconds, to lower the risk of a ban.` });
+    } else {
+      add({ id: 'pace', level: 'ok', title: `Takes about ${minutes < 60 ? `${Math.max(1, minutes)} min` : `${Math.round(minutes / 6) / 10} hours`} to send.`, note: `One message every ${session.intervalSeconds} seconds.` });
+    }
+  }
+  add({ id: 'risk', level: 'warning', title: 'Unofficial WhatsApp sending.', note: 'WhatsApp can block numbers that send in bulk this way. Send only to people who expect your messages.' });
+
+  return { checks, canSend: !checks.some((c) => c.level === 'error'), recipients };
+}

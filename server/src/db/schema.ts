@@ -121,6 +121,8 @@ export const tenants = pgTable('tenants', {
   pausedReason: text(),
   // Shown in every email footer — required by anti-spam law
   postalAddress: text(),
+  // Unofficial WhatsApp Web sending. Off for everyone; switched on per company by the operator only.
+  whatsappWebEnabled: boolean().notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -549,6 +551,43 @@ export const suppressions = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex().on(t.tenantId, t.channel, t.address)],
+);
+
+// ---------------------------------------------------------------------
+//  WhatsApp Web session (unofficial, interim). One linked number per company.
+// ---------------------------------------------------------------------
+
+export const whatsappSessionStatus = pgEnum('whatsapp_session_status', [
+  'DISCONNECTED', // never linked, or unlinked by the company
+  'CONNECTING', // waiting for the QR code to be scanned
+  'CONNECTED',
+  'LOGGED_OUT', // unlinked from the phone (Linked devices → Log out)
+  'BLOCKED', // WhatsApp refused the number
+]);
+
+export const whatsappSessions = pgTable('whatsapp_sessions', {
+  id: id(),
+  tenantId: tenantRef().unique(),
+  status: whatsappSessionStatus().notNull().default('DISCONNECTED'),
+  phone: text(), // E.164 of the linked number
+  displayName: text(),
+  dailyLimit: integer().notNull().default(200),
+  intervalSeconds: integer().notNull().default(10),
+  lastError: text(),
+  connectedAt: ts(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+// Login keys for the linked session, encrypted at rest (AES-256-GCM). Deleted on unlink.
+export const whatsappAuth = pgTable(
+  'whatsapp_auth',
+  {
+    tenantId: tenantRef(),
+    key: text().notNull(),
+    valueEnc: text().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.key] })],
 );
 
 // ---------------------------------------------------------------------

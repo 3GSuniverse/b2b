@@ -30,7 +30,7 @@ export class DeferSend extends Error {
   }
 }
 
-async function finalize(
+export async function finalizeMessage(
   msg: { id: string; campaignId: string | null; automationId: string | null },
   status: Final,
   error: string,
@@ -54,7 +54,7 @@ export async function markMessageFailed(messageId: string, error: string) {
     where: eq(messages.id, messageId),
     columns: { id: true, campaignId: true, automationId: true },
   });
-  if (msg) await finalize(msg, 'FAILED', error);
+  if (msg) await finalizeMessage(msg, 'FAILED', error);
 }
 
 /** When no message of a campaign is still queued, the campaign is done. */
@@ -109,7 +109,7 @@ export async function processSendJob(
 
   // 1. Tenant must be allowed to send
   if (msg.tenant.status !== 'ACTIVE') {
-    await finalize(msg, 'FAILED', `tenant_${msg.tenant.status.toLowerCase()}`);
+    await finalizeMessage(msg, 'FAILED', `tenant_${msg.tenant.status.toLowerCase()}`);
     return 'failed';
   }
 
@@ -127,7 +127,7 @@ export async function processSendJob(
     )
     .limit(1);
   if (suppressed || (msg.contact && msg.contact.emailStatus !== 'SUBSCRIBED')) {
-    await finalize(msg, 'SUPPRESSED', suppressed ? 'on_suppression_list' : `contact_${msg.contact!.emailStatus.toLowerCase()}`);
+    await finalizeMessage(msg, 'SUPPRESSED', suppressed ? 'on_suppression_list' : `contact_${msg.contact!.emailStatus.toLowerCase()}`);
     return 'suppressed';
   }
 
@@ -145,11 +145,11 @@ export async function processSendJob(
       : null;
 
   if (!sender) {
-    await finalize(msg, 'FAILED', 'no_sender');
+    await finalizeMessage(msg, 'FAILED', 'no_sender');
     return 'failed';
   }
   if (!content?.subject || !content.html) {
-    await finalize(msg, 'FAILED', 'no_content');
+    await finalizeMessage(msg, 'FAILED', 'no_content');
     return 'failed';
   }
 
@@ -158,7 +158,7 @@ export async function processSendJob(
   if (sender.kind !== 'DOMAIN') {
     const conn = sender.connection;
     if (!conn || conn.status !== 'ACTIVE') {
-      await finalize(msg, 'FAILED', 'mailbox_disconnected');
+      await finalizeMessage(msg, 'FAILED', 'mailbox_disconnected');
       return 'failed';
     }
     const usage = await senderUsageLast24h(sender.id);
@@ -203,7 +203,7 @@ export async function processSendJob(
   } catch (err) {
     const e = err instanceof SendError ? err : new SendError(String((err as Error)?.message ?? err), false);
     if (e.permanent) {
-      await finalize(msg, 'FAILED', `${e.code ?? 'error'}: ${e.message}`.slice(0, 500));
+      await finalizeMessage(msg, 'FAILED', `${e.code ?? 'error'}: ${e.message}`.slice(0, 500));
       return 'failed';
     }
     await db

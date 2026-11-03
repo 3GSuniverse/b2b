@@ -25,6 +25,7 @@ import { senderRoutes } from './modules/senders/routes.js';
 import { unsubscribeRoutes } from './modules/unsubscribe/routes.js';
 import { webhookRoutes, type WebhookOptions } from './modules/webhooks/routes.js';
 import { webRoutes } from './modules/web/routes.js';
+import { whatsappRoutes } from './modules/whatsapp/routes.js';
 
 export interface AppOptions {
   webhooks?: WebhookOptions;
@@ -100,6 +101,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(templateRoutes);
   await app.register(automationRoutes);
   await app.register(overviewRoutes);
+  await app.register(whatsappRoutes);
   await app.register(notificationRoutes);
   await app.register(unsubscribeRoutes);
   await app.register(webhookRoutes, opts.webhooks ?? {});

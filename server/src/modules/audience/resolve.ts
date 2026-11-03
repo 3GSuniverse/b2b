@@ -41,13 +41,26 @@ function filterSql(f: AudienceFilter): SQL {
  * Then: (in any of the lists OR hand-picked) — or everyone if neither is given — AND every filter.
  */
 export function emailAudienceWhere(tenantId: string, audience: Audience | null | undefined): SQL {
+  return audienceWhere(tenantId, audience, 'EMAIL');
+}
+
+/**
+ * Same as the email audience, for WhatsApp: separate consent (whatsappStatus),
+ * must have a phone number, and not on the WhatsApp suppression list.
+ */
+export function whatsappAudienceWhere(tenantId: string, audience: Audience | null | undefined): SQL {
+  return audienceWhere(tenantId, audience, 'WHATSAPP');
+}
+
+function audienceWhere(tenantId: string, audience: Audience | null | undefined, channel: 'EMAIL' | 'WHATSAPP'): SQL {
+  const address = channel === 'EMAIL' ? contacts.email : contacts.phone;
   const conditions: (SQL | undefined)[] = [
     eq(contacts.tenantId, tenantId),
-    eq(contacts.emailStatus, 'SUBSCRIBED'),
-    isNotNull(contacts.email),
+    channel === 'EMAIL' ? eq(contacts.emailStatus, 'SUBSCRIBED') : eq(contacts.whatsappStatus, 'SUBSCRIBED'),
+    isNotNull(address),
     notExists(
       sql`(select 1 from ${suppressions} where ${suppressions.tenantId} = ${contacts.tenantId}
-          and ${suppressions.channel} = 'EMAIL' and ${suppressions.address} = ${contacts.email})`,
+          and ${suppressions.channel} = ${channel} and ${suppressions.address} = ${address})`,
     ),
   ];
 
@@ -95,6 +108,27 @@ export async function* iterateEmailAudience(
       .limit(batchSize);
     if (rows.length === 0) return;
     yield rows as { id: string; email: string }[];
+    after = rows[rows.length - 1]!.id;
+  }
+}
+
+export async function countWhatsAppAudience(db: DB | Tx, tenantId: string, audience: Audience | null | undefined) {
+  const [row] = await db.select({ n: count() }).from(contacts).where(whatsappAudienceWhere(tenantId, audience));
+  return row?.n ?? 0;
+}
+
+export async function* iterateWhatsAppAudience(db: DB | Tx, tenantId: string, audience: Audience | null | undefined, batchSize = 1000) {
+  let after = '';
+  const where = whatsappAudienceWhere(tenantId, audience);
+  for (;;) {
+    const rows = await db
+      .select({ id: contacts.id, phone: contacts.phone })
+      .from(contacts)
+      .where(and(where, sql`${contacts.id} > ${after}`))
+      .orderBy(contacts.id)
+      .limit(batchSize);
+    if (rows.length === 0) return;
+    yield rows as { id: string; phone: string }[];
     after = rows[rows.length - 1]!.id;
   }
 }

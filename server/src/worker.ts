@@ -6,7 +6,10 @@ import { closeRedis, createRedis } from './lib/redis.js';
 import { runMaintenanceTick, runSchedulerTick } from './modules/scheduler/tick.js';
 import { DeferSend, markMessageFailed, processSendJob } from './modules/sending/send-message.js';
 import { processImport } from './modules/imports/process.js';
-import { closeQueues, getSchedulerQueue, QUEUES, type EmailSendJob } from './queues/index.js';
+import { closeQueues, getSchedulerQueue, QUEUES, type EmailSendJob, type WhatsAppJob } from './queues/index.js';
+import { setWhatsAppGateway } from './modules/whatsapp/gateway.js';
+import { WhatsAppManager } from './modules/whatsapp/manager.js';
+import { processWhatsAppJob } from './modules/whatsapp/service.js';
 
 // The worker runs as its own process, separate from the API,
 // so a burst of sending never slows down the dashboard.
@@ -73,6 +76,39 @@ const importWorker = new Worker<{ importId: string }>(
   { connection: createRedis(), concurrency: 1 },
 );
 
+// WhatsApp Web (unofficial, interim): the worker holds each company's linked session
+const whatsapp = new WhatsAppManager();
+setWhatsAppGateway(whatsapp);
+await whatsapp.start();
+
+const whatsappWorker = new Worker<WhatsAppJob>(
+  QUEUES.whatsappSend,
+  async (job, token) => {
+    if (job.data.kind === 'test') {
+      const { tenantId, to, text } = job.data;
+      await whatsapp.sendText(tenantId, to, text);
+      return 'test_sent';
+    }
+    const { messageId } = job.data;
+    try {
+      return await processWhatsAppJob(messageId, whatsapp);
+    } catch (err) {
+      if (err instanceof DeferSend) {
+        await job.moveToDelayed(err.until.getTime(), token);
+        if (err.message !== 'pacing') logger.info({ messageId, until: err.until }, err.message);
+        throw new DelayedError();
+      }
+      throw err;
+    }
+  },
+  // One at a time: pacing per number is enforced in processWhatsAppJob
+  { connection: createRedis(), concurrency: 1 },
+);
+whatsappWorker.on('failed', (job, err) => {
+  if (!job || job.data.kind !== 'message') return;
+  if (job.attemptsMade >= (job.opts.attempts ?? 1)) void markMessageFailed(job.data.messageId, `gave_up: ${err.message}`.slice(0, 500));
+});
+
 // One repeating job, every minute. Upsert = safe to run on every boot.
 await getSchedulerQueue().upsertJobScheduler('every-minute', { every: 60_000 }, { name: 'tick' });
 await getSchedulerQueue().upsertJobScheduler('every-5-minutes', { every: 5 * 60_000 }, { name: 'maintenance' });
@@ -80,7 +116,8 @@ await getSchedulerQueue().upsertJobScheduler('every-5-minutes', { every: 5 * 60_
 logger.info(`Worker started (send rate ${env.SEND_RATE_PER_SECOND}/s)`);
 
 async function shutdown() {
-  await Promise.allSettled([emailWorker.close(), schedulerWorker.close(), importWorker.close()]);
+  await Promise.allSettled([emailWorker.close(), schedulerWorker.close(), importWorker.close(), whatsappWorker.close()]);
+  await whatsapp.stop();
   await closeQueues();
   await Promise.allSettled([closeDatabase(), closeRedis()]);
   process.exit(0);
