@@ -3,7 +3,7 @@ import { env } from './config/env.js';
 import { closeDatabase } from './lib/db.js';
 import { logger } from './lib/logger.js';
 import { closeRedis, createRedis } from './lib/redis.js';
-import { runSchedulerTick } from './modules/scheduler/tick.js';
+import { runMaintenanceTick, runSchedulerTick } from './modules/scheduler/tick.js';
 import { markMessageFailed, processSendJob } from './modules/sending/send-message.js';
 import { closeQueues, getSchedulerQueue, QUEUES, type EmailSendJob } from './queues/index.js';
 
@@ -39,7 +39,12 @@ emailWorker.on('failed', (job, err) => {
 
 const schedulerWorker = new Worker(
   QUEUES.scheduler,
-  async () => {
+  async (job) => {
+    if (job.name === 'maintenance') {
+      const m = await runMaintenanceTick();
+      if (m.domains.checked) logger.info(m, 'maintenance tick');
+      return m;
+    }
     const result = await runSchedulerTick();
     if (result.started.length || result.failed.length) logger.info(result, 'scheduler tick');
     return result;
@@ -49,6 +54,7 @@ const schedulerWorker = new Worker(
 
 // One repeating job, every minute. Upsert = safe to run on every boot.
 await getSchedulerQueue().upsertJobScheduler('every-minute', { every: 60_000 }, { name: 'tick' });
+await getSchedulerQueue().upsertJobScheduler('every-5-minutes', { every: 5 * 60_000 }, { name: 'maintenance' });
 
 logger.info(`Worker started (send rate ${env.SEND_RATE_PER_SECOND}/s)`);
 

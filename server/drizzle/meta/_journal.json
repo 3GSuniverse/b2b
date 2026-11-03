@@ -15,6 +15,13 @@
       "when": 1793705021611,
       "tag": "0001_campaign_last_error",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793707642502,
+      "tag": "0002_auth_and_domain_ownership",
+      "breakpoints": true
     }
   ]
 }

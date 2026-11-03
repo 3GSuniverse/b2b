@@ -29,9 +29,16 @@ export async function makeTenant(overrides: Partial<typeof tenants.$inferInsert>
       ...overrides,
     })
     .returning();
+  const domainName = `kt-${Math.random().toString(36).slice(2, 8)}.in`;
   const [domain] = await db
     .insert(sendingDomains)
-    .values({ tenantId: tenant!.id, domain: 'kurukshetra-travels.in', identityStatus: 'VERIFIED' })
+    .values({
+      tenantId: tenant!.id,
+      domain: domainName,
+      identityStatus: 'VERIFIED',
+      dkimStatus: 'VERIFIED',
+      ownershipStatus: 'VERIFIED',
+    })
     .returning();
   const [sender] = await db
     .insert(senders)
@@ -39,7 +46,7 @@ export async function makeTenant(overrides: Partial<typeof tenants.$inferInsert>
       tenantId: tenant!.id,
       domainId: domain!.id,
       fromName: 'Kurukshetra Travels',
-      fromEmail: 'offers@kurukshetra-travels.in',
+      fromEmail: `offers@${domainName}`,
       replyTo: 'bookings@kurukshetra-travels.in',
       isDefault: true,
     })

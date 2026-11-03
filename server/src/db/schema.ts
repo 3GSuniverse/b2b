@@ -126,7 +126,27 @@ export const users = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex().on(t.tenantId, t.email)],
+  // One email = one login. Stored lower-cased.
+  (t) => [uniqueIndex().on(t.email), index().on(t.tenantId)],
+);
+
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: id(),
+    // sha256 of the cookie token — a database leak never exposes live sessions
+    tokenHash: text().notNull().unique(),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tenantId: tenantRef(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    lastSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    userAgent: text(),
+    ip: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.userId), index().on(t.expiresAt)],
 );
 
 export const auditLogs = pgTable(
@@ -155,6 +175,12 @@ export const sendingDomains = pgTable(
     tenantId: tenantRef(),
     domain: text().notNull(),
     mailFromDomain: text(),
+    // Tenant-specific TXT record proving THIS company controls the domain.
+    // Without it, a company could "claim" a domain someone else already verified in SES.
+    ownershipToken: text()
+      .notNull()
+      .$defaultFn(() => `sandesh-verify=${createId()}`),
+    ownershipStatus: verificationStatus().notNull().default('PENDING'),
     identityStatus: verificationStatus().notNull().default('PENDING'),
     dkimStatus: verificationStatus().notNull().default('PENDING'),
     mailFromStatus: verificationStatus().notNull().default('PENDING'),
@@ -163,7 +189,8 @@ export const sendingDomains = pgTable(
     lastCheckedAt: ts(),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex().on(t.tenantId, t.domain)],
+  // A domain belongs to exactly one company on the platform
+  (t) => [uniqueIndex().on(t.domain), index().on(t.tenantId)],
 );
 
 export const senders = pgTable(
@@ -478,6 +505,20 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
   senders: many(senders),
 }));
 
+export const usersRelations = relations(users, ({ one }) => ({
+  tenant: one(tenants, { fields: [users.tenantId], references: [tenants.id] }),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, { fields: [sessions.userId], references: [users.id] }),
+  tenant: one(tenants, { fields: [sessions.tenantId], references: [tenants.id] }),
+}));
+
+export const sendingDomainsRelations = relations(sendingDomains, ({ one, many }) => ({
+  tenant: one(tenants, { fields: [sendingDomains.tenantId], references: [tenants.id] }),
+  senders: many(senders),
+}));
+
 export const sendersRelations = relations(senders, ({ one }) => ({
   tenant: one(tenants, { fields: [senders.tenantId], references: [tenants.id] }),
   domain: one(sendingDomains, { fields: [senders.domainId], references: [sendingDomains.id] }),
@@ -521,3 +562,5 @@ export type Contact = typeof contacts.$inferSelect;
 export type Campaign = typeof campaigns.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type Sender = typeof senders.$inferSelect;
+export type User = typeof users.$inferSelect;
+export type SendingDomain = typeof sendingDomains.$inferSelect;

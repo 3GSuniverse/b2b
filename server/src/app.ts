@@ -1,16 +1,26 @@
 import Fastify from 'fastify';
+import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import formbody from '@fastify/formbody';
 import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
 import { env, isProd } from './config/env.js';
+import { AppError, registerErrorHandler } from './lib/http.js';
+import { authRoutes } from './modules/auth/routes.js';
+import { domainRoutes } from './modules/domains/routes.js';
 import { healthRoutes } from './modules/health/routes.js';
+import { senderRoutes } from './modules/senders/routes.js';
 import { unsubscribeRoutes } from './modules/unsubscribe/routes.js';
 import { webhookRoutes, type WebhookOptions } from './modules/webhooks/routes.js';
 
 export interface AppOptions {
   webhooks?: WebhookOptions;
+  /** Sign-in / sign-up attempts per IP per 15 minutes (default 10) */
+  authRateLimit?: number;
 }
+
+const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export async function buildApp(opts: AppOptions = {}) {
   const app = Fastify({
@@ -24,6 +34,8 @@ export async function buildApp(opts: AppOptions = {}) {
     bodyLimit: 1024 * 1024,
   });
 
+  registerErrorHandler(app);
+
   await app.register(helmet, {
     // The unsubscribe page has a small inline <style>; everything else stays locked down
     contentSecurityPolicy: {
@@ -32,9 +44,24 @@ export async function buildApp(opts: AppOptions = {}) {
   });
   await app.register(cors, { origin: isProd ? env.PUBLIC_URL : true, credentials: true });
   await app.register(sensible);
+  await app.register(cookie);
   await app.register(formbody); // one-click unsubscribe posts form-encoded
+  await app.register(rateLimit, { global: false }); // enabled per route (login, signup, DNS checks)
+
+  // CSRF protection for the API: browsers can't send a cross-site JSON body without
+  // a CORS preflight, so requiring JSON on every write blocks forged form posts.
+  app.addHook('onRequest', async (req) => {
+    if (!req.url.startsWith('/api/') || !MUTATING.has(req.method)) return;
+    const hasBody = Number(req.headers['content-length'] ?? 0) > 0 || req.headers['transfer-encoding'] !== undefined;
+    if (hasBody && !String(req.headers['content-type'] ?? '').startsWith('application/json')) {
+      throw new AppError(415, 'json_required', 'Send the request body as JSON');
+    }
+  });
 
   await app.register(healthRoutes);
+  await app.register(authRoutes, { rateLimitMax: opts.authRateLimit });
+  await app.register(domainRoutes);
+  await app.register(senderRoutes);
   await app.register(unsubscribeRoutes);
   await app.register(webhookRoutes, opts.webhooks ?? {});
 

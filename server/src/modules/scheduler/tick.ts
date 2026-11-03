@@ -3,10 +3,19 @@ import { db } from '../../lib/db.js';
 import { campaigns } from '../../db/schema.js';
 import type { EnqueueFn } from '../../queues/index.js';
 import { CampaignError, startCampaign } from '../sending/start-campaign.js';
+import { refreshPendingDomains } from '../domains/service.js';
+import { deleteExpiredSessions } from '../auth/sessions.js';
 
 export interface TickResult {
   started: string[];
   failed: { campaignId: string; reason: string }[];
+}
+
+/** Housekeeping that doesn't need to run every minute: domain checks, expired sessions. */
+export async function runMaintenanceTick() {
+  const domains = await refreshPendingDomains();
+  await deleteExpiredSessions();
+  return { domains };
 }
 
 /**

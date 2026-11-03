@@ -1,8 +1,9 @@
 import { and, count, eq, gte, inArray } from 'drizzle-orm';
 import { db } from '../../lib/db.js';
-import { campaigns, messages } from '../../db/schema.js';
+import { campaigns, messages, senders } from '../../db/schema.js';
 import { enqueueEmails, type EnqueueFn } from '../../queues/index.js';
 import { countEmailAudience, iterateEmailAudience } from '../audience/resolve.js';
+import { isDomainReady } from '../domains/service.js';
 
 export class CampaignError extends Error {
   constructor(
@@ -12,6 +13,7 @@ export class CampaignError extends Error {
       | 'not_startable'
       | 'tenant_not_active'
       | 'no_sender'
+      | 'sender_not_verified'
       | 'no_content'
       | 'quota_exceeded',
   ) {
@@ -58,6 +60,14 @@ export async function startCampaign(
     throw new CampaignError('Sending is paused for this account', 'tenant_not_active');
   }
   if (!campaign.senderId) throw new CampaignError('Choose who the email is from', 'no_sender');
+  const sender = await db.query.senders.findFirst({
+    where: and(eq(senders.id, campaign.senderId), eq(senders.tenantId, campaign.tenantId)),
+    with: { domain: true },
+  });
+  if (!sender) throw new CampaignError('Choose who the email is from', 'no_sender');
+  if (!isDomainReady(sender.domain)) {
+    throw new CampaignError(`${sender.domain.domain} isn’t verified yet. Finish the DNS setup first.`, 'sender_not_verified');
+  }
 
   const subject = campaign.subject ?? campaign.template?.subject;
   const html = campaign.html ?? campaign.template?.html;
