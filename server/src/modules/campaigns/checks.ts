@@ -50,7 +50,8 @@ function emptyExpr(key: string): SQL | null {
   return sql`coalesce(${contacts.attributes} ->> ${key}, '') = ''`;
 }
 
-const PLACEHOLDER = /\[[A-Z][A-Z0-9 _-]{1,30}\]/g;
+// Starter designs mark what to replace with [CAPS IN BRACKETS]; sending one by mistake is embarrassing
+const PLACEHOLDER = /\[[A-Z][A-Z0-9 ,.'’—–&/:_-]{1,120}\]/g;
 
 /**
  * The "Ready-to-send checks" panel. Errors block sending; warnings are advice.
@@ -88,9 +89,9 @@ export async function campaignChecks(input: CheckInput): Promise<{ checks: Check
   if (placeholders.length) {
     add({
       id: 'placeholders',
-      level: 'warning',
+      level: 'error',
       title: `${placeholders.length} placeholder${placeholders.length > 1 ? 's' : ''} still in the email.`,
-      note: `Replace ${placeholders.join(' and ')} before sending.`,
+      note: `Replace ${placeholders.map((p) => (p.length > 40 ? p.slice(0, 38) + '…]' : p)).join(', ')} before sending.`,
     });
   }
 

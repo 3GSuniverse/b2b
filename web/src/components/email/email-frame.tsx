@@ -81,7 +81,7 @@ export function EmailPreview({
   previewText?: string | null;
 }) {
   const body = html ? (
-    <EmailFrame html={html} width={device === 'mobile' ? 375 : 640} minHeight={device === 'mobile' ? 560 : 520} />
+    <EmailFrame html={html} width={device === 'mobile' ? 375 : 640} minHeight={device === 'mobile' ? 520 : 360} />
   ) : (
     <div className="grid h-[420px] place-items-center px-8 text-center text-sm text-muted">Choose a design to see the preview.</div>
   );

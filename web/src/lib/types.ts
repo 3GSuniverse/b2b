@@ -200,3 +200,34 @@ export interface Automation {
   activatedAt: string | null;
   stats: { sent: number; delivered: number; clicked: number; clickRate: number };
 }
+
+export interface Starter {
+  id: string;
+  name: string;
+  description: string;
+  subject: string;
+  previewText: string;
+  html: string;
+}
+
+export interface Rendered {
+  subject: string;
+  html: string;
+  text: string;
+}
+
+export interface CampaignPreview {
+  previewAs: { id: string; email: string | null; firstName: string | null } | null;
+  rendered: Rendered | null;
+  checks: Check[];
+  canSend: boolean;
+  recipients: number;
+}
+
+export interface CampaignReport {
+  campaign: Campaign;
+  pending: number;
+  cancelled: number;
+  topLinks: { url: string; clicks: number }[];
+  problems: { email: string; at: string; detail: Record<string, unknown> | null }[];
+}

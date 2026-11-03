@@ -306,7 +306,7 @@ export function VisualEditor({ html, onChange, fields }: { html: string; onChang
                 <ul className="flex flex-col gap-3 text-[13px] leading-relaxed text-muted">
                   <li>Click any text in the email and type to change it.</li>
                   <li>
-                    Replace anything in <span className="font-semibold text-ink">[SQUARE BRACKETS]</span>. Sending is blocked until they’re gone.
+                    Replace anything in <span className="font-semibold text-ink">[SQUARE BRACKETS]</span>. You can’t send until they’re gone.
                   </li>
                   <li>
                     <span className="font-semibold text-ink">Personalise</span> adds a field like {'{first_name|there}'}. Each person sees their own name; “there” is used when a name is missing.

@@ -52,8 +52,10 @@ describe('overview', () => {
     expect(o.quota).toMatchObject({ used: 3, limit: 1000, resetsOn: '2026-12-01' });
     expect(o.thisMonth).toMatchObject({ sent: 3, delivered: 2, deliveryRate: 66.7, clicked: 1, clickRate: 50, sentChange: 200, unsubscribed: 1 });
     expect(o.last30Days).toHaveLength(30);
-    expect(o.last30Days.at(-1)).toEqual({ day: '2026-11-03', sent: 1, delivered: 1, clicked: 1 });
-    expect(o.last30Days.find((d) => d.day === '2026-11-01')).toEqual({ day: '2026-11-01', sent: 2, delivered: 1, clicked: 0 });
+    expect(o.last30Days.at(-1)).toEqual({ day: '2026-11-03', sent: 1, delivered: 1, clicked: 1, campaigns: [] });
+    expect(o.last30Days.find((d) => d.day === '2026-11-01')).toEqual({ day: '2026-11-01', sent: 2, delivered: 1, clicked: 0, campaigns: [] });
+    // The chart names the campaign that started that day (IST)
+    expect(o.last30Days.find((d) => d.day === '2026-11-02').campaigns).toEqual([{ id: camp!.id, name: 'Diwali' }]);
     expect(o.audience).toEqual({ total: 4, subscribed: 3, suppressed: 1 });
     expect(o.upcoming).toMatchObject({ name: 'Kashi yatra', recipients: 3 });
     expect(o.recentCampaigns.map((c) => c.name)).toContain('Diwali');

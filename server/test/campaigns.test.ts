@@ -97,7 +97,7 @@ describe('preview and checks', () => {
     const byId = Object.fromEntries(p.checks.map((x: { id: string }) => [x.id, x]));
     expect(byId.unknown_tags).toMatchObject({ level: 'error' });
     expect(byId.unknown_tags.title).toContain('{cityy}');
-    expect(byId.placeholders).toMatchObject({ level: 'warning' });
+    expect(byId.placeholders).toMatchObject({ level: 'error' }); // never send [PLACEHOLDERS] to customers
     expect(byId.placeholders.note).toContain('[PRICE]');
     expect(byId.fallback_first_name).toMatchObject({ level: 'warning', title: '1 contact has no first name.' });
     expect(byId.unsubscribe.level).toBe('ok');
