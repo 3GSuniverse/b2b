@@ -1,0 +1,50 @@
+import { cva, type VariantProps } from 'class-variance-authority';
+import { Loader2 } from 'lucide-react';
+import { forwardRef, type ButtonHTMLAttributes } from 'react';
+import { Link, type LinkProps } from 'react-router-dom';
+import { cn } from '@/lib/cn';
+
+export const buttonStyles = cva(
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] font-semibold transition-[background,box-shadow,color,transform] duration-150 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 select-none',
+  {
+    variants: {
+      variant: {
+        primary: 'bg-ink text-white hover:bg-[#25302c] shadow-[inset_0_-1px_0_rgb(0_0_0/0.25)]',
+        accent: 'bg-accent text-white hover:bg-accent-strong',
+        secondary: 'bg-surface text-ink border border-line hover:bg-sunken hover:border-[#d2d7d3]',
+        ghost: 'text-ink-2 hover:bg-hover hover:text-ink',
+        danger: 'bg-danger text-white hover:bg-[#931c13]',
+        'danger-ghost': 'text-danger hover:bg-danger-soft',
+        link: 'text-accent hover:text-accent-strong underline-offset-4 hover:underline px-0 h-auto',
+      },
+      size: {
+        sm: 'h-9 px-3 text-[13px]',
+        md: 'h-11 px-4 text-sm',
+        lg: 'h-12 px-5 text-[15px]',
+        icon: 'h-10 w-10 p-0',
+        'icon-sm': 'h-8 w-8 p-0 rounded-lg',
+      },
+    },
+    defaultVariants: { variant: 'secondary', size: 'md' },
+  },
+);
+
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonStyles> {
+  loading?: boolean;
+}
+
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { className, variant, size, loading, children, disabled, type = 'button', ...props },
+  ref,
+) {
+  return (
+    <button ref={ref} type={type} className={cn(buttonStyles({ variant, size }), className)} disabled={disabled || loading} aria-busy={loading || undefined} {...props}>
+      {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+      {children}
+    </button>
+  );
+});
+
+export function LinkButton({ className, variant, size, ...props }: LinkProps & VariantProps<typeof buttonStyles>) {
+  return <Link className={cn(buttonStyles({ variant, size }), className)} {...props} />;
+}

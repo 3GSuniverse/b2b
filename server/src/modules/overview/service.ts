@@ -88,6 +88,14 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
     unreadCount(tenantId),
   ]);
 
+  // Campaigns that started in the chart window, so the chart can name its peaks
+  const chartCampaigns = await db.execute<{ day: string; id: string; name: string }>(sql`
+    select to_char(${campaigns.startedAt} at time zone ${tz}, 'YYYY-MM-DD') as day, ${campaigns.id} as id, ${campaigns.name} as name
+    from ${campaigns}
+    where ${campaigns.tenantId} = ${tenantId}
+      and ${campaigns.startedAt} >= ${new Date(now.getTime() - 31 * 86_400_000).toISOString()}::timestamptz
+    order by ${campaigns.startedAt}`);
+
   const byStatus = Object.fromEntries(audienceRows.map((r) => [r.status, r.n]));
   const totalContacts = audienceRows.reduce((a, r) => a + r.n, 0);
   const subscribed = byStatus.SUBSCRIBED ?? 0;
@@ -115,7 +123,13 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
       unsubscribed: unsubs,
       unsubscribeRate: pct(unsubs, cur.delivered || cur.sent),
     },
-    last30Days: daily.rows.map((r) => ({ day: r.day, sent: r.sent, delivered: r.delivered, clicked: r.clicked })),
+    last30Days: daily.rows.map((r) => ({
+      day: r.day,
+      sent: r.sent,
+      delivered: r.delivered,
+      clicked: r.clicked,
+      campaigns: chartCampaigns.rows.filter((c) => c.day === r.day).map((c) => ({ id: c.id, name: c.name })),
+    })),
     health: {
       sample: health.sample,
       bounceRate: Math.round(health.bounceRate * 1000) / 10,
