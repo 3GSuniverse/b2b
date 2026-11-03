@@ -1,6 +1,6 @@
 import { Worker } from 'bullmq';
 import { env } from './config/env.js';
-import { db } from './lib/db.js';
+import { closeDatabase } from './lib/db.js';
 import { createRedis } from './lib/redis.js';
 import { QUEUES, type EmailSendJob } from './queues/index.js';
 
@@ -30,7 +30,7 @@ console.log(`Worker started (rate limit ${env.SEND_RATE_PER_SECOND}/s)`);
 
 async function shutdown() {
   await emailWorker.close();
-  await db.$disconnect();
+  await closeDatabase();
   process.exit(0);
 }
 

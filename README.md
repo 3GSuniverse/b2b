@@ -9,12 +9,12 @@ automations, contacts, and deliverability safety built in. Multi-tenant from day
 b2b/
 ├── docker-compose.yml      Postgres + Redis for local development
 └── server/                 API + background worker (Node, TypeScript)
-    ├── prisma/
-    │   └── schema.prisma   Database schema (tenants, contacts, campaigns, automations…)
-    ├── prisma.config.ts    Prisma 7 config — reads DATABASE_URL from .env
+    ├── drizzle/            Generated SQL migrations (committed, readable SQL)
+    ├── drizzle.config.ts   Drizzle Kit config — reads DATABASE_URL from .env
     └── src/
         ├── config/env.ts   All settings, validated at startup
-        ├── lib/            Shared clients: database (Prisma), Redis
+        ├── db/schema.ts    Database schema (tenants, contacts, campaigns, automations…)
+        ├── lib/            Shared clients: database (Drizzle), Redis
         ├── queues/         BullMQ queue definitions
         ├── modules/        One folder per feature (routes + logic)
         ├── app.ts          Builds the Fastify app
@@ -27,7 +27,7 @@ b2b/
 | Part | Choice | Why |
 |---|---|---|
 | API | Fastify 5 + TypeScript | Fast, typed, low overhead |
-| Database | PostgreSQL 16 + Prisma 7 | Relational data, safe migrations |
+| Database | PostgreSQL 16 + Drizzle ORM | Typed queries, plain-SQL migrations, no native binaries |
 | Queue | Redis + BullMQ | Retries, rate limiting, scheduled jobs |
 | Email | Amazon SES (ap-south-1) | Cheapest reliable sending, scales to SaaS |
 
@@ -48,8 +48,7 @@ npm install
 cp .env.example .env          # then fill in the AWS keys
 
 # 3. Create the database tables
-npm run db:generate
-npm run db:migrate -- --name init
+npm run db:migrate
 
 # 4. Run the API and the worker (two terminals)
 npm run dev
