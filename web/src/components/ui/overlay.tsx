@@ -39,7 +39,9 @@ export function Dialog({
             <div className="flex flex-col gap-1.5">
               <DialogPrimitive.Title className="text-lg font-semibold tracking-tight">{title}</DialogPrimitive.Title>
               {description ? (
-                <DialogPrimitive.Description className="text-sm leading-relaxed text-muted">{description}</DialogPrimitive.Description>
+                <DialogPrimitive.Description asChild>
+                  <div className="text-sm leading-relaxed text-muted">{description}</div>
+                </DialogPrimitive.Description>
               ) : (
                 <DialogPrimitive.Description className="sr-only">{title}</DialogPrimitive.Description>
               )}
@@ -89,7 +91,9 @@ export function Sheet({
             <div className="flex min-w-0 flex-col gap-1">
               <DialogPrimitive.Title className="truncate text-lg font-semibold tracking-tight">{title}</DialogPrimitive.Title>
               {description ? (
-                <DialogPrimitive.Description className="text-sm text-muted">{description}</DialogPrimitive.Description>
+                <DialogPrimitive.Description asChild>
+                  <div className="pt-1 text-sm text-muted">{description}</div>
+                </DialogPrimitive.Description>
               ) : (
                 <DialogPrimitive.Description className="sr-only">{title}</DialogPrimitive.Description>
               )}

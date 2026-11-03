@@ -64,3 +64,10 @@ export function avatarTone(seed: string) {
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return AVATAR[h % AVATAR.length]!.join(' ');
 }
+
+/** +919848022338 → +91 98480 22338. Other countries are shown as stored. */
+export function phone(p: string | null | undefined) {
+  if (!p) return '';
+  const m = /^\+91(\d{5})(\d{5})$/.exec(p);
+  return m ? `+91 ${m[1]} ${m[2]}` : p;
+}
