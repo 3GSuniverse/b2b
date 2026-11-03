@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, CheckCircle2, Circle, Globe, Mail, MoreHorizontal, Plus, RefreshCw, Send, Star, Trash2, TriangleAlert } from 'lucide-react';
+import { Building2, CheckCircle2, Circle, Globe, Mail, MessageCircle, MoreHorizontal, Plus, RefreshCw, Send, Star, Trash2, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -13,10 +13,12 @@ import { cn } from '@/lib/cn';
 import { ago, n } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import type { DnsRecord, Domain, Mailbox, Sender } from '@/lib/types';
+import { WhatsAppSettings } from '@/components/whatsapp/settings';
 
 const SECTIONS = [
   { id: 'senders', label: 'Sending addresses', icon: Send },
   { id: 'domains', label: 'Domains', icon: Globe },
+  { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
   { id: 'company', label: 'Company', icon: Building2 },
 ] as const;
 type Section = (typeof SECTIONS)[number]['id'];
@@ -613,15 +615,17 @@ function Company() {
 
 export function SettingsPage() {
   const { section } = useParams();
+  const { tenant } = useSession();
+  const sections = SECTIONS.filter((x) => x.id !== 'whatsapp' || tenant.features?.whatsapp);
   if (section === 'account') return <Navigate to="/settings/company" replace />;
-  if (!SECTIONS.some((s) => s.id === section)) return <Navigate to="/settings/senders" replace />;
-  const content: Record<Section, ReactNode> = { senders: <Senders />, domains: <Domains />, company: <Company /> };
+  if (!sections.some((s) => s.id === section)) return <Navigate to="/settings/senders" replace />;
+  const content: Record<Section, ReactNode> = { senders: <Senders />, domains: <Domains />, whatsapp: <WhatsAppSettings />, company: <Company /> };
   return (
     <>
       <PageHeader title="Settings" />
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
         <nav aria-label="Settings" className="flex gap-1 overflow-x-auto lg:sticky lg:top-6 lg:flex-col">
-          {SECTIONS.map(({ id, label, icon: Icon }) => (
+          {sections.map(({ id, label, icon: Icon }) => (
             <NavLink
               key={id}
               to={`/settings/${id}`}
@@ -639,4 +643,3 @@ export function SettingsPage() {
     </>
   );
 }
-

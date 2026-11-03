@@ -2,7 +2,7 @@
 
 export interface Me {
   user: { id: string; name: string; email: string; role: 'OWNER' | 'ADMIN' | 'MEMBER' };
-  tenant: { id: string; name: string; slug: string; status: 'ACTIVE' | 'PAUSED' | 'SUSPENDED'; timezone: string; monthlyQuota: number; pausedReason: string | null };
+  tenant: { id: string; name: string; slug: string; status: 'ACTIVE' | 'PAUSED' | 'SUSPENDED'; timezone: string; monthlyQuota: number; pausedReason: string | null; features?: { whatsapp: boolean } };
 }
 
 export interface CampaignStats {
@@ -37,9 +37,11 @@ export interface Audience {
   filters?: AudienceFilter[];
 }
 
+export type Channel = 'EMAIL' | 'WHATSAPP';
 export interface Campaign {
   id: string;
   name: string;
+  channel: Channel;
   status: CampaignStatus;
   sender: { id: string; fromName: string; fromEmail: string; kind: string } | null;
   templateId: string | null;
@@ -217,7 +219,7 @@ export interface Rendered {
 }
 
 export interface CampaignPreview {
-  previewAs: { id: string; email: string | null; firstName: string | null } | null;
+  previewAs: { id: string; email: string | null; firstName: string | null; phone?: string | null } | null;
   rendered: Rendered | null;
   checks: Check[];
   canSend: boolean;
@@ -230,4 +232,16 @@ export interface CampaignReport {
   cancelled: number;
   topLinks: { url: string; clicks: number }[];
   problems: { email: string; at: string; detail: Record<string, unknown> | null }[];
+}
+
+export interface WhatsAppStatus {
+  status: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'LOGGED_OUT' | 'BLOCKED';
+  phone: string | null;
+  displayName: string | null;
+  dailyLimit: number;
+  intervalSeconds: number;
+  sentLast24h: number;
+  lastError: string | null;
+  connectedAt: string | null;
+  qr: string | null; // data: URL while linking
 }

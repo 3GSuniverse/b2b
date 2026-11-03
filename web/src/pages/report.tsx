@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DeviceToggle, EmailPreview, type Device } from '@/components/email/email-frame';
+import { WhatsAppPreview } from '@/components/whatsapp/preview';
+import { useSession } from '@/lib/session';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Panel, PanelHeader, ProgressBar, Skeleton } from '@/components/ui/display';
 import { Dialog } from '@/components/ui/overlay';
@@ -19,7 +21,14 @@ const share = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10
 /** Sent → delivered → opened → clicked, each as a share of what was sent. */
 function Funnel({ c, tracked }: { c: Campaign; tracked: boolean }) {
   const s = c.stats;
-  const steps = [
+  const wa = c.channel === 'WHATSAPP';
+  const steps = wa
+    ? [
+        { label: 'Sent', value: s.sent, note: `of ${n(s.recipients)} recipients` },
+        { label: 'Delivered ✓✓', value: s.delivered, note: `${pct(share(s.delivered, s.sent))} of sent` },
+        { label: 'Read', value: s.opened, note: `${pct(share(s.opened, s.delivered))} of delivered` },
+      ]
+    : [
     { label: 'Sent', value: s.sent, note: `of ${n(s.recipients)} recipients` },
     { label: 'Delivered', value: s.delivered, note: `${pct(share(s.delivered, s.sent))} of sent` },
     ...(tracked
@@ -30,9 +39,13 @@ function Funnel({ c, tracked }: { c: Campaign; tracked: boolean }) {
       : []),
   ];
   const max = Math.max(s.sent, 1);
+  void wa;
   return (
     <Panel className="flex flex-col gap-5 p-5 sm:p-6">
-      <PanelHeader title="How far it got" description={tracked ? 'Opens are a rough guide: some apps hide them, others open every email automatically.' : 'Opens and clicks aren’t tracked when sending from Gmail.'} />
+      <PanelHeader
+        title="How far it got"
+        description={wa ? 'Read counts only people who have read receipts (blue ticks) switched on.' : tracked ? 'Opens are a rough guide: some apps hide them, others open every email automatically.' : 'Opens and clicks aren’t tracked when sending from Gmail.'}
+      />
       <ol className="flex flex-col gap-3.5">
         {steps.map((st, i) => (
           <li key={st.label} className="grid grid-cols-[minmax(0,1fr)] grid-cols-[110px_minmax(0,1fr)] items-center gap-4 sm:grid-cols-[140px_minmax(0,1fr)_150px]">
@@ -82,6 +95,7 @@ function SendingProgress({ c, pending, onCancel }: { c: Campaign; pending: numbe
 
 export function ReportPage() {
   const { id } = useParams();
+  const { tenant } = useSession();
   const nav = useNavigate();
   const qc = useQueryClient();
   const [device, setDevice] = useState<Device>('desktop');
@@ -124,10 +138,19 @@ export function ReportPage() {
   const { campaign: c, pending, cancelled, topLinks, problems } = q.data;
   if (c.status === 'DRAFT' || c.status === 'SCHEDULED') return <Navigate to={`/campaigns/${c.id}/edit`} replace />;
   const s = c.stats;
-  const tracked = c.sender?.kind !== 'GMAIL';
+  const wa = c.channel === 'WHATSAPP';
+  const tracked = !wa && c.sender?.kind !== 'GMAIL';
   const maxClicks = Math.max(1, ...topLinks.map((l) => l.clicks));
 
-  const kpis = [
+  const kpis = wa
+    ? [
+        { label: 'Delivered', value: pct(c.rates.delivery), sub: `${n(s.delivered)} of ${n(s.sent)}` },
+        { label: 'Read', value: pct(c.rates.open), sub: `${n(s.opened)} people` },
+        { label: 'Replied STOP', value: n(s.unsubscribed), sub: pct(c.rates.unsubscribe) },
+        { label: 'Not on WhatsApp', value: n(s.failed - cancelled), sub: 'or couldn’t be sent', warn: false },
+        { label: 'Skipped', value: n(s.suppressed), sub: 'unsubscribed earlier' },
+      ]
+    : [
     { label: 'Delivered', value: pct(c.rates.delivery), sub: `${n(s.delivered)} of ${n(s.sent)}` },
     ...(tracked
       ? [
@@ -197,7 +220,7 @@ export function ReportPage() {
 
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         <div className="flex min-w-0 flex-col gap-6">
-          <Funnel c={c} tracked={tracked} />
+          <Funnel c={c} tracked={tracked || wa} />
 
           {tracked && (
             <Panel className="flex flex-col">
@@ -225,6 +248,7 @@ export function ReportPage() {
             </Panel>
           )}
 
+          {!wa && (
           <Panel className="flex flex-col">
             <PanelHeader
               className="px-5 pt-5 sm:px-6 sm:pt-6"
@@ -271,6 +295,7 @@ export function ReportPage() {
               </p>
             )}
           </Panel>
+          )}
         </div>
 
         <Panel className="flex flex-col gap-4 p-4 sm:p-5 lg:sticky lg:top-6">
@@ -279,15 +304,19 @@ export function ReportPage() {
               <h2 className="text-[15px] font-semibold">What was sent</h2>
               <span className="text-xs text-muted">Exactly as it went out, personalised for one recipient</span>
             </div>
-            <DeviceToggle value={device} onChange={setDevice} />
+            {!wa && <DeviceToggle value={device} onChange={setDevice} />}
           </div>
-          <EmailPreview
-            html={preview.data?.rendered?.html ?? null}
-            device={device}
-            fromName={c.sender?.fromName ?? ''}
-            subject={preview.data?.rendered?.subject ?? c.subject ?? ''}
-            previewText={c.previewText}
-          />
+          {wa ? (
+            <WhatsAppPreview text={preview.data?.rendered?.text ?? c.text} businessName={tenant.name} />
+          ) : (
+            <EmailPreview
+              html={preview.data?.rendered?.html ?? null}
+              device={device}
+              fromName={c.sender?.fromName ?? ''}
+              subject={preview.data?.rendered?.subject ?? c.subject ?? ''}
+              previewText={c.previewText}
+            />
+          )}
         </Panel>
       </div>
 

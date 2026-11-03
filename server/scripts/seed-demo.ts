@@ -150,6 +150,7 @@ async function main() {
       firstName: first,
       lastName: last,
       emailStatus: status,
+      whatsappStatus: rand() < 0.45 ? 'SUBSCRIBED' : 'UNSUBSCRIBED',
       attributes: {
         city: pick(CITIES),
         ...(trip ? { trip_date: trip, destination: pick(TRIPS) } : {}),

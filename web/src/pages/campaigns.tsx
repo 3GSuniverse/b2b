@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Copy, MoreHorizontal, Pencil, Send, Trash2, XCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, MessageCircle, MoreHorizontal, Pencil, Send, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -38,8 +38,8 @@ function Engagement({ c }: { c: Campaign }) {
         <span className="text-xs text-muted">delivered</span>
       </span>
       <span className="flex flex-col">
-        <span className="font-semibold">{pct(c.rates.click)}</span>
-        <span className="text-xs text-muted">clicked, of {n(c.stats.delivered)}</span>
+        <span className="font-semibold">{pct(c.channel === 'WHATSAPP' ? c.rates.open : c.rates.click)}</span>
+        <span className="text-xs text-muted">{c.channel === 'WHATSAPP' ? 'read' : `clicked, of ${n(c.stats.delivered)}`}</span>
       </span>
     </div>
   );
@@ -149,7 +149,17 @@ export function CampaignsPage() {
                     <Link to={campaignHref(c)} className="truncate text-sm font-semibold after:absolute after:inset-0 after:content-[''] hover:underline">
                       {c.name}
                     </Link>
-                    <span className="truncate text-[13px] text-muted">{c.subject ? <PrettyTags text={c.subject} /> : 'No subject yet'}</span>
+                    <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted">
+                      {c.channel === 'WHATSAPP' && (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[#e7f8ee] px-1.5 text-[11px] font-semibold text-[#0f6b3a]">
+                          <MessageCircle className="h-3 w-3" aria-hidden />
+                          WhatsApp
+                        </span>
+                      )}
+                      <span className="truncate">
+                        {c.channel === 'WHATSAPP' ? (c.text ? <PrettyTags text={c.text.split('\n')[0]!} /> : 'No message yet') : c.subject ? <PrettyTags text={c.subject} /> : 'No subject yet'}
+                      </span>
+                    </span>
                   </div>
                   <div className="justify-self-end lg:justify-self-start">
                     <CampaignStatusBadge status={c.status as CampaignStatus} />

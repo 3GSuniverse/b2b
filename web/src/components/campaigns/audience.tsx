@@ -28,12 +28,12 @@ export function useLists() {
 }
 
 /** Live "how many people is this" for an audience, debounced. */
-export function useAudienceCount(audience: Audience | null) {
-  const [key, setKey] = useState(JSON.stringify(audience ?? {}));
+export function useAudienceCount(audience: Audience | null, channel: 'EMAIL' | 'WHATSAPP' = 'EMAIL') {
+  const [key, setKey] = useState(JSON.stringify({ ...(audience ?? {}), channel }));
   useEffect(() => {
-    const t = setTimeout(() => setKey(JSON.stringify(audience ?? {})), 300);
+    const t = setTimeout(() => setKey(JSON.stringify({ ...(audience ?? {}), channel })), 300);
     return () => clearTimeout(t);
-  }, [audience]);
+  }, [audience, channel]);
   return useQuery({
     queryKey: ['audience-count', key],
     queryFn: () => api.post<{ count: number }>('/api/audience/count', JSON.parse(key)),
@@ -55,10 +55,10 @@ export function useFieldLabel() {
   return (key: string) => CORE_FIELDS.find((f) => f.key === key)?.label ?? fields.data?.fields.find((f) => f.key === key)?.label ?? key;
 }
 
-export function AudienceEditor({ value, onChange }: { value: Audience | null; onChange: (a: Audience) => void }) {
+export function AudienceEditor({ value, onChange, channel = 'EMAIL' }: { value: Audience | null; onChange: (a: Audience) => void; channel?: 'EMAIL' | 'WHATSAPP' }) {
   const lists = useLists();
   const fields = useFields();
-  const count = useAudienceCount(value);
+  const count = useAudienceCount(value, channel);
   const a: Audience = value ?? {};
   const listIds = a.listIds ?? [];
   const filters = a.filters ?? [];
@@ -72,7 +72,7 @@ export function AudienceEditor({ value, onChange }: { value: Audience | null; on
       <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Who gets this">
         {(
           [
-            ['everyone', 'Everyone who’s subscribed', 'All contacts who can receive email'],
+            ['everyone', 'Everyone who’s subscribed', channel === 'WHATSAPP' ? 'Everyone who agreed to WhatsApp messages' : 'All contacts who can receive email'],
             ['lists', 'People in lists', 'Pick one or more lists'],
           ] as const
         ).map(([m, title, sub]) => (
@@ -107,7 +107,7 @@ export function AudienceEditor({ value, onChange }: { value: Audience | null; on
               <label key={l.id} className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-sunken">
                 <Checkbox label={l.name} checked={on} onCheckedChange={(v) => onChange({ ...a, listIds: v ? [...listIds, l.id] : listIds.filter((x) => x !== l.id) })} />
                 <span className="flex-1 text-sm font-medium">{l.name}</span>
-                <span className="tnum text-[13px] text-muted">{n(l.subscribed)} subscribed</span>
+                <span className="tnum text-[13px] text-muted">{channel === 'WHATSAPP' ? `${n(l.members)} people` : `${n(l.subscribed)} subscribed`}</span>
               </label>
             );
           })}

@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, ListPlus, ListX, Search, Trash2, Upload, UserPlus, Users, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ListPlus, ListX, MessageCircle, Search, Trash2, Upload, UserPlus, Users, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -298,7 +298,20 @@ export function ContactsPage() {
                               </div>
                             </div>
                           </td>
-                          <td className="tnum whitespace-nowrap py-3 pr-4 text-ink-2">{c.phone ? phone(c.phone) : <span className="text-faint">—</span>}</td>
+                          <td className="tnum whitespace-nowrap py-3 pr-4 text-ink-2">
+                            {c.phone ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                {phone(c.phone)}
+                                {c.whatsappStatus === 'SUBSCRIBED' && (
+                                  <span title="Agreed to WhatsApp messages" className="grid h-4 w-4 place-items-center rounded-full bg-[#e7f8ee] text-[#128c4a]">
+                                    <MessageCircle className="h-2.5 w-2.5" aria-label="Agreed to WhatsApp messages" />
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-faint">—</span>
+                            )}
+                          </td>
                           <td className="py-3 pr-4">
                             <div className="flex flex-wrap gap-1">
                               {c.lists.slice(0, 2).map((l) => (

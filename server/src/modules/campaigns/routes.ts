@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../lib/db.js';
 import { parseBody } from '../../lib/http.js';
-import { countEmailAudience } from '../audience/resolve.js';
+import { countEmailAudience, countWhatsAppAudience } from '../audience/resolve.js';
 import { requireAuth, tenantOf } from '../auth/guard.js';
 import {
   audienceSchema,
@@ -96,6 +96,9 @@ export async function campaignRoutes(app: FastifyInstance) {
 
   // "186 contacts match" while the user builds an audience
   app.post('/api/audience/count', { preHandler: requireAuth }, async (req) => ({
-    count: await countEmailAudience(db, tenantOf(req), parseBody(audienceSchema, req.body)),
+    count: await (async () => {
+      const { channel, ...audience } = parseBody(audienceSchema.extend({ channel: z.enum(['EMAIL', 'WHATSAPP']).optional() }), req.body);
+      return channel === 'WHATSAPP' ? countWhatsAppAudience(db, tenantOf(req), audience) : countEmailAudience(db, tenantOf(req), audience);
+    })(),
   }));
 }

@@ -12,6 +12,7 @@ import {
   Clock3,
   FlaskConical,
   LayoutTemplate,
+  MessageCircle,
   Loader2,
   Mail,
   Pencil,
@@ -37,6 +38,8 @@ import { cn } from '@/lib/cn';
 import { dateTime, n } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { CampaignStatusBadge } from '@/lib/status';
+import { WHATSAPP_STARTER, WhatsAppComposer } from './whatsapp-composer';
+import { Segmented } from '@/components/ui/controls';
 import { PrettyTags } from '@/lib/tags';
 import type { Audience, Campaign, CampaignPreview, Check as CheckT, Sender } from '@/lib/types';
 
@@ -49,13 +52,13 @@ export function tzOffset(tz: string, at = new Date()) {
   return m ? `${m[1]}:${m[2] ?? '00'}` : '+00:00';
 }
 /** "2026-11-04T10:00" in the company's time zone → ISO with offset. */
-const toIso = (local: string, tz: string) => `${local}:00${tzOffset(tz, new Date(local))}`;
+export const toIso = (local: string, tz: string) => `${local}:00${tzOffset(tz, new Date(local))}`;
 /** Date → "YYYY-MM-DDTHH:mm" as the wall clock in a time zone. */
-function toLocalInput(d: Date, tz: string) {
+export function toLocalInput(d: Date, tz: string) {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(d).map((x) => [x.type, x.value]));
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
-function nextAt(daysAhead: number, hour: number, tz: string, weekday?: number) {
+export function nextAt(daysAhead: number, hour: number, tz: string, weekday?: number) {
   const now = new Date();
   const local = toLocalInput(now, tz).slice(0, 10);
   const base = new Date(`${local}T12:00:00Z`);
@@ -72,6 +75,16 @@ function NewCampaign() {
   const qc = useQueryClient();
   const [name, setName] = useState(() => `Campaign ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`);
   const senders = useQuery({ queryKey: ['senders'], queryFn: () => api.get<{ senders: Sender[] }>('/api/senders') });
+  const { tenant } = useSession();
+  const [channel, setChannel] = useState<'EMAIL' | 'WHATSAPP'>('EMAIL');
+  const createWa = useMutation({
+    mutationFn: () => api.post<{ campaign: Campaign }>('/api/campaigns', { name: name.trim() || 'Untitled campaign', channel: 'WHATSAPP', text: WHATSAPP_STARTER }),
+    onSuccess: ({ campaign }) => {
+      qc.invalidateQueries({ queryKey: ['campaigns'] });
+      nav(`/campaigns/${campaign.id}/edit`, { replace: true });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
   const create = useMutation({
     mutationFn: (d: Design) => {
       const def = senders.data?.senders.find((s) => s.isDefault && s.readyToSend) ?? senders.data?.senders.find((s) => s.readyToSend);
@@ -98,12 +111,38 @@ function NewCampaign() {
         title="New campaign"
         description="Name it, then pick a design to start from. You’ll change the words next."
       />
-      <Panel className="p-5 sm:p-6">
+      <Panel className="flex flex-col gap-5 p-5 sm:p-6">
         <Field label="Campaign name" hint="Only your team sees this.">
           {(p) => <Input {...p} value={name} onChange={(e) => setName(e.target.value)} className="max-w-md" />}
         </Field>
+        {tenant.features?.whatsapp && (
+          <div className="flex flex-col gap-2">
+            <span className="text-[13px] font-semibold">Send by</span>
+            <Segmented
+              label="Channel"
+              value={channel}
+              onChange={setChannel}
+              options={[
+                { value: 'EMAIL', label: 'Email' },
+                { value: 'WHATSAPP', label: 'WhatsApp' },
+              ]}
+            />
+          </div>
+        )}
       </Panel>
-      <DesignGallery onPick={(d) => create.mutate(d)} busy={create.isPending} />
+      {channel === 'EMAIL' ? (
+        <DesignGallery onPick={(d) => create.mutate(d)} busy={create.isPending} />
+      ) : (
+        <Panel className="flex flex-col items-start gap-4 p-5 sm:p-6">
+          <p className="max-w-xl text-sm leading-relaxed text-muted">
+            A WhatsApp campaign is one message, sent from your linked number to everyone who agreed to WhatsApp messages. We’ll start you with a short example to edit.
+          </p>
+          <Button variant="primary" loading={createWa.isPending} onClick={() => createWa.mutate()}>
+            <MessageCircle className="h-4 w-4" />
+            Write the WhatsApp message
+          </Button>
+        </Panel>
+      )}
     </>
   );
 }
@@ -127,7 +166,7 @@ const toDraft = (c: Campaign): Draft => ({
   audience: c.audience,
 });
 
-function Step({ icon, title, summary, done, open, onToggle, children, error }: { icon: ReactNode; title: string; summary: ReactNode; done: boolean; open: boolean; onToggle: () => void; children: ReactNode; error?: boolean }) {
+export function Step({ icon, title, summary, done, open, onToggle, children, error }: { icon: ReactNode; title: string; summary: ReactNode; done: boolean; open: boolean; onToggle: () => void; children: ReactNode; error?: boolean }) {
   return (
     <Panel className={cn('overflow-hidden transition-shadow', open && 'shadow-[var(--shadow-lift)]')}>
       <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-sunken sm:px-6">
@@ -145,7 +184,7 @@ function Step({ icon, title, summary, done, open, onToggle, children, error }: {
   );
 }
 
-function ChecksPanel({ checks, loading }: { checks?: CheckT[]; loading: boolean }) {
+export function ChecksPanel({ checks, loading }: { checks?: CheckT[]; loading: boolean }) {
   const order = { error: 0, warning: 1, ok: 2 } as const;
   const sorted = [...(checks ?? [])].sort((a, b) => order[a.level] - order[b.level]);
   const errors = sorted.filter((c) => c.level === 'error').length;
@@ -692,5 +731,11 @@ function Composer({ id }: { id: string }) {
 
 export function ComposerPage() {
   const { id } = useParams();
-  return id ? <Composer key={id} id={id} /> : <NewCampaign />;
+  const q = useQuery({ queryKey: ['campaign', id], queryFn: () => api.get<{ campaign: Campaign }>(`/api/campaigns/${id}`), enabled: !!id });
+  if (!id) return <NewCampaign />;
+  if (q.error) return <Navigate to="/campaigns" replace />;
+  if (!q.data) return <Skeleton className="h-[600px] rounded-[var(--radius-panel)]" />;
+  const c = q.data.campaign;
+  if (c.status !== 'DRAFT' && c.status !== 'SCHEDULED') return <Navigate to={`/campaigns/${id}`} replace />;
+  return c.channel === 'WHATSAPP' ? <WhatsAppComposer key={id} c={c} /> : <Composer key={id} id={id} />;
 }

@@ -37,6 +37,8 @@ export function Logo({ className }: { className?: string }) {
 }
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
+  const whatsapp = !!useSession().tenant.features?.whatsapp;
+  const { pathname } = useLocation();
   return (
     <nav aria-label="Main" className="flex flex-col gap-0.5">
       {NAV.map(({ to, label, icon: Icon, end }) => (
@@ -48,7 +50,10 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
           className={({ isActive }) =>
             cn(
               'flex h-10 items-center gap-3 rounded-[10px] px-3 text-sm font-medium transition-colors',
-              isActive ? 'bg-accent-soft text-accent-strong' : 'text-ink-2 hover:bg-hover hover:text-ink',
+              // WhatsApp has its own item, so Settings stays unlit there
+              isActive && !(to === '/settings' && whatsapp && pathname.startsWith('/settings/whatsapp'))
+                ? 'bg-accent-soft text-accent-strong'
+                : 'text-ink-2 hover:bg-hover hover:text-ink',
             )
           }
         >
@@ -56,13 +61,26 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
           {label}
         </NavLink>
       ))}
-      <span className="flex h-10 items-center justify-between rounded-[10px] px-3 text-sm font-medium text-faint" aria-disabled>
-        <span className="flex items-center gap-3">
+      {whatsapp ? (
+        <NavLink
+          to="/settings/whatsapp"
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            cn('flex h-10 items-center gap-3 rounded-[10px] px-3 text-sm font-medium transition-colors', isActive ? 'bg-accent-soft text-accent-strong' : 'text-ink-2 hover:bg-hover hover:text-ink')
+          }
+        >
           <MessageCircle className="h-[18px] w-[18px]" aria-hidden />
           WhatsApp
+        </NavLink>
+      ) : (
+        <span className="flex h-10 items-center justify-between rounded-[10px] px-3 text-sm font-medium text-faint" aria-disabled>
+          <span className="flex items-center gap-3">
+            <MessageCircle className="h-[18px] w-[18px]" aria-hidden />
+            WhatsApp
+          </span>
+          <Badge tone="orange" className="px-2 text-[11px]">Soon</Badge>
         </span>
-        <Badge tone="orange" className="px-2 text-[11px]">Soon</Badge>
-      </span>
+      )}
     </nav>
   );
 }
