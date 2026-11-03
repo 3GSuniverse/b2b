@@ -10,6 +10,7 @@ import { AppError, registerErrorHandler } from './lib/http.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { domainRoutes } from './modules/domains/routes.js';
 import { healthRoutes } from './modules/health/routes.js';
+import { mailboxRoutes } from './modules/mailboxes/routes.js';
 import { senderRoutes } from './modules/senders/routes.js';
 import { unsubscribeRoutes } from './modules/unsubscribe/routes.js';
 import { webhookRoutes, type WebhookOptions } from './modules/webhooks/routes.js';
@@ -62,6 +63,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(authRoutes, { rateLimitMax: opts.authRateLimit });
   await app.register(domainRoutes);
   await app.register(senderRoutes);
+  await app.register(mailboxRoutes);
   await app.register(unsubscribeRoutes);
   await app.register(webhookRoutes, opts.webhooks ?? {});
 

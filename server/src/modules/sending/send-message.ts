@@ -2,6 +2,8 @@ import { and, count, eq, sql } from 'drizzle-orm';
 import { db } from '../../lib/db.js';
 import { campaigns, messageEvents, messages, suppressions } from '../../db/schema.js';
 import { getEmailProvider, SendError, type EmailProvider } from '../email/index.js';
+import { getMailboxProviderFactory, type MailboxProviderFactory } from '../mailboxes/gmail-provider.js';
+import { senderUsageLast24h } from '../mailboxes/service.js';
 import { buildMergeVars, renderEmail } from '../email/render.js';
 import { unsubscribeUrl } from '../unsubscribe/token.js';
 import { bumpCounter } from './counters.js';
@@ -14,6 +16,17 @@ export type SendOutcome =
   | 'missing';
 
 type Final = 'SUPPRESSED' | 'FAILED';
+
+/**
+ * Thrown when a connected mailbox has used its daily allowance. The message stays QUEUED
+ * and the worker re-schedules the job for `until` — it is sent later, never dropped.
+ */
+export class DeferSend extends Error {
+  constructor(readonly until: Date, reason: string) {
+    super(reason);
+    this.name = 'DeferSend';
+  }
+}
 
 async function finalize(
   msg: { id: string; campaignId: string | null; automationId: string | null },
@@ -64,14 +77,15 @@ export async function maybeCompleteCampaign(campaignId: string) {
 export async function processSendJob(
   messageId: string,
   provider: EmailProvider = getEmailProvider(),
+  mailboxProvider: MailboxProviderFactory = getMailboxProviderFactory(),
 ): Promise<SendOutcome> {
   const msg = await db.query.messages.findFirst({
     where: eq(messages.id, messageId),
     with: {
       tenant: true,
       contact: true,
-      campaign: { with: { sender: true } },
-      automation: { with: { sender: true, template: true } },
+      campaign: { with: { sender: { with: { connection: true } } } },
+      automation: { with: { sender: { with: { connection: true } }, template: true } },
     },
   });
 
@@ -124,6 +138,22 @@ export async function processSendJob(
     return 'failed';
   }
 
+  // Connected mailboxes (Gmail) send through the company's own account, within its daily limit
+  let sendVia = provider;
+  if (sender.kind !== 'DOMAIN') {
+    const conn = sender.connection;
+    if (!conn || conn.status !== 'ACTIVE') {
+      await finalize(msg, 'FAILED', 'mailbox_disconnected');
+      return 'failed';
+    }
+    const usage = await senderUsageLast24h(sender.id);
+    if (usage.sent >= conn.dailyLimit) {
+      const until = new Date((usage.oldest?.getTime() ?? Date.now()) + 86_400_000 + 60_000);
+      throw new DeferSend(until, `${conn.email} reached its daily limit of ${conn.dailyLimit}`);
+    }
+    sendVia = mailboxProvider(conn);
+  }
+
   // 4. Render
   const unsubUrl = unsubscribeUrl(msg.id);
   const vars = buildMergeVars(msg.contact, msg.tenant, { unsubscribe_url: unsubUrl });
@@ -136,7 +166,7 @@ export async function processSendJob(
   // 5. Send
   let providerMessageId: string;
   try {
-    ({ providerMessageId } = await provider.send({
+    ({ providerMessageId } = await sendVia.send({
       from: { name: sender.fromName, email: sender.fromEmail },
       replyTo: sender.replyTo,
       to: msg.toAddress,
@@ -175,6 +205,7 @@ export async function processSendJob(
       .set({
         status: 'SENT',
         providerMessageId,
+        senderId: sender.id,
         sentAt: new Date(),
         error: null,
         attempts: sql`${messages.attempts} + 1`,

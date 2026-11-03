@@ -6,3 +6,7 @@ process.env.PUBLIC_URL = 'https://campaigns.example.in';
 process.env.APP_SECRET = 'test-secret-that-is-long-enough';
 process.env.EMAIL_PROVIDER = 'log';
 process.env.SES_SNS_TOPIC_ARN = '';
+process.env.APP_URL = 'https://app.example.in';
+process.env.GOOGLE_CLIENT_ID = 'test-client.apps.googleusercontent.com';
+process.env.GOOGLE_CLIENT_SECRET = 'test-google-secret';
+process.env.GOOGLE_REDIRECT_URI = 'https://campaigns.example.in/api/integrations/gmail/callback';

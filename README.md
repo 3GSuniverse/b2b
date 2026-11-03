@@ -75,6 +75,9 @@ All `/api` routes use a session cookie set at sign-in. Writes must be JSON.
 | DELETE | `/api/domains/:id` | Disconnect a domain |
 | GET · POST | `/api/senders` | List / create "from" addresses on a verified domain |
 | PATCH · DELETE | `/api/senders/:id` | Edit / remove a sender |
+| GET | `/api/integrations/gmail/connect` | Start "Connect Gmail" (redirects to Google) |
+| GET | `/api/integrations/gmail/callback` | Google returns here; creates the Gmail sender |
+| GET · DELETE | `/api/mailboxes` · `/api/mailboxes/:id` | Connected mailboxes / disconnect (revokes at Google) |
 | GET · POST | `/u/:token` | Unsubscribe page and Gmail one-click unsubscribe |
 | POST | `/webhooks/ses` | SES events via SNS (signature-verified) |
 
@@ -86,6 +89,19 @@ All `/api` routes use a session cookie set at sign-in. Writes must be JSON.
 3. The worker re-checks every 5 minutes for 7 days (or the user clicks "Check now").
 4. Once verified, the company creates a sender like `offers@abcholidays.com`. Its customers
    only ever see the company's own name and address.
+
+### Two ways to send
+
+| | Own domain (SES) | Connected Gmail |
+|---|---|---|
+| Sender shown | `offers@company.com` | the company's Gmail address |
+| Setup | add DNS records once | "Sign in with Google" |
+| Volume | thousands, scales | ~400/day (Gmail) · ~1,500/day (Workspace) |
+| Bounce / open tracking | yes (SES events) | no — Gmail doesn't report them |
+
+Gmail access is **send-only** (`gmail.send`) — the app can never read anyone's inbox.
+Tokens are encrypted at rest (AES-256-GCM). When a mailbox hits its daily limit, the
+remaining emails wait in the queue and go out as the 24-hour window frees up.
 
 ## Tests
 

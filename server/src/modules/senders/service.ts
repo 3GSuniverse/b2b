@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 import { z } from 'zod';
-import { campaigns, senders, sendingDomains } from '../../db/schema.js';
+import { campaigns, mailboxConnections, senders, sendingDomains } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { isDomainReady } from '../domains/service.js';
@@ -26,18 +26,23 @@ export const createSenderBody = z.object({
 
 export const updateSenderBody = createSenderBody.pick({ fromName: true, replyTo: true, isDefault: true }).partial();
 
-type SenderRow = typeof senders.$inferSelect & { domain: typeof sendingDomains.$inferSelect };
+type SenderRow = typeof senders.$inferSelect & {
+  domain: typeof sendingDomains.$inferSelect | null;
+  connection: typeof mailboxConnections.$inferSelect | null;
+};
 
 function senderDto(s: SenderRow) {
   return {
     id: s.id,
+    kind: s.kind,
     fromName: s.fromName,
     fromEmail: s.fromEmail,
     replyTo: s.replyTo,
     isDefault: s.isDefault,
-    domain: { id: s.domain.id, domain: s.domain.domain },
-    // A sender can be created while the domain is still being verified, but can't send until it is
-    readyToSend: isDomainReady(s.domain),
+    domain: s.domain ? { id: s.domain.id, domain: s.domain.domain } : null,
+    mailbox: s.connection ? { id: s.connection.id, status: s.connection.status, dailyLimit: s.connection.dailyLimit } : null,
+    // Domain senders: domain must be verified. Mailbox senders: mailbox must still be connected.
+    readyToSend: s.kind === 'DOMAIN' ? !!s.domain && isDomainReady(s.domain) : s.connection?.status === 'ACTIVE',
     createdAt: s.createdAt,
   };
 }
@@ -45,7 +50,7 @@ function senderDto(s: SenderRow) {
 async function getOwned(tenantId: string, id: string) {
   const s = await db.query.senders.findFirst({
     where: and(eq(senders.id, id), eq(senders.tenantId, tenantId)),
-    with: { domain: true },
+    with: { domain: true, connection: true },
   });
   if (!s) throw new AppError(404, 'sender_not_found', 'Sender not found');
   return s;
@@ -54,7 +59,7 @@ async function getOwned(tenantId: string, id: string) {
 export async function listSenders(tenantId: string) {
   const rows = await db.query.senders.findMany({
     where: eq(senders.tenantId, tenantId),
-    with: { domain: true },
+    with: { domain: true, connection: true },
     orderBy: [asc(senders.createdAt)],
   });
   return rows.map(senderDto);
@@ -87,6 +92,7 @@ export async function createSender(tenantId: string, input: z.infer<typeof creat
       .insert(senders)
       .values({
         tenantId,
+        kind: 'DOMAIN',
         domainId: domain.id,
         fromName: input.fromName,
         fromEmail: input.fromEmail,

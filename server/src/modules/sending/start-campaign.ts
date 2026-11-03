@@ -62,11 +62,15 @@ export async function startCampaign(
   if (!campaign.senderId) throw new CampaignError('Choose who the email is from', 'no_sender');
   const sender = await db.query.senders.findFirst({
     where: and(eq(senders.id, campaign.senderId), eq(senders.tenantId, campaign.tenantId)),
-    with: { domain: true },
+    with: { domain: true, connection: true },
   });
   if (!sender) throw new CampaignError('Choose who the email is from', 'no_sender');
-  if (!isDomainReady(sender.domain)) {
-    throw new CampaignError(`${sender.domain.domain} isn’t verified yet. Finish the DNS setup first.`, 'sender_not_verified');
+  if (sender.kind === 'DOMAIN') {
+    if (!sender.domain || !isDomainReady(sender.domain)) {
+      throw new CampaignError(`${sender.domain?.domain ?? 'The domain'} isn’t verified yet. Finish the DNS setup first.`, 'sender_not_verified');
+    }
+  } else if (sender.connection?.status !== 'ACTIVE') {
+    throw new CampaignError(`${sender.fromEmail} is disconnected. Reconnect it in Settings → Senders.`, 'sender_not_verified');
   }
 
   const subject = campaign.subject ?? campaign.template?.subject;
@@ -105,6 +109,7 @@ export async function startCampaign(
         batch.map((c) => ({
           tenantId: campaign.tenantId,
           campaignId,
+          senderId: campaign.senderId,
           contactId: c.id,
           channel: 'EMAIL' as const,
           toAddress: c.email.toLowerCase(),

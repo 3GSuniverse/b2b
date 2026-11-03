@@ -24,6 +24,16 @@ const schema = z.object({
   EMAIL_PROVIDER: z.enum(['ses', 'log']).default('log'),
   // If set, SNS notifications from any other topic are rejected
   SES_SNS_TOPIC_ARN: z.string().optional(),
+
+  // Where the dashboard lives (users are sent back here after connecting Gmail)
+  APP_URL: z.string().url().optional(),
+  // 32-byte key (base64) that encrypts mailbox tokens. Falls back to one derived from APP_SECRET.
+  TOKEN_ENCRYPTION_KEY: z.string().optional(),
+
+  // "Connect Gmail" — from Google Cloud → Google Auth Platform → Clients
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URI: z.string().url().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

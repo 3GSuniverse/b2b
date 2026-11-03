@@ -1,10 +1,10 @@
-import { Worker } from 'bullmq';
+import { DelayedError, Worker } from 'bullmq';
 import { env } from './config/env.js';
 import { closeDatabase } from './lib/db.js';
 import { logger } from './lib/logger.js';
 import { closeRedis, createRedis } from './lib/redis.js';
 import { runMaintenanceTick, runSchedulerTick } from './modules/scheduler/tick.js';
-import { markMessageFailed, processSendJob } from './modules/sending/send-message.js';
+import { DeferSend, markMessageFailed, processSendJob } from './modules/sending/send-message.js';
 import { closeQueues, getSchedulerQueue, QUEUES, type EmailSendJob } from './queues/index.js';
 
 // The worker runs as its own process, separate from the API,
@@ -12,10 +12,20 @@ import { closeQueues, getSchedulerQueue, QUEUES, type EmailSendJob } from './que
 
 const emailWorker = new Worker<EmailSendJob>(
   QUEUES.emailSend,
-  async (job) => {
-    const outcome = await processSendJob(job.data.messageId);
-    logger.debug({ messageId: job.data.messageId, outcome }, 'email processed');
-    return outcome;
+  async (job, token) => {
+    try {
+      const outcome = await processSendJob(job.data.messageId);
+      logger.debug({ messageId: job.data.messageId, outcome }, 'email processed');
+      return outcome;
+    } catch (err) {
+      if (err instanceof DeferSend) {
+        // Mailbox daily limit reached — park the job until the window frees up (doesn't use a retry)
+        await job.moveToDelayed(err.until.getTime(), token);
+        logger.info({ messageId: job.data.messageId, until: err.until }, err.message);
+        throw new DelayedError();
+      }
+      throw err;
+    }
   },
   {
     connection: createRedis(),

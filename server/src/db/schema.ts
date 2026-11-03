@@ -4,9 +4,10 @@
 //  TS names are camelCase; columns are snake_case (casing set in db client).
 // =====================================================================
 import { createId } from '@paralleldrive/cuid2';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -92,6 +93,17 @@ export const automationSendStatus = pgEnum('automation_send_status', [
   'SENT',
   'SKIPPED',
   'FAILED',
+]);
+export const senderKind = pgEnum('sender_kind', [
+  'DOMAIN', // company's own domain, sent through Amazon SES
+  'GMAIL', // a connected Gmail / Google Workspace mailbox
+  'OUTLOOK', // a connected Outlook / Microsoft 365 mailbox
+]);
+export const mailboxProvider = pgEnum('mailbox_provider', ['GOOGLE', 'MICROSOFT']);
+export const connectionStatus = pgEnum('connection_status', [
+  'ACTIVE',
+  'REVOKED', // the user removed access in their Google/Microsoft account
+  'ERROR',
 ]);
 export const importStatus = pgEnum('import_status', ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED']);
 
@@ -193,21 +205,54 @@ export const sendingDomains = pgTable(
   (t) => [uniqueIndex().on(t.domain), index().on(t.tenantId)],
 );
 
+// A Gmail/Outlook mailbox a company connected with "Sign in with Google/Microsoft".
+// Tokens are encrypted at rest (AES-256-GCM); a database leak alone can't send mail.
+export const mailboxConnections = pgTable(
+  'mailbox_connections',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    provider: mailboxProvider().notNull(),
+    email: text().notNull(), // lower-cased
+    displayName: text(),
+    refreshTokenEnc: text().notNull(),
+    accessTokenEnc: text(),
+    accessTokenExpiresAt: ts(),
+    scopes: text().notNull(),
+    // Gmail allows ~500/day on personal accounts, ~2000 on Workspace; we stay under it
+    dailyLimit: integer().notNull().default(400),
+    status: connectionStatus().notNull().default('ACTIVE'),
+    lastError: text(),
+    connectedById: text().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex().on(t.tenantId, t.provider, t.email)],
+);
+
 export const senders = pgTable(
   'senders',
   {
     id: id(),
     tenantId: tenantRef(),
-    domainId: text()
-      .notNull()
-      .references(() => sendingDomains.id, { onDelete: 'cascade' }),
+    kind: senderKind().notNull().default('DOMAIN'),
+    // DOMAIN senders point at a verified domain; GMAIL/OUTLOOK senders at a connected mailbox
+    domainId: text().references(() => sendingDomains.id, { onDelete: 'cascade' }),
+    connectionId: text().references(() => mailboxConnections.id, { onDelete: 'cascade' }),
     fromName: text().notNull(),
     fromEmail: text().notNull(),
     replyTo: text(),
     isDefault: boolean().notNull().default(false),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex().on(t.tenantId, t.fromEmail)],
+  (t) => [
+    uniqueIndex().on(t.tenantId, t.fromEmail),
+    // Every sender points at exactly what it sends through
+    check(
+      'sender_target',
+      sql`(${t.kind} = 'DOMAIN' and ${t.domainId} is not null) or (${t.kind} <> 'DOMAIN' and ${t.connectionId} is not null)`,
+    ),
+  ],
 );
 
 // ---------------------------------------------------------------------
@@ -404,6 +449,7 @@ export const messages = pgTable(
     campaignId: text().references(() => campaigns.id, { onDelete: 'cascade' }), // null for automations
     automationId: text().references(() => automations.id, { onDelete: 'cascade' }),
     contactId: text().references(() => contacts.id, { onDelete: 'set null' }),
+    senderId: text().references(() => senders.id, { onDelete: 'set null' }), // which mailbox/domain sent it
     channel: channel().notNull().default('EMAIL'),
     toAddress: text().notNull(),
     status: messageStatus().notNull().default('QUEUED'),
@@ -420,6 +466,7 @@ export const messages = pgTable(
     // one message per recipient per campaign — safe retries, never a double send
     uniqueIndex().on(t.campaignId, t.toAddress),
     index().on(t.tenantId, t.status),
+    index().on(t.senderId, t.sentAt), // rolling 24h count per mailbox
   ],
 );
 
@@ -522,6 +569,12 @@ export const sendingDomainsRelations = relations(sendingDomains, ({ one, many })
 export const sendersRelations = relations(senders, ({ one }) => ({
   tenant: one(tenants, { fields: [senders.tenantId], references: [tenants.id] }),
   domain: one(sendingDomains, { fields: [senders.domainId], references: [sendingDomains.id] }),
+  connection: one(mailboxConnections, { fields: [senders.connectionId], references: [mailboxConnections.id] }),
+}));
+
+export const mailboxConnectionsRelations = relations(mailboxConnections, ({ one, many }) => ({
+  tenant: one(tenants, { fields: [mailboxConnections.tenantId], references: [tenants.id] }),
+  senders: many(senders),
 }));
 
 export const contactsRelations = relations(contacts, ({ one, many }) => ({
@@ -564,3 +617,4 @@ export type Message = typeof messages.$inferSelect;
 export type Sender = typeof senders.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type SendingDomain = typeof sendingDomains.$inferSelect;
+export type MailboxConnection = typeof mailboxConnections.$inferSelect;
