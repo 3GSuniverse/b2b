@@ -8,3 +8,9 @@ dist/
 .DS_Store
 coverage/
 dump.rdb
+
+# Never commit credentials
+client_secret*.json
+*-oauth.json
+*.pem
+*.key

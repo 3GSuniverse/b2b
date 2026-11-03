@@ -244,3 +244,25 @@ describe('MIME', () => {
     expect(mime).not.toContain('X-Bad');
   });
 });
+
+describe('Google credentials file', () => {
+  it('reads the client file downloaded from Google Cloud', async () => {
+    const { parseGoogleOAuthFile } = await import('../src/modules/mailboxes/google.js');
+    const file = parseGoogleOAuthFile(
+      JSON.stringify({
+        web: {
+          client_id: '123-abc.apps.googleusercontent.com',
+          client_secret: 'GOCSPX-secret',
+          redirect_uris: ['http://localhost:4000/api/integrations/gmail/callback'],
+        },
+      }),
+    );
+    expect(file).toEqual({
+      clientId: '123-abc.apps.googleusercontent.com',
+      clientSecret: 'GOCSPX-secret',
+      redirectUris: ['http://localhost:4000/api/integrations/gmail/callback'],
+    });
+    expect(() => parseGoogleOAuthFile('{"something":"else"}')).toThrow(/web.client_id/);
+    expect(() => parseGoogleOAuthFile('not json')).toThrow(/not valid JSON/);
+  });
+});

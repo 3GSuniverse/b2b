@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { env } from '../../config/env.js';
 import { AppError } from '../../lib/http.js';
 
@@ -18,13 +19,55 @@ export function setGoogleFetch(f: Fetch) {
   fetchImpl = f;
 }
 
+export interface GoogleOAuthFile {
+  clientId: string;
+  clientSecret: string;
+  redirectUris: string[];
+}
+
+/** Reads the "Download JSON" file from Google Cloud → Clients. */
+export function parseGoogleOAuthFile(contents: string): GoogleOAuthFile {
+  let json: { web?: Record<string, unknown>; installed?: Record<string, unknown> };
+  try {
+    json = JSON.parse(contents);
+  } catch {
+    throw new Error('GOOGLE_OAUTH_JSON is not valid JSON');
+  }
+  const c = json.web ?? json.installed;
+  if (!c || typeof c.client_id !== 'string' || typeof c.client_secret !== 'string') {
+    throw new Error('GOOGLE_OAUTH_JSON does not look like a Google OAuth client file (expected "web.client_id")');
+  }
+  return {
+    clientId: c.client_id,
+    clientSecret: c.client_secret,
+    redirectUris: Array.isArray(c.redirect_uris) ? c.redirect_uris.filter((u): u is string => typeof u === 'string') : [],
+  };
+}
+
+let fromFile: GoogleOAuthFile | null | undefined;
+function oauthFile(): GoogleOAuthFile | null {
+  if (fromFile === undefined) {
+    fromFile = env.GOOGLE_OAUTH_JSON ? parseGoogleOAuthFile(readFileSync(env.GOOGLE_OAUTH_JSON, 'utf8')) : null;
+  }
+  return fromFile;
+}
+
+const CALLBACK_PATH = '/api/integrations/gmail/callback';
+
 export function googleConfig() {
-  const clientId = env.GOOGLE_CLIENT_ID;
-  const clientSecret = env.GOOGLE_CLIENT_SECRET;
+  const file = oauthFile();
+  // Explicit env values win over the file, so one setting can be overridden without editing it
+  const clientId = env.GOOGLE_CLIENT_ID || file?.clientId;
+  const clientSecret = env.GOOGLE_CLIENT_SECRET || file?.clientSecret;
   if (!clientId || !clientSecret) {
     throw new AppError(503, 'gmail_not_configured', 'Connecting Gmail isn’t set up on this server yet.');
   }
-  const redirectUri = env.GOOGLE_REDIRECT_URI ?? `${env.PUBLIC_URL.replace(/\/$/, '')}/api/integrations/gmail/callback`;
+  const publicBase = env.PUBLIC_URL.replace(/\/$/, '');
+  const redirectUri =
+    env.GOOGLE_REDIRECT_URI ||
+    // Prefer the redirect URI registered for this server's address
+    file?.redirectUris.find((u) => u === `${publicBase}${CALLBACK_PATH}`) ||
+    `${publicBase}${CALLBACK_PATH}`;
   return { clientId, clientSecret, redirectUri };
 }
 

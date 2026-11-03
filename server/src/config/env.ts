@@ -34,6 +34,8 @@ const schema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().url().optional(),
+  // Or: path to the client_secret JSON downloaded from Google (kept on the server, never in git)
+  GOOGLE_OAUTH_JSON: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);
