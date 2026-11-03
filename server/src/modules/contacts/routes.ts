@@ -1,0 +1,84 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { parseBody } from '../../lib/http.js';
+import { requireAuth, requireRole, tenantOf } from '../auth/guard.js';
+import {
+  addToList,
+  contactStats,
+  createContact,
+  createContactBody,
+  createList,
+  deleteContacts,
+  deleteList,
+  getContact,
+  listContacts,
+  listLists,
+  listQuery,
+  removeFromList,
+  updateContact,
+  updateContactBody,
+  updateList,
+} from './service.js';
+
+type IdParams = { Params: { id: string } };
+const idsBody = z.object({ contactIds: z.array(z.string()).min(1, 'Choose at least one contact').max(1000) });
+const listBody = z.object({
+  name: z.string().trim().min(1, 'Enter a list name').max(80),
+  description: z.string().trim().max(300).optional(),
+});
+
+export async function contactRoutes(app: FastifyInstance) {
+  app.get('/api/contacts', { preHandler: requireAuth }, async (req) =>
+    listContacts(tenantOf(req), parseBody(listQuery, req.query)),
+  );
+
+  app.get('/api/contacts/stats', { preHandler: requireAuth }, async (req) => ({ stats: await contactStats(tenantOf(req)) }));
+
+  app.post('/api/contacts', { preHandler: requireAuth }, async (req, reply) => {
+    const body = parseBody(createContactBody, req.body);
+    return reply.code(201).send({ contact: await createContact(tenantOf(req), body) });
+  });
+
+  app.get<IdParams>('/api/contacts/:id', { preHandler: requireAuth }, async (req) => ({
+    contact: await getContact(tenantOf(req), req.params.id),
+  }));
+
+  app.patch<IdParams>('/api/contacts/:id', { preHandler: requireAuth }, async (req) => ({
+    contact: await updateContact(tenantOf(req), req.params.id, parseBody(updateContactBody, req.body)),
+  }));
+
+  app.delete<IdParams>('/api/contacts/:id', { preHandler: requireRole('ADMIN') }, async (req, reply) => {
+    await deleteContacts(tenantOf(req), [req.params.id]);
+    return reply.code(204).send();
+  });
+
+  app.post('/api/contacts/delete', { preHandler: requireRole('ADMIN') }, async (req) => {
+    const { contactIds } = parseBody(idsBody, req.body);
+    return { deleted: await deleteContacts(tenantOf(req), contactIds) };
+  });
+
+  // Lists
+  app.get('/api/lists', { preHandler: requireAuth }, async (req) => ({ lists: await listLists(tenantOf(req)) }));
+
+  app.post('/api/lists', { preHandler: requireAuth }, async (req, reply) => {
+    const body = parseBody(listBody, req.body);
+    return reply.code(201).send({ list: await createList(tenantOf(req), body.name, body.description) });
+  });
+
+  app.patch<IdParams>('/api/lists/:id', { preHandler: requireAuth }, async (req) => ({
+    list: await updateList(tenantOf(req), req.params.id, parseBody(listBody.partial(), req.body)),
+  }));
+
+  app.delete<IdParams>('/api/lists/:id', { preHandler: requireRole('ADMIN') }, async (req, reply) => {
+    await deleteList(tenantOf(req), req.params.id);
+    return reply.code(204).send();
+  });
+
+  app.post<IdParams>('/api/lists/:id/members', { preHandler: requireAuth }, async (req) => ({
+    added: await addToList(tenantOf(req), req.params.id, parseBody(idsBody, req.body).contactIds),
+  }));
+
+  app.post<IdParams>('/api/lists/:id/members/remove', { preHandler: requireAuth }, async (req) => ({
+    removed: await removeFromList(tenantOf(req), req.params.id, parseBody(idsBody, req.body).contactIds),
+  }));
+}

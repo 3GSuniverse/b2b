@@ -7,6 +7,8 @@ export const QUEUES = {
   emailSend: 'email-send',
   // Repeating job every minute: picks up due scheduled campaigns and automations.
   scheduler: 'scheduler',
+  // Large CSV imports, processed in the background
+  imports: 'contact-import',
 } as const;
 
 export interface EmailSendJob {
@@ -18,6 +20,19 @@ export const EMAIL_SEND_ATTEMPTS = 5;
 // Created on first use, so importing this file never opens a Redis connection by itself.
 let emailSendQueue: Queue<EmailSendJob> | undefined;
 let schedulerQueue: Queue | undefined;
+let importQueue: Queue<{ importId: string }> | undefined;
+
+export function getImportQueue(): Queue<{ importId: string }> {
+  importQueue ??= new Queue(QUEUES.imports, {
+    connection: createRedis(),
+    defaultJobOptions: { attempts: 2, backoff: { type: 'fixed', delay: 10_000 }, removeOnComplete: { age: 86_400 } },
+  });
+  return importQueue;
+}
+
+export async function enqueueImport(importId: string) {
+  await getImportQueue().add('import', { importId }, { jobId: importId });
+}
 
 export function getEmailSendQueue(): Queue<EmailSendJob> {
   emailSendQueue ??= new Queue<EmailSendJob>(QUEUES.emailSend, {
@@ -48,5 +63,5 @@ export async function enqueueEmails(messageIds: string[]): Promise<void> {
 export type EnqueueFn = typeof enqueueEmails;
 
 export async function closeQueues() {
-  await Promise.allSettled([emailSendQueue?.close(), schedulerQueue?.close()]);
+  await Promise.allSettled([emailSendQueue?.close(), schedulerQueue?.close(), importQueue?.close()]);
 }

@@ -53,3 +53,15 @@ export class FakeDns implements DnsLookup {
     this.records.mx.clear();
   }
 }
+
+/** Builds a multipart/form-data body like a browser file upload. */
+export function multipart(fileName: string, content: string, fields: Record<string, string> = {}) {
+  const boundary = `----test${Math.random().toString(16).slice(2)}`;
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(fields)) {
+    parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`);
+  }
+  parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: text/csv\r\n\r\n${content}\r\n`);
+  parts.push(`--${boundary}--\r\n`);
+  return { payload: Buffer.from(parts.join('')), headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } };
+}

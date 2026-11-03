@@ -5,6 +5,7 @@ import { logger } from './lib/logger.js';
 import { closeRedis, createRedis } from './lib/redis.js';
 import { runMaintenanceTick, runSchedulerTick } from './modules/scheduler/tick.js';
 import { DeferSend, markMessageFailed, processSendJob } from './modules/sending/send-message.js';
+import { processImport } from './modules/imports/process.js';
 import { closeQueues, getSchedulerQueue, QUEUES, type EmailSendJob } from './queues/index.js';
 
 // The worker runs as its own process, separate from the API,
@@ -62,6 +63,16 @@ const schedulerWorker = new Worker(
   { connection: createRedis(), concurrency: 1 },
 );
 
+const importWorker = new Worker<{ importId: string }>(
+  QUEUES.imports,
+  async (job) => {
+    const r = await processImport(job.data.importId);
+    logger.info({ importId: job.data.importId, imported: r.imported, updated: r.updated, skipped: r.skipped }, 'import finished');
+    return { imported: r.imported, updated: r.updated, skipped: r.skipped };
+  },
+  { connection: createRedis(), concurrency: 1 },
+);
+
 // One repeating job, every minute. Upsert = safe to run on every boot.
 await getSchedulerQueue().upsertJobScheduler('every-minute', { every: 60_000 }, { name: 'tick' });
 await getSchedulerQueue().upsertJobScheduler('every-5-minutes', { every: 5 * 60_000 }, { name: 'maintenance' });
@@ -69,7 +80,7 @@ await getSchedulerQueue().upsertJobScheduler('every-5-minutes', { every: 5 * 60_
 logger.info(`Worker started (send rate ${env.SEND_RATE_PER_SECOND}/s)`);
 
 async function shutdown() {
-  await Promise.allSettled([emailWorker.close(), schedulerWorker.close()]);
+  await Promise.allSettled([emailWorker.close(), schedulerWorker.close(), importWorker.close()]);
   await closeQueues();
   await Promise.allSettled([closeDatabase(), closeRedis()]);
   process.exit(0);

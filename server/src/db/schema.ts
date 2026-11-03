@@ -323,11 +323,21 @@ export const listMemberships = pgTable(
   (t) => [primaryKey({ columns: [t.listId, t.contactId] }), index().on(t.contactId)],
 );
 
+export type ImportOptions = {
+  updateExisting: boolean;
+  /** CSV header → contact field ("email", "firstName", "attr:city", or "skip") */
+  mapping?: Record<string, string>;
+};
+
 export const importJobs = pgTable('import_jobs', {
   id: id(),
   tenantId: tenantRef(),
   fileName: text().notNull(),
   listId: text().references(() => lists.id, { onDelete: 'set null' }),
+  createdById: text().references(() => users.id, { onDelete: 'set null' }),
+  // Raw file, kept only until the import finishes, then cleared
+  sourceCsv: text(),
+  options: jsonb().$type<ImportOptions>(),
   status: importStatus().notNull().default('PENDING'),
   totalRows: integer().notNull().default(0),
   imported: integer().notNull().default(0),
@@ -542,6 +552,30 @@ export const suppressions = pgTable(
 );
 
 // ---------------------------------------------------------------------
+//  Notifications — what the company should know about (shown in the dashboard)
+// ---------------------------------------------------------------------
+
+export const notificationLevel = pgEnum('notification_level', ['INFO', 'SUCCESS', 'WARNING', 'ERROR']);
+
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    type: text().notNull(), // campaign.completed, tenant.paused, mailbox.disconnected, domain.verified…
+    level: notificationLevel().notNull().default('INFO'),
+    title: text().notNull(),
+    body: text(),
+    link: text(), // dashboard path, e.g. /campaigns/abc
+    // Same key = same event; prevents duplicates when a check runs twice
+    dedupeKey: text(),
+    readAt: ts(),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.tenantId, t.createdAt), uniqueIndex().on(t.tenantId, t.dedupeKey)],
+);
+
+// ---------------------------------------------------------------------
 //  Relations (for the relational query API)
 // ---------------------------------------------------------------------
 
@@ -581,6 +615,10 @@ export const contactsRelations = relations(contacts, ({ one, many }) => ({
   tenant: one(tenants, { fields: [contacts.tenantId], references: [tenants.id] }),
   lists: many(listMemberships),
   messages: many(messages),
+}));
+
+export const listsRelations = relations(lists, ({ many }) => ({
+  members: many(listMemberships),
 }));
 
 export const listMembershipsRelations = relations(listMemberships, ({ one }) => ({

@@ -2,12 +2,16 @@ import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import formbody from '@fastify/formbody';
+import multipart from '@fastify/multipart';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
 import { env, isProd } from './config/env.js';
 import { AppError, registerErrorHandler } from './lib/http.js';
 import { authRoutes } from './modules/auth/routes.js';
+import { contactRoutes } from './modules/contacts/routes.js';
+import { importRoutes } from './modules/imports/routes.js';
+import { fieldRoutes } from './modules/contacts/fields.js';
 import { domainRoutes } from './modules/domains/routes.js';
 import { healthRoutes } from './modules/health/routes.js';
 import { mailboxRoutes } from './modules/mailboxes/routes.js';
@@ -47,6 +51,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(sensible);
   await app.register(cookie);
   await app.register(formbody); // one-click unsubscribe posts form-encoded
+  await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 20 } }); // CSV imports
   await app.register(rateLimit, { global: false }); // enabled per route (login, signup, DNS checks)
 
   // CSRF protection for the API: browsers can't send a cross-site JSON body without
@@ -54,7 +59,9 @@ export async function buildApp(opts: AppOptions = {}) {
   app.addHook('onRequest', async (req) => {
     if (!req.url.startsWith('/api/') || !MUTATING.has(req.method)) return;
     const hasBody = Number(req.headers['content-length'] ?? 0) > 0 || req.headers['transfer-encoding'] !== undefined;
-    if (hasBody && !String(req.headers['content-type'] ?? '').startsWith('application/json')) {
+    const type = String(req.headers['content-type'] ?? '');
+    const uploadOk = req.url.startsWith('/api/imports') && type.startsWith('multipart/form-data');
+    if (hasBody && !type.startsWith('application/json') && !uploadOk) {
       throw new AppError(415, 'json_required', 'Send the request body as JSON');
     }
   });
@@ -64,6 +71,9 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(domainRoutes);
   await app.register(senderRoutes);
   await app.register(mailboxRoutes);
+  await app.register(fieldRoutes);
+  await app.register(contactRoutes);
+  await app.register(importRoutes);
   await app.register(unsubscribeRoutes);
   await app.register(webhookRoutes, opts.webhooks ?? {});
 
