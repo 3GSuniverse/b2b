@@ -119,7 +119,7 @@ export function SignInPage() {
       subtitle={`Sign in to ${BRAND.name}.`}
       footer={
         <>
-          New here? <Link to="/signup" className="font-semibold text-accent hover:text-accent-strong">Create an account</Link>
+          New here? <Link to="/signup" className="font-semibold text-accent hover:text-accent-strong">Start a free trial</Link>
         </>
       }
     >
@@ -150,8 +150,8 @@ export function SignUpPage() {
   };
   return (
     <AuthLayout
-      title="Create your account"
-      subtitle="Set up your company. You can connect your domain right after."
+      title="Start your free trial"
+      subtitle="5 days to try email and WhatsApp campaigns. No card needed."
       footer={
         <>
           Already have an account? <Link to="/signin" className="font-semibold text-accent hover:text-accent-strong">Sign in</Link>
@@ -173,7 +173,7 @@ export function SignUpPage() {
           {(p) => <PasswordInput {...p} autoComplete="new-password" value={form.password} onChange={set('password')} />}
         </Field>
         <Button type="submit" variant="primary" size="lg" loading={m.isPending} className="mt-1 w-full">
-          Create account
+          Start free trial
         </Button>
       </form>
     </AuthLayout>

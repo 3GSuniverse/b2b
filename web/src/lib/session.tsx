@@ -16,7 +16,8 @@ export const meQuery = {
   queryKey: ['me'],
   queryFn: () => api.get<Me>('/api/auth/me'),
   retry: (count: number, err: unknown) => !(err instanceof ApiError && err.status === 401) && count < 2,
-  staleTime: 60_000,
+  staleTime: 30_000,
+  refetchInterval: 60_000, // trial days and WhatsApp allowance stay current
 };
 
 /** Wraps signed-in pages: loads the session, or sends the user to sign in. */

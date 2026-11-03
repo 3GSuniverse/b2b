@@ -9,6 +9,7 @@ import { Dialog } from '@/components/ui/overlay';
 import { api, ApiError } from '@/lib/api';
 import { ago, n } from '@/lib/format';
 import type { WhatsAppStatus } from '@/lib/types';
+import { useSession } from '@/lib/session';
 
 export function useWhatsApp(opts: { poll?: boolean } = {}) {
   return useQuery({
@@ -75,6 +76,8 @@ function Linking({ wa, onCancel }: { wa: WhatsAppStatus; onCancel: () => void })
 
 export function WhatsAppSettings() {
   const qc = useQueryClient();
+  const { tenant } = useSession();
+  const trial = tenant.plan?.plan === 'TRIAL' ? tenant.plan : null;
   const q = useWhatsApp({ poll: true });
   const wa = q.data;
   const [limits, setLimits] = useState<{ dailyLimit: number; intervalSeconds: number } | null>(null);
@@ -117,6 +120,18 @@ export function WhatsAppSettings() {
   return (
     <div className="flex flex-col gap-5">
       <PanelHeader title="WhatsApp" description="Send WhatsApp campaigns from your own number. Messages appear in its chats like any you send from the phone." />
+      {trial?.whatsapp && (
+        <div className="flex flex-col gap-2 rounded-[14px] border border-line bg-surface px-4 py-3.5">
+          <div className="flex items-baseline justify-between gap-3 text-[13px]">
+            <span className="font-semibold">Trial messages</span>
+            <span className="tnum text-muted">
+              {n(trial.whatsapp.used)} of {n(trial.whatsapp.limit)} used
+            </span>
+          </div>
+          <ProgressBar value={trial.whatsapp.used} max={trial.whatsapp.limit} label="Trial WhatsApp messages used" tone={trial.whatsapp.used / trial.whatsapp.limit > 0.8 ? 'warm' : 'accent'} />
+          <span className="text-xs text-muted">The trial includes a few WhatsApp messages to try it with real customers. Each number can be used for one trial. When the trial ends, the number is unlinked automatically.</span>
+        </div>
+      )}
       <RiskNote />
 
       <Panel className="flex flex-col gap-6 p-5 sm:p-6">

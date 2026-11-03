@@ -86,19 +86,21 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function QuotaCard() {
+  const { tenant } = useSession();
+  const trial = tenant.plan?.plan === 'TRIAL';
   const q = useQuery({ queryKey: ['overview'], queryFn: () => api.get<Overview>('/api/overview'), staleTime: 30_000 });
   if (!q.data) return null;
   const { used, limit, resetsOn } = q.data.quota;
   return (
     <div className="flex flex-col gap-2.5 rounded-[14px] border border-line bg-surface p-3.5">
       <div className="flex items-baseline justify-between text-[13px]">
-        <span className="font-semibold">Monthly emails</span>
+        <span className="font-semibold">{trial ? 'Trial emails' : 'Monthly emails'}</span>
         <span className="tnum text-muted">
           {n(used)} / {n(limit)}
         </span>
       </div>
       <ProgressBar value={used} max={limit} label="Monthly emails used" tone={used / limit > 0.9 ? 'warm' : 'accent'} />
-      <span className="text-xs text-muted">Resets on {date(resetsOn, { day: 'numeric', month: 'short' })}</span>
+      <span className="text-xs text-muted">{trial ? 'Included in your free trial' : `Resets on ${date(resetsOn, { day: 'numeric', month: 'short' })}`}</span>
     </div>
   );
 }
@@ -185,6 +187,46 @@ function TopBar({ onSearch, onMenu }: { onSearch: () => void; onMenu: () => void
   );
 }
 
+/** Trial status: a quiet line while it runs, a clear stop once it's over. */
+export function TrialBanner() {
+  const { tenant } = useSession();
+  const p = tenant.plan;
+  if (!p || p.plan !== 'TRIAL') return null;
+  const upgrade = `mailto:${BRAND.supportEmail}?subject=${encodeURIComponent(`Upgrade ${tenant.name} to the paid plan`)}`;
+  if (p.trialEnded) {
+    return (
+      <div role="alert" className="flex flex-wrap items-center gap-4 rounded-[14px] bg-ink px-5 py-4 text-white">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <strong className="text-[15px] font-semibold">Your free trial has ended</strong>
+          <span className="text-[13px] text-white/70">Sending is off and WhatsApp has been unlinked. Your contacts, templates and reports are safe. Upgrade to pick up where you left off.</span>
+        </div>
+        <a href={upgrade} className="inline-flex h-10 items-center rounded-[var(--radius-control)] bg-white px-4 text-sm font-semibold text-ink hover:bg-white/90">
+          Upgrade
+        </a>
+      </div>
+    );
+  }
+  const waLeft = p.whatsapp ? Math.max(0, p.whatsapp.limit - p.whatsapp.used) : null;
+  const urgent = (p.daysLeft ?? 9) <= 1;
+  return (
+    <div className={cn('flex flex-wrap items-center gap-x-5 gap-y-2 rounded-[14px] border px-4 py-2.5 text-[13px]', urgent ? 'border-[#f3c9a8] bg-warm-soft text-warm-strong' : 'border-line bg-surface text-ink-2')}>
+      <span className="flex items-center gap-2 font-semibold text-ink">
+        <span className={cn('h-2 w-2 rounded-full', urgent ? 'bg-warm' : 'bg-accent')} aria-hidden />
+        Free trial: {p.daysLeft === 0 ? 'ends today' : `${p.daysLeft} ${p.daysLeft === 1 ? 'day' : 'days'} left`}
+      </span>
+      {waLeft !== null && (
+        <span className="tnum">
+          {n(waLeft)} of {n(p.whatsapp!.limit)} WhatsApp messages left
+        </span>
+      )}
+      {p.emailLimit !== null && <span className="tnum">{n(p.emailLimit)} emails included</span>}
+      <a href={upgrade} className="ml-auto font-semibold text-accent hover:text-accent-strong">
+        Upgrade
+      </a>
+    </div>
+  );
+}
+
 export function PausedBanner() {
   const { tenant } = useSession();
   if (tenant.status === 'ACTIVE') return null;
@@ -221,6 +263,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-6 px-4 pb-16 pt-5 sm:px-6 lg:px-10 lg:pt-7">
           <TopBar onSearch={() => setPalette(true)} onMenu={() => setMobileNav(true)} />
+          <TrialBanner />
           <PausedBanner />
           <main id="main" className="flex flex-col gap-6">
             {children ?? <Outlet />}

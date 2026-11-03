@@ -2,7 +2,10 @@
 
 export interface Me {
   user: { id: string; name: string; email: string; role: 'OWNER' | 'ADMIN' | 'MEMBER' };
-  tenant: { id: string; name: string; slug: string; status: 'ACTIVE' | 'PAUSED' | 'SUSPENDED'; timezone: string; monthlyQuota: number; pausedReason: string | null; features?: { whatsapp: boolean } };
+  tenant: { id: string; name: string; slug: string; status: 'ACTIVE' | 'PAUSED' | 'SUSPENDED'; timezone: string; monthlyQuota: number; pausedReason: string | null;
+    features?: { whatsapp: boolean };
+    plan?: { plan: 'TRIAL' | 'PAID'; trialEndsAt: string | null; trialEnded: boolean; daysLeft: number | null; whatsapp: { limit: number; used: number } | null; emailLimit: number | null };
+  };
 }
 
 export interface CampaignStats {

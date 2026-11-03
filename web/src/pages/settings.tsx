@@ -553,7 +553,8 @@ interface Account {
 
 function Company() {
   const qc = useQueryClient();
-  const { user } = useSession();
+  const { user, tenant } = useSession();
+  const tenantPlan = tenant.plan;
   const q = useQuery({ queryKey: ['account'], queryFn: () => api.get<{ account: Account }>('/api/account') });
   const [f, setF] = useState<{ name: string; postalAddress: string } | null>(null);
   useEffect(() => {
@@ -595,6 +596,16 @@ function Company() {
       </Panel>
       <Panel className="grid grid-cols-[minmax(0,1fr)] gap-4 p-5 text-[13px] sm:grid-cols-3 sm:p-6">
         <div className="flex flex-col gap-1">
+          <span className="text-muted">Plan</span>
+          <span className="font-semibold">
+            {tenantPlan?.plan === 'TRIAL'
+              ? tenantPlan.trialEnded
+                ? 'Free trial (ended)'
+                : `Free trial, ${tenantPlan.daysLeft === 0 ? 'ends today' : `${tenantPlan.daysLeft} days left`}`
+              : 'Paid'}
+          </span>
+        </div>
+        <div className="flex flex-col gap-1">
           <span className="text-muted">Time zone</span>
           <span className="font-semibold">India ({a.timezone})</span>
         </div>
@@ -602,7 +613,7 @@ function Company() {
           <span className="text-muted">Emails per month</span>
           <span className="tnum font-semibold">{n(a.monthlyQuota)}</span>
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 sm:col-span-3 sm:border-t sm:border-line-soft sm:pt-4">
           <span className="text-muted">Signed in as</span>
           <span className="truncate font-semibold">{user.email}</span>
         </div>

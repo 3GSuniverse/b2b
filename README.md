@@ -96,22 +96,34 @@ npm run start:worker                        # sending, scheduling, automations
 The server looks for the dashboard in `../web/dist`; set `WEB_DIST` to point
 elsewhere. Restart the server after each dashboard build (asset names change).
 
-## WhatsApp (interim: WhatsApp Web)
+## Plans, free trial and WhatsApp
 
-Until the official WhatsApp route (Meta Cloud API through a Solution Partner) is set up,
-a company can link its own number the way WhatsApp Web does. **This is unofficial**:
-WhatsApp can block numbers that send in bulk this way. It is off for every company and
-only the operator can switch it on, from the server:
+Every new company starts on a **free trial**: 5 days, 200 emails and 100 WhatsApp
+messages (`TRIAL_DAYS`, `TRIAL_EMAILS`, `TRIAL_WHATSAPP_MESSAGES`). When it ends, sending
+stops on its own: WhatsApp is unlinked and its keys deleted, scheduled campaigns are
+cancelled, automations paused, and the company sees "Your free trial has ended".
+Their data stays. A reminder goes out the day before.
+
+Until online payments exist, the operator changes plans from the server:
 
 ```bash
 cd server
-npm run feature -- whatsapp-web <company slug or owner email> on    # or off
+npm run plan -- <company slug or owner email>                 # show
+npm run plan -- <company slug or owner email> paid [emails]   # upgrade (default 5,000 emails a month)
+npm run plan -- <company slug or owner email> trial <days>    # extend or restart a trial
 ```
 
-Then in the dashboard: Settings → WhatsApp → Link WhatsApp, and scan the QR code from the
-phone (Linked devices → Link a device). The **worker** holds the connection, so it must be
-running. Sending is paced (default one message every 10 seconds, 200 a day per number),
-only goes to contacts who agreed to WhatsApp, and a reply of STOP unsubscribes them.
+**WhatsApp during the trial** links the company's own number the way WhatsApp Web does
+(Settings → WhatsApp → Link WhatsApp, then scan the QR code from the phone). **This is
+unofficial**: WhatsApp can block numbers that send in bulk this way. It is available only
+during an active trial, each number can be used for one trial, and sending is paced
+(one message every 10 seconds by default). Only contacts who agreed to WhatsApp get
+messages; replying STOP unsubscribes them. The **worker** holds the connection, so it
+must be running. Paid companies will use the official WhatsApp Business route
+(planned: Meta Cloud API through a Solution Partner such as Gupshup).
+
+For testing, `npm run feature -- whatsapp-web <company> on` turns WhatsApp Web on for a
+company outside a trial.
 
 ## API
 

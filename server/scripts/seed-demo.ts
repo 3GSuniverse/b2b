@@ -93,7 +93,7 @@ async function main() {
 
   const [tenant] = await db
     .insert(tenants)
-    .values({ name: 'Kurukshetra Travels', slug: `kurukshetra-demo-${Date.now().toString(36)}`, monthlyQuota: 5000, postalAddress: 'Road No. 12, Banjara Hills, Hyderabad 500034' })
+    .values({ name: 'Kurukshetra Travels', slug: `kurukshetra-demo-${Date.now().toString(36)}`, plan: 'PAID', monthlyQuota: 5000, postalAddress: 'Road No. 12, Banjara Hills, Hyderabad 500034' })
     .returning();
   const tenantId = tenant!.id;
   const [user] = await db.insert(users).values({ tenantId, email: EMAIL, name: 'GunaSekhar', passwordHash: await hashPassword(PASSWORD), role: 'OWNER' }).returning();
