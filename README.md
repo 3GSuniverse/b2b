@@ -60,3 +60,35 @@ Check it is alive: `curl http://localhost:4000/health`
 ```json
 { "status": "ok", "database": "up", "redis": "up" }
 ```
+
+## API (so far)
+
+All `/api` routes use a session cookie set at sign-in. Writes must be JSON.
+
+| Method | Path | What it does |
+|---|---|---|
+| POST | `/api/auth/signup` | Create a company account and its owner |
+| POST | `/api/auth/login` · `/api/auth/logout` | Sign in / out (rate limited) |
+| GET | `/api/auth/me` | Current user and company |
+| GET · POST | `/api/domains` | List / connect a sending domain (returns DNS records to add) |
+| POST | `/api/domains/:id/check` | Re-check DNS and SES status now |
+| DELETE | `/api/domains/:id` | Disconnect a domain |
+| GET · POST | `/api/senders` | List / create "from" addresses on a verified domain |
+| PATCH · DELETE | `/api/senders/:id` | Edit / remove a sender |
+| GET · POST | `/u/:token` | Unsubscribe page and Gmail one-click unsubscribe |
+| POST | `/webhooks/ses` | SES events via SNS (signature-verified) |
+
+### How a company connects its own domain
+
+1. `POST /api/domains { "domain": "abcholidays.com" }` → returns 7 DNS records.
+2. The company adds them at its DNS provider: an ownership TXT (proves *this* account owns the
+   domain), 3 DKIM CNAMEs, MX + SPF for `mail.abcholidays.com`, and an optional DMARC TXT.
+3. The worker re-checks every 5 minutes for 7 days (or the user clicks "Check now").
+4. Once verified, the company creates a sender like `offers@abcholidays.com`. Its customers
+   only ever see the company's own name and address.
+
+## Tests
+
+```bash
+cd server && npm test     # needs Postgres + Redis (docker compose up -d)
+```
