@@ -1,4 +1,4 @@
-import { and, count, eq, gte, inArray } from 'drizzle-orm';
+import { and, count, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from '../../lib/db.js';
 import { campaigns, messages, senders } from '../../db/schema.js';
 import { enqueueEmails, type EnqueueFn } from '../../queues/index.js';
@@ -22,16 +22,17 @@ export class CampaignError extends Error {
   }
 }
 
-function monthStart(now = new Date()) {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+/** Start of the calendar month in the company's timezone (India: midnight IST on the 1st). */
+export function monthStartSql(now: Date, timezone: string) {
+  return sql`(date_trunc('month', ${now.toISOString()}::timestamptz at time zone ${timezone}) at time zone ${timezone})`;
 }
 
-/** Emails a tenant has used this calendar month (UTC). */
-export async function monthlyUsage(tenantId: string, now = new Date()) {
+/** Emails a tenant has used this calendar month, in its own timezone. */
+export async function monthlyUsage(tenantId: string, now = new Date(), timezone = 'Asia/Kolkata') {
   const [row] = await db
     .select({ n: count() })
     .from(messages)
-    .where(and(eq(messages.tenantId, tenantId), gte(messages.queuedAt, monthStart(now)), eq(messages.channel, 'EMAIL')));
+    .where(and(eq(messages.tenantId, tenantId), gte(messages.queuedAt, monthStartSql(now, timezone)), eq(messages.channel, 'EMAIL')));
   return row?.n ?? 0;
 }
 
@@ -78,7 +79,7 @@ export async function startCampaign(
   if (!subject || !html) throw new CampaignError('The email has no subject or content', 'no_content');
 
   const audienceSize = await countEmailAudience(db, campaign.tenantId, campaign.audience);
-  const used = await monthlyUsage(campaign.tenantId, now);
+  const used = await monthlyUsage(campaign.tenantId, now, campaign.tenant.timezone);
   if (used + audienceSize > campaign.tenant.monthlyQuota) {
     throw new CampaignError(
       `This send needs ${audienceSize} emails but only ${Math.max(0, campaign.tenant.monthlyQuota - used)} are left this month`,

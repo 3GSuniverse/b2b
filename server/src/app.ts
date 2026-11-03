@@ -11,6 +11,8 @@ import { AppError, registerErrorHandler } from './lib/http.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { campaignRoutes } from './modules/campaigns/routes.js';
 import { contactRoutes } from './modules/contacts/routes.js';
+import { notificationRoutes } from './modules/notifications/service.js';
+import { overviewRoutes } from './modules/overview/service.js';
 import { importRoutes } from './modules/imports/routes.js';
 import { fieldRoutes } from './modules/contacts/fields.js';
 import { domainRoutes } from './modules/domains/routes.js';
@@ -76,6 +78,8 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(contactRoutes);
   await app.register(importRoutes);
   await app.register(campaignRoutes);
+  await app.register(overviewRoutes);
+  await app.register(notificationRoutes);
   await app.register(unsubscribeRoutes);
   await app.register(webhookRoutes, opts.webhooks ?? {});
 

@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from '../../lib/db.js';
 import { messages, tenants } from '../../db/schema.js';
+import { notify, today } from '../notifications/service.js';
 
 // Amazon SES reviews an account at ~5% bounces or ~0.1% complaints.
 // One careless tenant must never get the whole platform's SES account paused,
@@ -61,5 +62,15 @@ export async function evaluateTenantHealth(tenantId: string, now = new Date()): 
     .set({ status: 'PAUSED', pausedReason: reason })
     .where(and(eq(tenants.id, tenantId), eq(tenants.status, 'ACTIVE')))
     .returning({ id: tenants.id });
+  if (paused.length) {
+    await notify(tenantId, {
+      type: 'tenant.paused',
+      level: 'ERROR',
+      title: 'Sending has been paused to protect your reputation',
+      body: reason,
+      link: '/contacts?status=BOUNCED',
+      dedupeKey: `tenant.paused:${today()}`,
+    });
+  }
   return paused.length > 0;
 }

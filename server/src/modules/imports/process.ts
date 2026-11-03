@@ -5,6 +5,7 @@ import { ensureField } from '../contacts/fields.js';
 import { fieldKey, normalizeEmail, normalizePhone } from '../contacts/normalize.js';
 import { coerceAttribute, fieldDefs } from '../contacts/service.js';
 import { autoMap, detectType, readCsv, splitFullName, type ColumnTarget } from './mapping.js';
+import { notify } from '../notifications/service.js';
 
 const BATCH = 500;
 const MAX_STORED_ERRORS = 500;
@@ -56,6 +57,14 @@ export async function processImport(jobId: string): Promise<ImportResult> {
         sourceCsv: null, // don't keep people's data around longer than needed
       })
       .where(eq(importJobs.id, jobId));
+    await notify(job.tenantId, {
+      type: 'import.completed',
+      level: result.skipped ? 'WARNING' : 'SUCCESS',
+      title: `${job.fileName} imported`,
+      body: `${result.imported.toLocaleString('en-IN')} new, ${result.updated.toLocaleString('en-IN')} updated${result.skipped ? `, ${result.skipped.toLocaleString('en-IN')} skipped` : ''}.`,
+      link: `/contacts/imports/${jobId}`,
+      dedupeKey: `import.completed:${jobId}`,
+    });
     return result;
   } catch (err) {
     await db

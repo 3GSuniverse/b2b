@@ -4,15 +4,27 @@ import { decryptSecret, encryptSecret } from '../../lib/crypto.js';
 import { db } from '../../lib/db.js';
 import { SendError, type EmailProvider } from '../email/types.js';
 import { GoogleAccessRevoked, gmailSendRaw, refreshAccessToken } from './google.js';
+import { notify, today } from '../notifications/service.js';
 import { buildMime } from './mime.js';
 
 const RATE_REASONS = new Set(['dailyLimitExceeded', 'userRateLimitExceeded', 'rateLimitExceeded', 'quotaExceeded']);
 
 async function markRevoked(connectionId: string, why: string) {
-  await db
+  const [c] = await db
     .update(mailboxConnections)
     .set({ status: 'REVOKED', lastError: why, accessTokenEnc: null, accessTokenExpiresAt: null })
-    .where(eq(mailboxConnections.id, connectionId));
+    .where(eq(mailboxConnections.id, connectionId))
+    .returning();
+  if (c) {
+    await notify(c.tenantId, {
+      type: 'mailbox.disconnected',
+      level: 'WARNING',
+      title: `${c.email} was disconnected`,
+      body: `${why} Emails from this address are on hold until you reconnect.`,
+      link: '/settings/senders',
+      dedupeKey: `mailbox.disconnected:${c.id}:${today()}`,
+    });
+  }
 }
 
 /** A valid access token — reuses the stored one, refreshes it when it has expired. */

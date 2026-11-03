@@ -5,6 +5,7 @@ import { AppError } from '../../lib/http.js';
 import { buildDnsRecords, checkDnsRecords, getDnsLookup, type DnsLookup, type DnsRecord } from './dns.js';
 import { getIdentityProvider, type IdentityProvider } from './identity-provider.js';
 import { normalizeDomain } from './validate.js';
+import { notify } from '../notifications/service.js';
 
 interface Deps {
   identity?: IdentityProvider;
@@ -154,6 +155,16 @@ export async function refreshDomain(tenantId: string, id: string, deps: Deps = {
     })
     .where(eq(sendingDomains.id, d.id))
     .returning();
+  if (ready && !d.verifiedAt) {
+    await notify(tenantId, {
+      type: 'domain.verified',
+      level: 'SUCCESS',
+      title: `${d.domain} is verified`,
+      body: `You can now send from any address @${d.domain}.`,
+      link: '/settings/senders',
+      dedupeKey: `domain.verified:${d.id}`,
+    });
+  }
   return domainDto(updated!);
 }
 

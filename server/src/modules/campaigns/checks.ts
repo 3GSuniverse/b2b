@@ -17,7 +17,7 @@ export interface Check {
 
 interface CheckInput {
   tenantId: string;
-  tenant: { monthlyQuota: number; status: string; pausedReason: string | null };
+  tenant: { monthlyQuota: number; status: string; pausedReason: string | null; timezone: string };
   subject: string | null;
   html: string | null;
   previewText: string | null;
@@ -134,7 +134,7 @@ export async function campaignChecks(input: CheckInput): Promise<{ checks: Check
 
   // Limits
   if (recipients) {
-    const used = await monthlyUsage(input.tenantId);
+    const used = await monthlyUsage(input.tenantId, new Date(), input.tenant.timezone);
     const left = Math.max(0, input.tenant.monthlyQuota - used);
     if (recipients > left) {
       add({ id: 'quota', level: 'error', title: 'Not enough emails left this month.', note: `This needs ${recipients.toLocaleString('en-IN')}; ${left.toLocaleString('en-IN')} are left.` });

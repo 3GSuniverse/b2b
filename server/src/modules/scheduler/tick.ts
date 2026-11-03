@@ -5,6 +5,7 @@ import type { EnqueueFn } from '../../queues/index.js';
 import { CampaignError, startCampaign } from '../sending/start-campaign.js';
 import { refreshPendingDomains } from '../domains/service.js';
 import { deleteExpiredSessions } from '../auth/sessions.js';
+import { notify } from '../notifications/service.js';
 
 export interface TickResult {
   started: string[];
@@ -41,10 +42,21 @@ export async function runSchedulerTick(opts: { now?: Date; enqueue?: EnqueueFn }
       if (err instanceof CampaignError && err.code === 'not_startable') continue; // someone else started it
       const reason = err instanceof Error ? err.message : String(err);
       // Leave it visible on the dashboard with the reason, instead of retrying forever
-      await db
+      const [failed] = await db
         .update(campaigns)
         .set({ status: 'FAILED', lastError: reason })
-        .where(and(eq(campaigns.id, id), eq(campaigns.status, 'SCHEDULED')));
+        .where(and(eq(campaigns.id, id), eq(campaigns.status, 'SCHEDULED')))
+        .returning();
+      if (failed) {
+        await notify(failed.tenantId, {
+          type: 'campaign.failed',
+          level: 'ERROR',
+          title: `“${failed.name}” couldn’t be sent at its scheduled time`,
+          body: reason,
+          link: `/campaigns/${failed.id}`,
+          dedupeKey: `campaign.failed:${failed.id}`,
+        });
+      }
       result.failed.push({ campaignId: id, reason });
     }
   }

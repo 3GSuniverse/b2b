@@ -7,6 +7,7 @@ import { senderUsageLast24h } from '../mailboxes/service.js';
 import { buildMergeVars, renderEmail } from '../email/render.js';
 import { unsubscribeUrl } from '../unsubscribe/token.js';
 import { bumpCounter } from './counters.js';
+import { notify } from '../notifications/service.js';
 
 export type SendOutcome =
   | 'sent'
@@ -61,10 +62,22 @@ export async function maybeCompleteCampaign(campaignId: string) {
     .from(messages)
     .where(and(eq(messages.campaignId, campaignId), eq(messages.status, 'QUEUED')));
   if ((row?.pending ?? 0) === 0) {
-    await db
+    const [done] = await db
       .update(campaigns)
       .set({ status: 'SENT', completedAt: new Date() })
-      .where(and(eq(campaigns.id, campaignId), eq(campaigns.status, 'SENDING')));
+      .where(and(eq(campaigns.id, campaignId), eq(campaigns.status, 'SENDING')))
+      .returning();
+    if (done && done.recipients > 0) {
+      const skipped = done.suppressed + done.failed;
+      await notify(done.tenantId, {
+        type: 'campaign.completed',
+        level: done.failed > 0 ? 'WARNING' : 'SUCCESS',
+        title: `“${done.name}” has been sent`,
+        body: `Sent to ${done.sent.toLocaleString('en-IN')} of ${done.recipients.toLocaleString('en-IN')} people${skipped ? ` · ${skipped.toLocaleString('en-IN')} skipped` : ''}. Opens and clicks keep updating over the next few days.`,
+        link: `/campaigns/${done.id}`,
+        dedupeKey: `campaign.completed:${done.id}`,
+      });
+    }
   }
 }
 
