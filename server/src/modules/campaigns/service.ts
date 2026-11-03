@@ -1,0 +1,398 @@
+import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { campaigns, contacts, lists, messageEvents, messages, senders, templates, trackedLinks, type Audience } from '../../db/schema.js';
+import { db } from '../../lib/db.js';
+import { AppError } from '../../lib/http.js';
+import type { EnqueueFn } from '../../queues/index.js';
+import { emailAudienceWhere } from '../audience/resolve.js';
+import { getEmailProvider, SendError } from '../email/index.js';
+import { buildMergeVars, renderEmail } from '../email/render.js';
+import { getMailboxProviderFactory } from '../mailboxes/gmail-provider.js';
+import { CampaignError, startCampaign } from '../sending/start-campaign.js';
+import { campaignChecks } from './checks.js';
+
+// ---------------------------------------------------------------------
+//  Validation
+// ---------------------------------------------------------------------
+
+const filterSchema = z.object({
+  field: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]{0,39}$/, 'Unknown field'),
+  op: z.enum(['eq', 'neq', 'contains', 'exists']),
+  value: z.string().max(200).optional(),
+});
+
+export const audienceSchema = z.object({
+  listIds: z.array(z.string()).max(50).optional(),
+  contactIds: z.array(z.string()).max(10_000).optional(),
+  filters: z.array(filterSchema).max(10).optional(),
+});
+
+export const campaignBody = z.object({
+  name: z.string().trim().min(1, 'Give the campaign a name').max(120),
+  senderId: z.string().nullable().optional(),
+  templateId: z.string().nullable().optional(),
+  subject: z.string().trim().max(200).nullable().optional(),
+  previewText: z.string().trim().max(200).nullable().optional(),
+  html: z.string().max(500_000, 'The email is too large').nullable().optional(),
+  text: z.string().max(200_000).nullable().optional(),
+  audience: audienceSchema.nullable().optional(),
+});
+
+const EDITABLE = ['DRAFT', 'SCHEDULED'] as const;
+
+// ---------------------------------------------------------------------
+//  Helpers
+// ---------------------------------------------------------------------
+
+const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : 0);
+
+type CampaignRow = typeof campaigns.$inferSelect & {
+  sender: (typeof senders.$inferSelect) | null;
+};
+
+export function campaignDto(c: CampaignRow) {
+  return {
+    id: c.id,
+    name: c.name,
+    status: c.status,
+    channel: c.channel,
+    sender: c.sender ? { id: c.sender.id, fromName: c.sender.fromName, fromEmail: c.sender.fromEmail, kind: c.sender.kind } : null,
+    templateId: c.templateId,
+    subject: c.subject,
+    previewText: c.previewText,
+    html: c.html,
+    text: c.text,
+    audience: c.audience,
+    scheduledAt: c.scheduledAt,
+    startedAt: c.startedAt,
+    completedAt: c.completedAt,
+    lastError: c.lastError,
+    stats: {
+      recipients: c.recipients,
+      sent: c.sent,
+      delivered: c.delivered,
+      bounced: c.bounced,
+      complained: c.complained,
+      opened: c.opened,
+      clicked: c.clicked,
+      unsubscribed: c.unsubscribed,
+      suppressed: c.suppressed,
+      failed: c.failed,
+    },
+    rates: {
+      delivery: pct(c.delivered, c.sent),
+      open: pct(c.opened, c.delivered || c.sent),
+      click: pct(c.clicked, c.delivered || c.sent),
+      bounce: pct(c.bounced, c.sent),
+      unsubscribe: pct(c.unsubscribed, c.delivered || c.sent),
+    },
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
+  };
+}
+
+async function getOwned(tenantId: string, id: string) {
+  const c = await db.query.campaigns.findFirst({
+    where: and(eq(campaigns.id, id), eq(campaigns.tenantId, tenantId)),
+    with: { sender: true },
+  });
+  if (!c) throw new AppError(404, 'campaign_not_found', 'Campaign not found');
+  return c;
+}
+
+async function assertRefs(tenantId: string, input: { senderId?: string | null; templateId?: string | null; audience?: Audience | null }) {
+  if (input.senderId) {
+    const s = await db.query.senders.findFirst({ where: and(eq(senders.id, input.senderId), eq(senders.tenantId, tenantId)), columns: { id: true } });
+    if (!s) throw new AppError(404, 'sender_not_found', 'Sender not found');
+  }
+  if (input.templateId) {
+    const t = await db.query.templates.findFirst({ where: and(eq(templates.id, input.templateId), eq(templates.tenantId, tenantId)), columns: { id: true } });
+    if (!t) throw new AppError(404, 'template_not_found', 'Template not found');
+  }
+  const listIds = input.audience?.listIds ?? [];
+  if (listIds.length) {
+    const found = await db.select({ id: lists.id }).from(lists).where(and(eq(lists.tenantId, tenantId), inArray(lists.id, listIds)));
+    if (found.length !== new Set(listIds).size) throw new AppError(404, 'list_not_found', 'One of the lists was not found');
+  }
+}
+
+// ---------------------------------------------------------------------
+//  CRUD
+// ---------------------------------------------------------------------
+
+export const listCampaignsQuery = z.object({
+  status: z.enum(['DRAFT', 'SCHEDULED', 'SENDING', 'PAUSED', 'SENT', 'CANCELLED', 'FAILED']).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export async function listCampaigns(tenantId: string, q: z.infer<typeof listCampaignsQuery>) {
+  const where = and(eq(campaigns.tenantId, tenantId), q.status ? eq(campaigns.status, q.status) : undefined);
+  const [rows, [{ total } = { total: 0 }]] = await Promise.all([
+    db.query.campaigns.findMany({
+      where,
+      with: { sender: true },
+      orderBy: [desc(campaigns.updatedAt)],
+      limit: q.pageSize,
+      offset: (q.page - 1) * q.pageSize,
+      columns: { html: false, text: false }, // lists stay light
+    }),
+    db.select({ total: count() }).from(campaigns).where(where),
+  ]);
+  return {
+    campaigns: rows.map((r) => campaignDto({ ...r, html: null, text: null } as CampaignRow)),
+    page: q.page,
+    total,
+    pages: Math.max(1, Math.ceil(total / q.pageSize)),
+  };
+}
+
+export async function getCampaign(tenantId: string, id: string) {
+  return campaignDto(await getOwned(tenantId, id));
+}
+
+export async function createCampaign(tenantId: string, userId: string, input: z.infer<typeof campaignBody>) {
+  await assertRefs(tenantId, input);
+  let content = { subject: input.subject ?? null, previewText: input.previewText ?? null, html: input.html ?? null, text: input.text ?? null };
+  if (input.templateId && !content.html) {
+    const t = (await db.query.templates.findFirst({ where: eq(templates.id, input.templateId) }))!;
+    content = { subject: content.subject ?? t.subject, previewText: content.previewText ?? t.previewText, html: t.html, text: t.text };
+  }
+  let senderId = input.senderId ?? null;
+  if (!senderId) {
+    const def = await db.query.senders.findFirst({ where: and(eq(senders.tenantId, tenantId), eq(senders.isDefault, true)), columns: { id: true } });
+    senderId = def?.id ?? null;
+  }
+  const [row] = await db
+    .insert(campaigns)
+    .values({ tenantId, name: input.name, senderId, templateId: input.templateId ?? null, audience: input.audience ?? null, createdById: userId, ...content })
+    .returning();
+  return getCampaign(tenantId, row!.id);
+}
+
+export async function updateCampaign(tenantId: string, id: string, input: Partial<z.infer<typeof campaignBody>>) {
+  const c = await getOwned(tenantId, id);
+  if (!EDITABLE.includes(c.status as (typeof EDITABLE)[number])) {
+    throw new AppError(409, 'not_editable', `A ${c.status.toLowerCase()} campaign can’t be edited. Duplicate it instead.`);
+  }
+  await assertRefs(tenantId, input);
+  const patch = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
+  if (Object.keys(patch).length) await db.update(campaigns).set(patch).where(eq(campaigns.id, id));
+  return getCampaign(tenantId, id);
+}
+
+export async function deleteCampaign(tenantId: string, id: string) {
+  const c = await getOwned(tenantId, id);
+  if (c.status === 'SENDING' || c.status === 'SENT' || c.startedAt) {
+    throw new AppError(409, 'not_deletable', 'Sent campaigns are kept for your reports. You can’t delete them.');
+  }
+  await db.delete(campaigns).where(eq(campaigns.id, id));
+}
+
+export async function duplicateCampaign(tenantId: string, userId: string, id: string) {
+  const c = await getOwned(tenantId, id);
+  const [row] = await db
+    .insert(campaigns)
+    .values({
+      tenantId,
+      name: `Copy of ${c.name}`.slice(0, 120),
+      senderId: c.senderId,
+      templateId: c.templateId,
+      subject: c.subject,
+      previewText: c.previewText,
+      html: c.html,
+      text: c.text,
+      audience: c.audience,
+      createdById: userId,
+    })
+    .returning();
+  return getCampaign(tenantId, row!.id);
+}
+
+// ---------------------------------------------------------------------
+//  Preview, checks, test send
+// ---------------------------------------------------------------------
+
+async function checkInputFor(tenantId: string, id: string) {
+  const c = await db.query.campaigns.findFirst({
+    where: and(eq(campaigns.id, id), eq(campaigns.tenantId, tenantId)),
+    with: { tenant: true, sender: { with: { domain: true, connection: true } } },
+  });
+  if (!c) throw new AppError(404, 'campaign_not_found', 'Campaign not found');
+  return {
+    c,
+    input: {
+      tenantId,
+      tenant: c.tenant,
+      subject: c.subject,
+      html: c.html,
+      previewText: c.previewText,
+      audience: c.audience,
+      sender: c.sender,
+    },
+  };
+}
+
+/** Renders the email as one real recipient would see it, plus the ready-to-send checks. */
+export async function previewCampaign(tenantId: string, id: string, contactId?: string) {
+  const { c, input } = await checkInputFor(tenantId, id);
+  // Plain select (not db.query): the audience filter has subqueries on other tables
+  const [contact] = contactId
+    ? await db.select().from(contacts).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId))).limit(1)
+    : await db.select().from(contacts).where(emailAudienceWhere(tenantId, c.audience)).orderBy(contacts.createdAt).limit(1);
+
+  const vars = buildMergeVars(contact ?? null, c.tenant, { unsubscribe_url: '#unsubscribe-preview' });
+  const rendered =
+    c.subject && c.html
+      ? renderEmail({ subject: c.subject, html: c.html, text: c.text, previewText: c.previewText }, vars, c.tenant)
+      : null;
+  const checks = await campaignChecks(input);
+  return {
+    previewAs: contact ? { id: contact.id, email: contact.email, firstName: contact.firstName } : null,
+    rendered,
+    ...checks,
+  };
+}
+
+export async function sendTestEmail(tenantId: string, id: string, to: string[]) {
+  const { c } = await checkInputFor(tenantId, id);
+  const sender = c.sender;
+  if (!sender) throw new AppError(400, 'no_sender', 'Choose who the email is from first');
+  if (!c.subject || !c.html) throw new AppError(400, 'no_content', 'Add a subject and content first');
+
+  const [sample] = await db.select().from(contacts).where(emailAudienceWhere(tenantId, c.audience)).orderBy(contacts.createdAt).limit(1);
+  const vars = buildMergeVars(sample ?? null, c.tenant, { unsubscribe_url: `#test-email-unsubscribe` });
+  const r = renderEmail({ subject: c.subject, html: c.html, text: c.text, previewText: c.previewText }, vars, c.tenant);
+
+  let provider;
+  if (sender.kind === 'DOMAIN') provider = getEmailProvider();
+  else if (sender.connection?.status === 'ACTIVE') provider = getMailboxProviderFactory()(sender.connection);
+  else throw new AppError(400, 'sender_not_verified', `${sender.fromEmail} is disconnected`);
+
+  const results: { to: string; ok: boolean; error?: string }[] = [];
+  for (const address of to) {
+    try {
+      await provider.send({
+        from: { name: sender.fromName, email: sender.fromEmail },
+        replyTo: sender.replyTo,
+        to: address,
+        subject: `[Test] ${r.subject}`,
+        html: r.html,
+        text: r.text,
+        headers: {},
+        tags: { tenant_id: tenantId, campaign_id: c.id, test: 'true' },
+      });
+      results.push({ to: address, ok: true });
+    } catch (err) {
+      const msg = err instanceof SendError ? err.message : 'Sending failed';
+      results.push({
+        to: address,
+        ok: false,
+        error: /not verified/i.test(msg)
+          ? 'While your account is in the SES sandbox, test emails can only go to verified addresses.'
+          : msg.slice(0, 200),
+      });
+    }
+  }
+  return { results, previewAs: sample?.email ?? null };
+}
+
+// ---------------------------------------------------------------------
+//  Scheduling and sending
+// ---------------------------------------------------------------------
+
+async function assertSendable(tenantId: string, id: string) {
+  const { input } = await checkInputFor(tenantId, id);
+  const r = await campaignChecks(input);
+  if (!r.canSend) {
+    const first = r.checks.find((c) => c.level === 'error')!;
+    throw new AppError(422, 'checks_failed', first.title, { checks: r.checks });
+  }
+  return r;
+}
+
+export async function scheduleCampaign(tenantId: string, id: string, scheduledAt: Date, now = new Date()) {
+  const c = await getOwned(tenantId, id);
+  if (!EDITABLE.includes(c.status as (typeof EDITABLE)[number])) {
+    throw new AppError(409, 'not_schedulable', `A ${c.status.toLowerCase()} campaign can’t be scheduled`);
+  }
+  if (scheduledAt.getTime() < now.getTime() + 60_000) throw new AppError(400, 'time_in_past', 'Pick a time at least a minute from now');
+  if (scheduledAt.getTime() > now.getTime() + 365 * 86_400_000) throw new AppError(400, 'time_too_far', 'Schedule within the next 12 months');
+  await assertSendable(tenantId, id);
+  await db.update(campaigns).set({ status: 'SCHEDULED', scheduledAt, lastError: null }).where(eq(campaigns.id, id));
+  return getCampaign(tenantId, id);
+}
+
+export async function unscheduleCampaign(tenantId: string, id: string) {
+  const c = await getOwned(tenantId, id);
+  if (c.status !== 'SCHEDULED') throw new AppError(409, 'not_scheduled', 'This campaign isn’t scheduled');
+  await db.update(campaigns).set({ status: 'DRAFT', scheduledAt: null }).where(and(eq(campaigns.id, id), eq(campaigns.status, 'SCHEDULED')));
+  return getCampaign(tenantId, id);
+}
+
+export async function sendCampaignNow(tenantId: string, id: string, enqueue?: EnqueueFn) {
+  const c = await getOwned(tenantId, id);
+  if (!EDITABLE.includes(c.status as (typeof EDITABLE)[number])) {
+    throw new AppError(409, 'not_sendable', `This campaign is already ${c.status.toLowerCase()}`);
+  }
+  await assertSendable(tenantId, id);
+  try {
+    await startCampaign(id, { enqueue });
+  } catch (err) {
+    if (err instanceof CampaignError) throw new AppError(409, err.code, err.message);
+    throw err;
+  }
+  return getCampaign(tenantId, id);
+}
+
+/** Stops a scheduled or sending campaign. Emails already sent stay sent; the rest are not sent. */
+export async function cancelCampaign(tenantId: string, id: string) {
+  const c = await getOwned(tenantId, id);
+  if (c.status !== 'SENDING' && c.status !== 'SCHEDULED') {
+    throw new AppError(409, 'not_cancellable', 'Only scheduled or sending campaigns can be cancelled');
+  }
+  await db.transaction(async (tx) => {
+    await tx.update(campaigns).set({ status: 'CANCELLED', completedAt: new Date() }).where(eq(campaigns.id, id));
+    await tx
+      .update(messages)
+      .set({ status: 'FAILED', error: 'campaign_cancelled' })
+      .where(and(eq(messages.campaignId, id), eq(messages.status, 'QUEUED')));
+  });
+  return getCampaign(tenantId, id);
+}
+
+// ---------------------------------------------------------------------
+//  Report
+// ---------------------------------------------------------------------
+
+export async function campaignReport(tenantId: string, id: string) {
+  const c = await getOwned(tenantId, id);
+  const [statusRows, links, bounces] = await Promise.all([
+    db
+      .select({ status: messages.status, error: messages.error, n: count() })
+      .from(messages)
+      .where(eq(messages.campaignId, id))
+      .groupBy(messages.status, messages.error),
+    db.select({ url: trackedLinks.url, clicks: trackedLinks.clicks }).from(trackedLinks).where(eq(trackedLinks.campaignId, id)).orderBy(desc(trackedLinks.clicks)).limit(10),
+    db
+      .select({
+        email: messages.toAddress,
+        at: messageEvents.occurredAt,
+        detail: messageEvents.detail,
+      })
+      .from(messageEvents)
+      .innerJoin(messages, eq(messages.id, messageEvents.messageId))
+      .where(and(eq(messages.campaignId, id), inArray(messageEvents.type, ['BOUNCE', 'COMPLAINT']), sql`${messages.status} in ('BOUNCED','COMPLAINED')`))
+      .orderBy(desc(messageEvents.occurredAt))
+      .limit(50),
+  ]);
+  const pending = statusRows.filter((r) => r.status === 'QUEUED').reduce((a, r) => a + r.n, 0);
+  const cancelled = statusRows.filter((r) => r.error === 'campaign_cancelled').reduce((a, r) => a + r.n, 0);
+  return {
+    campaign: campaignDto(c),
+    pending,
+    cancelled,
+    topLinks: links,
+    problems: bounces.map((b) => ({ email: b.email, at: b.at, detail: b.detail })),
+  };
+}

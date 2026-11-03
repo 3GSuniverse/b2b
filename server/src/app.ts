@@ -9,6 +9,7 @@ import sensible from '@fastify/sensible';
 import { env, isProd } from './config/env.js';
 import { AppError, registerErrorHandler } from './lib/http.js';
 import { authRoutes } from './modules/auth/routes.js';
+import { campaignRoutes } from './modules/campaigns/routes.js';
 import { contactRoutes } from './modules/contacts/routes.js';
 import { importRoutes } from './modules/imports/routes.js';
 import { fieldRoutes } from './modules/contacts/fields.js';
@@ -74,6 +75,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(fieldRoutes);
   await app.register(contactRoutes);
   await app.register(importRoutes);
+  await app.register(campaignRoutes);
   await app.register(unsubscribeRoutes);
   await app.register(webhookRoutes, opts.webhooks ?? {});
 
