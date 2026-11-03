@@ -26,7 +26,7 @@ async function owned(tenantId: string, id: string) {
 
 export async function templateRoutes(app: FastifyInstance) {
   app.get('/api/templates/starters', { preHandler: requireAuth }, async () => ({
-    starters: STARTERS.map(({ id, name, description, subject, previewText }) => ({ id, name, description, subject, previewText })),
+    starters: STARTERS.map(({ id, name, description, subject, previewText, html }) => ({ id, name, description, subject, previewText, html })),
   }));
 
   app.post('/api/templates/from-starter', { preHandler: requireAuth }, async (req, reply) => {
@@ -40,9 +40,18 @@ export async function templateRoutes(app: FastifyInstance) {
     return reply.code(201).send({ template: t });
   });
 
-  app.get('/api/templates', { preHandler: requireAuth }, async (req) => ({
+  // ?include=html adds the HTML, for galleries that show thumbnails
+  app.get<{ Querystring: { include?: string } }>('/api/templates', { preHandler: requireAuth }, async (req) => ({
     templates: await db
-      .select({ id: templates.id, name: templates.name, subject: templates.subject, previewText: templates.previewText, updatedAt: templates.updatedAt, createdAt: templates.createdAt })
+      .select({
+        id: templates.id,
+        name: templates.name,
+        subject: templates.subject,
+        previewText: templates.previewText,
+        updatedAt: templates.updatedAt,
+        createdAt: templates.createdAt,
+        ...(req.query.include === 'html' ? { html: templates.html } : {}),
+      })
       .from(templates)
       .where(eq(templates.tenantId, tenantOf(req)))
       .orderBy(desc(templates.updatedAt)),
