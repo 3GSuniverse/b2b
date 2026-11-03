@@ -17,7 +17,7 @@ export interface Check {
 
 interface CheckInput {
   tenantId: string;
-  tenant: { monthlyQuota: number; status: string; pausedReason: string | null; timezone: string };
+  tenant: { monthlyQuota: number; status: string; pausedReason: string | null; timezone: string; postalAddress?: string | null };
   subject: string | null;
   html: string | null;
   previewText: string | null;
@@ -83,6 +83,9 @@ export async function campaignChecks(input: CheckInput): Promise<{ checks: Check
   if (!html) add({ id: 'content', level: 'error', title: 'The email has no content yet.' });
 
   add({ id: 'unsubscribe', level: 'ok', title: 'Unsubscribe link added.', note: 'Required by Gmail and Yahoo — added to every email automatically.' });
+  if (!input.tenant.postalAddress?.trim()) {
+    add({ id: 'address', level: 'warning', title: 'Add your office address.', note: 'It goes in the footer of every email. Anti-spam rules expect it. Settings → Company.' });
+  }
 
   const all = `${subject}\n${input.previewText ?? ''}\n${html}`;
   const placeholders = [...new Set(all.match(PLACEHOLDER) ?? [])];

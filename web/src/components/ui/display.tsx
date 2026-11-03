@@ -10,7 +10,7 @@ export function Panel({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 export function PanelHeader({ title, description, action, className }: { title: ReactNode; description?: ReactNode; action?: ReactNode; className?: string }) {
   return (
     <div className={cn('flex flex-wrap items-start justify-between gap-3', className)}>
-      <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 max-w-2xl flex-1 flex-col gap-1">
         <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
         {description && <p className="text-[13px] leading-relaxed text-muted">{description}</p>}
       </div>

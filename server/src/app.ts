@@ -8,6 +8,7 @@ import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
 import { env, isProd } from './config/env.js';
 import { AppError, registerErrorHandler } from './lib/http.js';
+import { accountRoutes } from './modules/account/routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { automationRoutes } from './modules/automations/routes.js';
 import { campaignRoutes } from './modules/campaigns/routes.js';
@@ -73,6 +74,7 @@ export async function buildApp(opts: AppOptions = {}) {
 
   await app.register(healthRoutes);
   await app.register(authRoutes, { rateLimitMax: opts.authRateLimit });
+  await app.register(accountRoutes);
   await app.register(domainRoutes);
   await app.register(senderRoutes);
   await app.register(mailboxRoutes);
