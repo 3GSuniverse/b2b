@@ -37,9 +37,10 @@ async function waCampaign(tenantId: string, text = 'Namaste {first_name|there}, 
 
 const noQueue = async () => undefined;
 
-describe('WhatsApp Web is off unless the operator switches it on', () => {
-  it('hides the API and refuses WhatsApp campaigns', async () => {
-    const { cookie } = await signup(app);
+describe('WhatsApp Web is only for free trials', () => {
+  it('paid companies don’t get it (they get the official WhatsApp route)', async () => {
+    const { cookie, json } = await signup(app);
+    await db.update(tenants).set({ plan: 'PAID' }).where(eq(tenants.id, json.tenant.id));
     const c = api(app, cookie);
     expect((await c.get('/api/whatsapp')).json().error).toBe('feature_not_enabled');
     expect((await c.post('/api/campaigns', { name: 'x', channel: 'WHATSAPP', text: 'hi' })).statusCode).toBe(403);
@@ -47,8 +48,7 @@ describe('WhatsApp Web is off unless the operator switches it on', () => {
   });
 
   it('when on: status, start linking, daily limit settings', async () => {
-    const { cookie, json } = await signup(app);
-    await db.update(tenants).set({ whatsappWebEnabled: true }).where(eq(tenants.id, json.tenant.id));
+    const { cookie } = await signup(app); // new companies are on a trial, which includes WhatsApp
     const c = api(app, cookie);
     expect((await c.get('/api/whatsapp')).json().whatsapp).toMatchObject({ status: 'DISCONNECTED', dailyLimit: 200, intervalSeconds: 10, qr: null });
     expect((await c.post('/api/whatsapp/connect')).json().whatsapp.status).toBe('CONNECTING');

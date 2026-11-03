@@ -1,3 +1,4 @@
+import { trialEnded } from '../plans/entitlements.js';
 import { and, count, eq, gte, inArray, sql, type SQL } from 'drizzle-orm';
 import { automations, automationSends, contacts, customFields, messages, tenants } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
@@ -80,7 +81,7 @@ export async function runAutomationsTick(opts: { now?: Date; enqueue?: EnqueueFn
   });
 
   for (const a of active as AutomationRow[]) {
-    if (a.tenant.status !== 'ACTIVE' || !a.templateId || !a.senderId || a.dateField.type !== 'DATE') continue;
+    if (a.tenant.status !== 'ACTIVE' || trialEnded(a.tenant) || !a.templateId || !a.senderId || a.dateField.type !== 'DATE') continue;
     result.automations++;
     try {
       // Never back-fill: nothing due before the automation was switched on

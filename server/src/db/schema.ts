@@ -42,6 +42,7 @@ const ts = () => timestamp({ withTimezone: true });
 // ---------------------------------------------------------------------
 
 export const tenantStatus = pgEnum('tenant_status', ['ACTIVE', 'PAUSED', 'SUSPENDED']);
+export const tenantPlan = pgEnum('tenant_plan', ['TRIAL', 'PAID']);
 export const userRole = pgEnum('user_role', ['OWNER', 'ADMIN', 'MEMBER']);
 export const channel = pgEnum('channel', ['EMAIL', 'WHATSAPP']);
 export const verificationStatus = pgEnum('verification_status', ['PENDING', 'VERIFIED', 'FAILED']);
@@ -121,7 +122,11 @@ export const tenants = pgTable('tenants', {
   pausedReason: text(),
   // Shown in every email footer — required by anti-spam law
   postalAddress: text(),
-  // Unofficial WhatsApp Web sending. Off for everyone; switched on per company by the operator only.
+  // Free trial: new companies start here; the operator switches them to PAID
+  plan: tenantPlan().notNull().default('TRIAL'),
+  trialEndsAt: ts(),
+  trialEndedAt: ts(), // set once the end-of-trial clean-up has run
+  // Unofficial WhatsApp Web sending: on during an active trial. This flag is an operator override for testing.
   whatsappWebEnabled: boolean().notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -577,6 +582,13 @@ export const whatsappSessions = pgTable('whatsapp_sessions', {
   connectedAt: ts(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
+});
+
+// Every number that has been linked during a trial — one free trial per WhatsApp number
+export const whatsappTrialNumbers = pgTable('whatsapp_trial_numbers', {
+  phone: text().primaryKey(),
+  tenantId: text().references(() => tenants.id, { onDelete: 'set null' }),
+  firstLinkedAt: createdAt(),
 });
 
 // Login keys for the linked session, encrypted at rest (AES-256-GCM). Deleted on unlink.

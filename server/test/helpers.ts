@@ -14,7 +14,7 @@ import {
 export async function resetDb() {
   await db.execute(sql`
     truncate table message_events, tracked_links, automation_sends, messages, campaigns, automations,
-      custom_fields, list_memberships, lists, import_jobs, suppressions, contacts, templates,
+      custom_fields, list_memberships, lists, import_jobs, suppressions, contacts, templates, whatsapp_trial_numbers,
       senders, sending_domains, audit_logs, users, tenants restart identity cascade
   `);
 }
@@ -25,6 +25,7 @@ export async function makeTenant(overrides: Partial<typeof tenants.$inferInsert>
     .values({
       name: 'Kurukshetra Travels',
       slug: `kt-${Math.random().toString(36).slice(2, 8)}`,
+      plan: 'PAID',
       postalAddress: '12 MG Road, Vijayawada 520010',
       ...overrides,
     })

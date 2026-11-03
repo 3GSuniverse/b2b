@@ -14,6 +14,7 @@ import { buildMergeVars, renderEmail } from '../email/render.js';
 import { getMailboxProviderFactory } from '../mailboxes/gmail-provider.js';
 import { CampaignError, startCampaign } from '../sending/start-campaign.js';
 import { campaignChecks, whatsappChecks } from './checks.js';
+import { trialEnded, whatsappWebAllowed } from '../plans/entitlements.js';
 
 // ---------------------------------------------------------------------
 //  Validation
@@ -159,8 +160,8 @@ export async function getCampaign(tenantId: string, id: string) {
 export async function createCampaign(tenantId: string, userId: string, input: z.infer<typeof campaignBody>) {
   await assertRefs(tenantId, input);
   if (input.channel === 'WHATSAPP') {
-    const t = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId), columns: { whatsappWebEnabled: true } });
-    if (!t?.whatsappWebEnabled) throw new AppError(403, 'feature_not_enabled', 'WhatsApp sending isn’t switched on for this account');
+    const t = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+    if (!t || !whatsappWebAllowed(t)) throw new AppError(403, 'feature_not_enabled', 'WhatsApp sending isn’t available on this account');
     const [row] = await db
       .insert(campaigns)
       .values({ tenantId, channel: 'WHATSAPP', name: input.name, text: input.text ?? null, audience: input.audience ?? null, createdById: userId })
@@ -290,6 +291,7 @@ export async function previewCampaign(tenantId: string, id: string, contactId?: 
 export async function sendTestWhatsApp(tenantId: string, id: string, phones: string[]) {
   const { c } = await checkInputFor(tenantId, id);
   if (c.channel !== 'WHATSAPP') throw new AppError(400, 'wrong_channel', 'This is an email campaign');
+  if (!whatsappWebAllowed(c.tenant)) throw new AppError(403, 'trial_ended', 'Your free trial has ended');
   if (!c.text?.trim()) throw new AppError(400, 'no_content', 'Write the message first');
   const session = await getSession(tenantId);
   if (session.status !== 'CONNECTED') throw new AppError(400, 'whatsapp_not_connected', 'Link your WhatsApp number first, in Settings → WhatsApp');
@@ -303,6 +305,7 @@ export async function sendTestWhatsApp(tenantId: string, id: string, phones: str
 
 export async function sendTestEmail(tenantId: string, id: string, to: string[]) {
   const { c } = await checkInputFor(tenantId, id);
+  if (trialEnded(c.tenant)) throw new AppError(403, 'trial_ended', 'Your free trial has ended');
   const sender = c.sender;
   if (!sender) throw new AppError(400, 'no_sender', 'Choose who the email is from first');
   if (!c.subject || !c.html) throw new AppError(400, 'no_content', 'Add a subject and content first');

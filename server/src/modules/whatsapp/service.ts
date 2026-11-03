@@ -1,6 +1,6 @@
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, max, min, sql } from 'drizzle-orm';
 import QRCode from 'qrcode';
-import { campaigns, contacts, messages, suppressions, tenants, whatsappSessions } from '../../db/schema.js';
+import { campaigns, contacts, messages, suppressions, tenants, whatsappSessions, whatsappTrialNumbers } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { buildMergeVars, renderString } from '../email/render.js';
@@ -8,6 +8,7 @@ import { notify } from '../notifications/service.js';
 import { bumpCounter } from '../sending/counters.js';
 import { DeferSend, finalizeMessage, maybeCompleteCampaign, type SendOutcome } from '../sending/send-message.js';
 import { getQr } from './bus.js';
+import { trialEnded, whatsappWebAllowed } from '../plans/entitlements.js';
 import { getWhatsAppGateway, WhatsAppError, type WhatsAppGateway } from './gateway.js';
 
 /** WhatsApp's own limit for one text message. */
@@ -24,8 +25,10 @@ export async function getSession(tenantId: string) {
 }
 
 export async function assertEnabled(tenantId: string) {
-  const t = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId), columns: { whatsappWebEnabled: true } });
-  if (!t?.whatsappWebEnabled) throw new AppError(404, 'feature_not_enabled', 'WhatsApp sending isn’t switched on for this account');
+  const t = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+  if (!t || !whatsappWebAllowed(t)) {
+    throw new AppError(404, 'feature_not_enabled', t && trialEnded(t) ? 'Your free trial has ended' : 'WhatsApp sending isn’t available on this account');
+  }
 }
 
 /** Sent in the last 24 hours from this company's number (rolling, like the Gmail limit). */
@@ -61,7 +64,23 @@ export async function onQr(tenantId: string) {
   await db.update(whatsappSessions).set({ status: 'CONNECTING', lastError: null }).where(eq(whatsappSessions.tenantId, tenantId));
 }
 
-export async function onConnected(tenantId: string, phone: string, displayName: string | null) {
+/**
+ * Called when a phone finishes linking. Returns false if the number isn't allowed here:
+ * each WhatsApp number gets one free trial, so signing up again doesn't buy more messages.
+ */
+export async function onConnected(tenantId: string, phone: string, displayName: string | null): Promise<boolean> {
+  const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+  if (tenant?.plan === 'TRIAL' && !tenant.whatsappWebEnabled && phone) {
+    const [claimed] = await db.insert(whatsappTrialNumbers).values({ phone, tenantId }).onConflictDoNothing().returning();
+    const owner = claimed ?? (await db.query.whatsappTrialNumbers.findFirst({ where: eq(whatsappTrialNumbers.phone, phone) }));
+    if (owner && owner.tenantId !== tenantId) {
+      await db
+        .update(whatsappSessions)
+        .set({ status: 'DISCONNECTED', phone: null, lastError: `${phone} has already been used for a free trial. Link a different number, or upgrade.` })
+        .where(eq(whatsappSessions.tenantId, tenantId));
+      return false;
+    }
+  }
   const before = await getSession(tenantId);
   await db
     .update(whatsappSessions)
@@ -77,6 +96,7 @@ export async function onConnected(tenantId: string, phone: string, displayName: 
       dedupeKey: `whatsapp.connected:${phone}:${new Date().toISOString().slice(0, 10)}`,
     });
   }
+  return true;
 }
 
 /** Linking couldn't reach WhatsApp at all (network, or WhatsApp refusing the connection). */
@@ -190,8 +210,8 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
     await finalizeMessage(msg, 'FAILED', `tenant_${msg.tenant.status.toLowerCase()}`);
     return 'failed';
   }
-  if (!msg.tenant.whatsappWebEnabled) {
-    await finalizeMessage(msg, 'FAILED', 'whatsapp_not_enabled');
+  if (!whatsappWebAllowed(msg.tenant, now)) {
+    await finalizeMessage(msg, 'FAILED', trialEnded(msg.tenant, now) ? 'trial_ended' : 'whatsapp_not_enabled');
     return 'failed';
   }
 

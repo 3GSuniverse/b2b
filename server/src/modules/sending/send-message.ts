@@ -7,6 +7,7 @@ import { senderUsageLast24h } from '../mailboxes/service.js';
 import { buildMergeVars, renderEmail } from '../email/render.js';
 import { unsubscribeUrl } from '../unsubscribe/token.js';
 import { bumpCounter } from './counters.js';
+import { trialEnded } from '../plans/entitlements.js';
 import { notify } from '../notifications/service.js';
 import { syncAutomationSend } from '../automations/engine.js';
 
@@ -110,6 +111,10 @@ export async function processSendJob(
   // 1. Tenant must be allowed to send
   if (msg.tenant.status !== 'ACTIVE') {
     await finalizeMessage(msg, 'FAILED', `tenant_${msg.tenant.status.toLowerCase()}`);
+    return 'failed';
+  }
+  if (trialEnded(msg.tenant)) {
+    await finalizeMessage(msg, 'FAILED', 'trial_ended');
     return 'failed';
   }
 

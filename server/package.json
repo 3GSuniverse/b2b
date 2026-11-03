@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed:demo": "tsx scripts/seed-demo.ts",
-    "feature": "tsx scripts/feature.ts"
+    "feature": "tsx scripts/feature.ts",
+    "plan": "tsx scripts/plan.ts"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1161.0",

@@ -2,6 +2,8 @@ import { randomBytes } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { env } from '../../config/env.js';
+import { planDto, whatsappWebAllowed } from '../plans/entitlements.js';
 import { tenants, users } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError, parseBody } from '../../lib/http.js';
@@ -45,7 +47,7 @@ function publicUser(u: { id: string; name: string; email: string; role: string }
   return { id: u.id, name: u.name, email: u.email, role: u.role };
 }
 
-function publicTenant(t: { id: string; name: string; slug: string; status: string; timezone: string; monthlyQuota: number; pausedReason: string | null; whatsappWebEnabled: boolean }) {
+async function publicTenant(t: typeof tenants.$inferSelect) {
   return {
     id: t.id,
     name: t.name,
@@ -54,7 +56,8 @@ function publicTenant(t: { id: string; name: string; slug: string; status: strin
     timezone: t.timezone,
     monthlyQuota: t.monthlyQuota,
     pausedReason: t.pausedReason,
-    features: { whatsapp: t.whatsappWebEnabled },
+    features: { whatsapp: whatsappWebAllowed(t) },
+    plan: await planDto(t),
   };
 }
 
@@ -75,7 +78,11 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRouteOptions) {
     const passwordHash = await hashPassword(body.password);
 
     const { tenant, user } = await db.transaction(async (tx) => {
-      const [tenant] = await tx.insert(tenants).values({ name: body.companyName, slug: slugify(body.companyName) }).returning();
+      // Every new company starts on a free trial
+      const [tenant] = await tx
+        .insert(tenants)
+        .values({ name: body.companyName, slug: slugify(body.companyName), plan: 'TRIAL', trialEndsAt: new Date(Date.now() + env.TRIAL_DAYS * 86_400_000), monthlyQuota: env.TRIAL_EMAILS })
+        .returning();
       const [user] = await tx
         .insert(users)
         .values({ tenantId: tenant!.id, email: body.email, name: body.name, passwordHash, role: 'OWNER' })
@@ -85,7 +92,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRouteOptions) {
 
     const s = await createSession({ userId: user.id, tenantId: tenant.id, userAgent: req.headers['user-agent'], ip: req.ip });
     setSessionCookie(reply, s.token, s.expiresAt);
-    return reply.code(201).send({ user: publicUser(user), tenant: publicTenant(tenant) });
+    return reply.code(201).send({ user: publicUser(user), tenant: await publicTenant(tenant) });
   });
 
   app.post('/api/auth/login', { config: authLimit }, async (req, reply) => {
@@ -102,7 +109,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRouteOptions) {
     await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
     const s = await createSession({ userId: user.id, tenantId: user.tenantId, userAgent: req.headers['user-agent'], ip: req.ip });
     setSessionCookie(reply, s.token, s.expiresAt);
-    return { user: publicUser(user), tenant: publicTenant(user.tenant) };
+    return { user: publicUser(user), tenant: await publicTenant(user.tenant) };
   });
 
   app.post('/api/auth/logout', async (req, reply) => {
@@ -115,6 +122,6 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRouteOptions) {
   app.get('/api/auth/me', { preHandler: requireAuth }, async (req) => {
     const user = await db.query.users.findFirst({ where: eq(users.id, req.auth!.userId), with: { tenant: true } });
     if (!user) throw new AppError(401, 'not_signed_in', 'Please sign in');
-    return { user: publicUser(user), tenant: publicTenant(user.tenant) };
+    return { user: publicUser(user), tenant: await publicTenant(user.tenant) };
   });
 }

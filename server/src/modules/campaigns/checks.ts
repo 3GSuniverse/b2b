@@ -6,6 +6,7 @@ import { isDomainReady } from '../domains/service.js';
 import { CORE_KEYS, findUnknownTags } from '../email/render.js';
 import { senderUsageLast24h } from '../mailboxes/service.js';
 import { monthlyUsage } from '../sending/start-campaign.js';
+import { trialEnded, whatsappAllowanceLeft, whatsappWebAllowed } from '../plans/entitlements.js';
 
 export type CheckLevel = 'ok' | 'warning' | 'error';
 export interface Check {
@@ -17,7 +18,7 @@ export interface Check {
 
 interface CheckInput {
   tenantId: string;
-  tenant: { monthlyQuota: number; status: string; pausedReason: string | null; timezone: string; postalAddress?: string | null };
+  tenant: { monthlyQuota: number; status: string; pausedReason: string | null; timezone: string; postalAddress?: string | null; plan?: 'TRIAL' | 'PAID'; trialEndsAt?: Date | null; whatsappWebEnabled?: boolean };
   subject: string | null;
   html: string | null;
   previewText: string | null;
@@ -63,6 +64,9 @@ export async function campaignChecks(input: CheckInput): Promise<{ checks: Check
   // Account
   if (input.tenant.status !== 'ACTIVE') {
     add({ id: 'account', level: 'error', title: 'Sending is paused for your account.', note: input.tenant.pausedReason ?? undefined });
+  }
+  if (input.tenant.plan && trialEnded({ plan: input.tenant.plan, trialEndsAt: input.tenant.trialEndsAt ?? null, whatsappWebEnabled: false })) {
+    add({ id: 'trial', level: 'error', title: 'Your free trial has ended.', note: 'Upgrade to keep sending. Your contacts and designs are safe.' });
   }
 
   // Sender
@@ -164,7 +168,7 @@ export async function campaignChecks(input: CheckInput): Promise<{ checks: Check
 /** "Before you send" for WhatsApp campaigns. */
 export async function whatsappChecks(input: {
   tenantId: string;
-  tenant: { status: string; pausedReason: string | null; whatsappWebEnabled: boolean };
+  tenant: { id: string; status: string; pausedReason: string | null; whatsappWebEnabled: boolean; plan: 'TRIAL' | 'PAID'; trialEndsAt: Date | null };
   text: string | null;
   audience: Audience | null;
 }): Promise<{ checks: Check[]; canSend: boolean; recipients: number }> {
@@ -174,7 +178,9 @@ export async function whatsappChecks(input: {
   const add = (c: Check) => checks.push(c);
 
   if (input.tenant.status !== 'ACTIVE') add({ id: 'account', level: 'error', title: 'Sending is paused for your account.', note: input.tenant.pausedReason ?? undefined });
-  if (!input.tenant.whatsappWebEnabled) add({ id: 'feature', level: 'error', title: 'WhatsApp sending isn’t switched on for this account.' });
+  if (trialEnded(input.tenant)) add({ id: 'trial', level: 'error', title: 'Your free trial has ended.', note: 'Upgrade to keep sending. Your contacts and messages are safe.' });
+  else if (!whatsappWebAllowed(input.tenant)) add({ id: 'feature', level: 'error', title: 'WhatsApp sending isn’t available on this account.' });
+  const allowance = await whatsappAllowanceLeft(input.tenant);
 
   const session = await getSession(input.tenantId);
   if (session.status === 'CONNECTED') add({ id: 'sender', level: 'ok', title: `Sending from ${session.phone ?? 'your WhatsApp'}.` });
@@ -196,6 +202,10 @@ export async function whatsappChecks(input: {
   if (!recipients) add({ id: 'audience', level: 'error', title: 'Nobody in this audience agreed to WhatsApp messages.', note: 'Only contacts marked “Agreed to WhatsApp” with a phone number get WhatsApp campaigns.' });
   else {
     add({ id: 'audience', level: 'ok', title: `${recipients.toLocaleString('en-IN')} recipient${recipients > 1 ? 's' : ''}.`, note: 'Only contacts who agreed to WhatsApp messages.' });
+    if (allowance !== null) {
+      if (recipients > allowance) add({ id: 'trial_limit', level: 'error', title: `Your trial has ${allowance} WhatsApp message${allowance === 1 ? '' : 's'} left.`, note: `This campaign needs ${recipients.toLocaleString('en-IN')}. Choose a smaller list, or upgrade.` });
+      else add({ id: 'trial_limit', level: 'ok', title: `Trial: ${allowance - recipients} WhatsApp messages left after this.`, note: 'The free trial includes a small number of messages to try things out.' });
+    }
     const usage = await whatsappUsageLast24h(input.tenantId);
     const today = Math.max(0, session.dailyLimit - usage.sent);
     const minutes = Math.ceil((Math.min(recipients, today) * session.intervalSeconds) / 60);

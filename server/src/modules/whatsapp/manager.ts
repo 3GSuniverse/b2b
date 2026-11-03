@@ -84,7 +84,12 @@ export class WhatsAppManager implements WhatsAppGateway {
             this.failures.delete(tenantId);
             await setQr(tenantId, null);
             const me = sock.user;
-            await onConnected(tenantId, me ? fromJid(me.id) : '', me?.name ?? me?.verifiedName ?? null);
+            const allowed = await onConnected(tenantId, me ? fromJid(me.id) : '', me?.name ?? me?.verifiedName ?? null);
+            if (!allowed) {
+              log.warn({ tenantId }, 'number already used for a trial, unlinking');
+              await this.disconnect(tenantId);
+              return;
+            }
             log.info({ tenantId }, 'whatsapp connected');
           }
           if (u.connection === 'close') {

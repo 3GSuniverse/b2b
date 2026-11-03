@@ -19,6 +19,10 @@ const schema = z.object({
   SES_CONFIGURATION_SET: z.string().default('sandesh-events'),
 
   SEND_RATE_PER_SECOND: z.coerce.number().positive().default(1),
+  // Free trial for new companies
+  TRIAL_DAYS: z.coerce.number().int().min(1).max(60).default(5),
+  TRIAL_WHATSAPP_MESSAGES: z.coerce.number().int().min(0).default(100),
+  TRIAL_EMAILS: z.coerce.number().int().min(0).default(200),
 
   // "ses" sends for real; "log" keeps emails in memory and prints them (dev/tests)
   EMAIL_PROVIDER: z.enum(['ses', 'log']).default('log'),

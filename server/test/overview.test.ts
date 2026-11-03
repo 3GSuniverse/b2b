@@ -49,7 +49,7 @@ describe('overview', () => {
 
     const o = await getOverview(tenantId, json.user.id, now);
     expect(o.greeting).toBe('Good afternoon, Anil');
-    expect(o.quota).toMatchObject({ used: 3, limit: 1000, resetsOn: '2026-12-01' });
+    expect(o.quota).toMatchObject({ used: 3, limit: 200, resetsOn: '2026-12-01' });
     expect(o.thisMonth).toMatchObject({ sent: 3, delivered: 2, deliveryRate: 66.7, clicked: 1, clickRate: 50, sentChange: 200, unsubscribed: 1 });
     expect(o.last30Days).toHaveLength(30);
     expect(o.last30Days.at(-1)).toEqual({ day: '2026-11-03', sent: 1, delivered: 1, clicked: 1, campaigns: [] });
