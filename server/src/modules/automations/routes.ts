@@ -5,6 +5,7 @@ import { automations, automationSends, customFields, senders, templates } from '
 import { db } from '../../lib/db.js';
 import { AppError, parseBody } from '../../lib/http.js';
 import { requireAuth, tenantOf } from '../auth/guard.js';
+import { PLACEHOLDER } from '../campaigns/checks.js';
 import { audienceSchema } from '../campaigns/service.js';
 import { countEmailAudience } from '../audience/resolve.js';
 import { isDomainReady } from '../domains/service.js';
@@ -117,6 +118,10 @@ export async function automationRoutes(app: FastifyInstance) {
     const tenantId = tenantOf(req);
     const a = await owned(tenantId, req.params.id);
     if (!a.template?.subject || !a.template.html) throw new AppError(400, 'no_template', 'Choose an email template with a subject and content first');
+    const left = [...new Set(`${a.template.subject}\n${a.template.previewText ?? ''}\n${a.template.html}`.match(PLACEHOLDER) ?? [])];
+    if (left.length) {
+      throw new AppError(400, 'placeholders_left', `The template still has ${left.map((p) => (p.length > 40 ? p.slice(0, 38) + '…]' : p)).join(', ')}. Replace ${left.length > 1 ? 'them' : 'it'} before switching on.`);
+    }
     if (!a.sender) throw new AppError(400, 'no_sender', 'Choose who the email is from first');
     const senderReady = a.sender.kind === 'DOMAIN' ? !!a.sender.domain && isDomainReady(a.sender.domain) : a.sender.connection?.status === 'ACTIVE';
     if (!senderReady) throw new AppError(400, 'sender_not_verified', `${a.sender.fromEmail} can’t send yet. Finish setting it up in Settings → Senders.`);

@@ -174,7 +174,12 @@ describe('automations API', () => {
     const a = (await c.post('/api/automations', { name: 'Trip reminder', dateFieldId: field.id, offsetDays: -3, sendTime: '09:00', templateId: tpl.id })).json().automation;
     expect(a).toMatchObject({ status: 'DRAFT', rule: '3 days before Trip date · 9:00 AM', timezone: 'Asia/Kolkata' });
 
-    // can't switch on without a sender that can send
+    // can't switch on while the design still has [PLACEHOLDERS]…
+    const blocked = (await c.post(`/api/automations/${a.id}/activate`)).json();
+    expect(blocked.error).toBe('placeholders_left');
+    expect(blocked.message).toContain('[PHONE]');
+    await c.patch(`/api/templates/${tpl.id}`, { html: '<p>Hi {first_name|there}, see you on {trip_date}. Call us on +91 98480 22338.</p>' });
+    // …or without a sender that can send
     expect((await c.post(`/api/automations/${a.id}/activate`)).json().error).toBe('no_sender');
 
     const inThreeDays = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
