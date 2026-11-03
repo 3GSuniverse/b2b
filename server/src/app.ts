@@ -9,7 +9,9 @@ import sensible from '@fastify/sensible';
 import { env, isProd } from './config/env.js';
 import { AppError, registerErrorHandler } from './lib/http.js';
 import { authRoutes } from './modules/auth/routes.js';
+import { automationRoutes } from './modules/automations/routes.js';
 import { campaignRoutes } from './modules/campaigns/routes.js';
+import { templateRoutes } from './modules/templates/routes.js';
 import { contactRoutes } from './modules/contacts/routes.js';
 import { notificationRoutes } from './modules/notifications/service.js';
 import { overviewRoutes } from './modules/overview/service.js';
@@ -78,6 +80,8 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(contactRoutes);
   await app.register(importRoutes);
   await app.register(campaignRoutes);
+  await app.register(templateRoutes);
+  await app.register(automationRoutes);
   await app.register(overviewRoutes);
   await app.register(notificationRoutes);
   await app.register(unsubscribeRoutes);

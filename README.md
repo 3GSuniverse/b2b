@@ -78,6 +78,19 @@ All `/api` routes use a session cookie set at sign-in. Writes must be JSON.
 | GET | `/api/integrations/gmail/connect` | Start "Connect Gmail" (redirects to Google) |
 | GET | `/api/integrations/gmail/callback` | Google returns here; creates the Gmail sender |
 | GET · DELETE | `/api/mailboxes` · `/api/mailboxes/:id` | Connected mailboxes / disconnect (revokes at Google) |
+| GET · POST · PATCH · DELETE | `/api/contacts` · `/api/contacts/:id` | Contacts (search, status, list filters, pages) |
+| GET | `/api/contacts/stats` | Counts for the status tabs |
+| GET · POST · DELETE | `/api/fields` | Custom fields (text, number, date, yes/no) |
+| GET · POST · PATCH · DELETE | `/api/lists` · `/api/lists/:id/members` | Lists and membership |
+| POST | `/api/imports/preview` · `/api/imports` | CSV import: preview mapping, then import |
+| GET · POST · PATCH · DELETE | `/api/campaigns` · `/api/campaigns/:id` | Campaign drafts |
+| POST | `/api/campaigns/:id/preview` · `/test` · `/schedule` · `/send` · `/cancel` | Preview + checks, test email, schedule, send, cancel |
+| GET | `/api/campaigns/:id/report` | Rates, top links, bounces |
+| POST | `/api/audience/count` | Live "N contacts match" |
+| GET · POST · PATCH · DELETE | `/api/templates` · `/api/templates/starters` | Templates and ready-made designs |
+| GET · POST · PATCH · DELETE | `/api/automations` · `/activate` · `/pause` · `/upcoming` | Date-based automations |
+| GET | `/api/overview` | Everything the dashboard home shows |
+| GET · POST | `/api/notifications` · `/api/notifications/read` | Alerts for the company |
 | GET · POST | `/u/:token` | Unsubscribe page and Gmail one-click unsubscribe |
 | POST | `/webhooks/ses` | SES events via SNS (signature-verified) |
 

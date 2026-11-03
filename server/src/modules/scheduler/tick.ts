@@ -6,10 +6,12 @@ import { CampaignError, startCampaign } from '../sending/start-campaign.js';
 import { refreshPendingDomains } from '../domains/service.js';
 import { deleteExpiredSessions } from '../auth/sessions.js';
 import { notify } from '../notifications/service.js';
+import { runAutomationsTick } from '../automations/engine.js';
 
 export interface TickResult {
   started: string[];
   failed: { campaignId: string; reason: string }[];
+  automations?: { queued: number; skipped: number };
 }
 
 /** Housekeeping that doesn't need to run every minute: domain checks, expired sessions. */
@@ -60,5 +62,7 @@ export async function runSchedulerTick(opts: { now?: Date; enqueue?: EnqueueFn }
       result.failed.push({ campaignId: id, reason });
     }
   }
+  const auto = await runAutomationsTick({ now, enqueue: opts.enqueue });
+  result.automations = { queued: auto.queued, skipped: auto.skipped };
   return result;
 }

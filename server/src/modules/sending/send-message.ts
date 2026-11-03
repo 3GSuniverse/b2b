@@ -8,6 +8,7 @@ import { buildMergeVars, renderEmail } from '../email/render.js';
 import { unsubscribeUrl } from '../unsubscribe/token.js';
 import { bumpCounter } from './counters.js';
 import { notify } from '../notifications/service.js';
+import { syncAutomationSend } from '../automations/engine.js';
 
 export type SendOutcome =
   | 'sent'
@@ -44,6 +45,7 @@ async function finalize(
     if (updated.length) await bumpCounter(tx, msg, counter);
   });
   if (msg.campaignId) await maybeCompleteCampaign(msg.campaignId);
+  if (msg.automationId) await syncAutomationSend(msg.id, status === 'SUPPRESSED' ? 'SKIPPED' : 'FAILED', error);
 }
 
 /** Called by the worker once every retry has been used up. */
@@ -232,5 +234,6 @@ export async function processSendJob(
   });
 
   if (msg.campaignId) await maybeCompleteCampaign(msg.campaignId);
+  if (msg.automationId) await syncAutomationSend(msg.id, 'SENT');
   return 'sent';
 }

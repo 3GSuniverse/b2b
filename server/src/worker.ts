@@ -57,7 +57,7 @@ const schedulerWorker = new Worker(
       return m;
     }
     const result = await runSchedulerTick();
-    if (result.started.length || result.failed.length) logger.info(result, 'scheduler tick');
+    if (result.started.length || result.failed.length || result.automations?.queued) logger.info(result, 'scheduler tick');
     return result;
   },
   { connection: createRedis(), concurrency: 1 },
