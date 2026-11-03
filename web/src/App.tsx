@@ -4,8 +4,8 @@ import { AppShell } from './components/shell';
 import { RequireSession } from './lib/session';
 import { SignInPage, SignUpPage } from './pages/auth';
 import { NotFoundPage } from './pages/not-found';
-import { OverviewPage } from './pages/overview';
 
+const OverviewPage = lazy(() => import('./pages/overview').then((m) => ({ default: m.OverviewPage })));
 const ContactsPage = lazy(() => import('./pages/contacts').then((m) => ({ default: m.ContactsPage })));
 const CampaignsPage = lazy(() => import('./pages/campaigns').then((m) => ({ default: m.CampaignsPage })));
 const ComposerPage = lazy(() => import('./pages/composer').then((m) => ({ default: m.ComposerPage })));
@@ -37,7 +37,7 @@ export function App() {
           </RequireSession>
         }
       >
-        <Route index element={<OverviewPage />} />
+        <Route index element={<Suspense fallback={<PageFallback />}><OverviewPage /></Suspense>} />
         <Route path="campaigns" element={<Suspense fallback={<PageFallback />}><CampaignsPage /></Suspense>} />
         <Route path="campaigns/new" element={<Suspense fallback={<PageFallback />}><ComposerPage /></Suspense>} />
         <Route path="campaigns/:id/edit" element={<Suspense fallback={<PageFallback />}><ComposerPage /></Suspense>} />

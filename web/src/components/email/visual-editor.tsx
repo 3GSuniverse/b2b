@@ -1,5 +1,6 @@
 import { Bold, Braces, Code2, ImageIcon, Italic, Link2, Redo2, Underline, Undo2, Unlink, Wand2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Segmented } from '@/components/ui/controls';
 import { Field, Input, Textarea } from '@/components/ui/field';
@@ -59,7 +60,6 @@ function ToolButton({ label, onClick, children, active }: { label: string; onCli
   );
 }
 
-const serialize = (doc: Document) => '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 
 /** Styles that only exist inside the editor frame (never saved into the email). */
 const EDITOR_CSS = `
@@ -68,7 +68,58 @@ const EDITOR_CSS = `
   *:hover:not(html):not(body):not(table):not(tbody):not(tr) { outline: 1px dashed rgba(11,122,98,.35); outline-offset: 2px; }
   img { cursor: pointer; }
   img.hayate-selected { outline: 2px solid #0B7A62 !important; outline-offset: 2px; }
+  span[data-hayate-tag] { display: inline-block; background: #E4F2ED; color: #075C49; border-radius: 5px; padding: 0 5px; margin: 0 1px; font-weight: 600; font-size: .92em; line-height: 1.45; cursor: default; user-select: none; -webkit-user-select: none; }
+  span[data-hayate-tag]:hover { outline: 1px solid #0B7A62 !important; }
 `;
+
+const TAG_RE = /\{\s*([a-zA-Z_]\w*)\s*(?:\|([^{}]*))?\}/g;
+const tagLabel = (key: string, fallback?: string) => {
+  const name = key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+  return fallback ? `${name} (or “${fallback}”)` : name;
+};
+
+/** A merge tag as a solid chip: it can be moved or deleted, never typed into half-way. */
+function chipFor(doc: Document, raw: string) {
+  const m = new RegExp(TAG_RE.source).exec(raw)!;
+  const span = doc.createElement('span');
+  span.setAttribute('data-hayate-tag', raw);
+  span.setAttribute('contenteditable', 'false');
+  span.textContent = tagLabel(m[1]!, m[2]);
+  return span;
+}
+
+/** Turns {first_name|there} text into chips throughout the body. */
+function chipify(doc: Document) {
+  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.parentElement?.closest('style,script,title,[data-hayate-tag]') ? NodeFilter.FILTER_REJECT : new RegExp(TAG_RE.source).test(n.nodeValue ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
+  });
+  const nodes: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
+  for (const node of nodes) {
+    const text = node.nodeValue ?? '';
+    const frag = doc.createDocumentFragment();
+    let last = 0;
+    for (const m of text.matchAll(new RegExp(TAG_RE.source, 'g'))) {
+      if (m.index! > last) frag.append(text.slice(last, m.index));
+      frag.append(chipFor(doc, m[0]));
+      last = m.index! + m[0].length;
+    }
+    frag.append(text.slice(last));
+    node.replaceWith(frag);
+  }
+}
+
+/** The HTML to save: chips back to {tags}, editor-only styles and markers removed. */
+function cleanHtml(doc: Document) {
+  const clone = doc.documentElement.cloneNode(true) as HTMLElement;
+  clone.querySelector('#hayate-editor-css')?.remove();
+  clone.querySelectorAll('[data-hayate-tag]').forEach((el) => el.replaceWith(doc.createTextNode(el.getAttribute('data-hayate-tag') ?? '')));
+  clone.querySelectorAll('.hayate-selected').forEach((e) => {
+    e.classList.remove('hayate-selected');
+    if (!e.getAttribute('class')) e.removeAttribute('class');
+  });
+  return '<!DOCTYPE html>\n' + clone.outerHTML;
+}
 
 /**
  * Click-and-type editing of a finished email design. Text is edited in place;
@@ -90,14 +141,7 @@ export function VisualEditor({ html, onChange, fields }: { html: string; onChang
     emitTimer.current = setTimeout(() => {
       const d = doc();
       if (!d) return;
-      // Strip editor-only markup before saving
-      const clone = d.documentElement.cloneNode(true) as HTMLElement;
-      clone.querySelector('#hayate-editor-css')?.remove();
-      clone.querySelectorAll('.hayate-selected').forEach((e) => {
-        e.classList.remove('hayate-selected');
-        if (!e.getAttribute('class')) e.removeAttribute('class');
-      });
-      onChange('<!DOCTYPE html>\n' + clone.outerHTML);
+      onChange(cleanHtml(d));
     }, 250);
   }, [onChange]);
 
@@ -122,6 +166,7 @@ export function VisualEditor({ html, onChange, fields }: { html: string; onChang
     style.id = 'hayate-editor-css';
     style.textContent = EDITOR_CSS;
     d.head?.appendChild(style);
+    chipify(d);
     d.addEventListener('input', emit);
     d.addEventListener('keyup', refreshState);
     d.addEventListener('mouseup', refreshState);
@@ -148,7 +193,7 @@ export function VisualEditor({ html, onChange, fields }: { html: string; onChang
     if (m === 'html') {
       clearTimeout(emitTimer.current);
       const d = doc();
-      const current = d ? serialize(d).replace(/<style id="hayate-editor-css">[\s\S]*?<\/style>/, '') : html;
+      const current = d ? cleanHtml(d) : html;
       setCode(current);
     } else {
       setSource(code);
@@ -208,8 +253,23 @@ export function VisualEditor({ html, onChange, fields }: { html: string; onChang
             <MergeTagMenu
               fields={fields}
               onInsert={(t) => {
+                const d = doc();
+                if (!d) return;
                 ref.current?.contentWindow?.focus();
-                exec('insertText', t);
+                // Insert at the caret by hand: execCommand('insertHTML') can drop it outside the paragraph
+                const sel = d.getSelection();
+                if (!sel || !sel.rangeCount || !d.body.contains(sel.anchorNode)) return toast('Click in the email where the field should go, then choose it again.');
+                const range = sel.getRangeAt(0);
+                range.deleteContents();
+                const chip = chipFor(d, t);
+                const space = d.createTextNode('\u00a0');
+                range.insertNode(space);
+                range.insertNode(chip);
+                range.setStartAfter(space);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+                emit();
               }}
               trigger={
                 <button type="button" onMouseDown={(e) => e.preventDefault()} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold text-ink-2 hover:bg-hover hover:text-ink">
@@ -309,7 +369,7 @@ export function VisualEditor({ html, onChange, fields }: { html: string; onChang
                     Replace anything in <span className="font-semibold text-ink">[SQUARE BRACKETS]</span>. You can’t send until they’re gone.
                   </li>
                   <li>
-                    <span className="font-semibold text-ink">Personalise</span> adds a field like {'{first_name|there}'}. Each person sees their own name; “there” is used when a name is missing.
+                    <span className="font-semibold text-ink">Personalise</span> adds a green field like <span className="rounded bg-accent-soft px-1 font-semibold text-accent-strong">First name</span>. Each person sees their own; the word in brackets is used when it’s missing.
                   </li>
                   <li>Click an image to change it.</li>
                   <li>The unsubscribe footer is added automatically when sending.</li>

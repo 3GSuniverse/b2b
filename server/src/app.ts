@@ -24,11 +24,14 @@ import { mailboxRoutes } from './modules/mailboxes/routes.js';
 import { senderRoutes } from './modules/senders/routes.js';
 import { unsubscribeRoutes } from './modules/unsubscribe/routes.js';
 import { webhookRoutes, type WebhookOptions } from './modules/webhooks/routes.js';
+import { webRoutes } from './modules/web/routes.js';
 
 export interface AppOptions {
   webhooks?: WebhookOptions;
   /** Sign-in / sign-up attempts per IP per 15 minutes (default 10) */
   authRateLimit?: number;
+  /** Built dashboard to serve (defaults to WEB_DIST or ../web/dist) */
+  webRoot?: string;
 }
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -48,9 +51,21 @@ export async function buildApp(opts: AppOptions = {}) {
   registerErrorHandler(app);
 
   await app.register(helmet, {
-    // The unsubscribe page has a small inline <style>; everything else stays locked down
     contentSecurityPolicy: {
-      directives: { defaultSrc: ["'none'"], styleSrc: ["'unsafe-inline'"], formAction: ["'self'"], imgSrc: ["'self'", 'data:'] },
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"], // no inline or third-party scripts, anywhere
+        // Email designs use inline styles; previews render them in sandboxed frames
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https:'], // images inside email previews live on other sites
+        fontSrc: ["'self'"],
+        connectSrc: ["'self'"],
+        frameSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'", 'https://accounts.google.com'],
+        frameAncestors: ["'none'"],
+      },
     },
   });
   await app.register(cors, { origin: isProd ? env.PUBLIC_URL : true, credentials: true });
@@ -88,6 +103,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(notificationRoutes);
   await app.register(unsubscribeRoutes);
   await app.register(webhookRoutes, opts.webhooks ?? {});
+  await app.register(webRoutes, { root: opts.webRoot });
 
   return app;
 }

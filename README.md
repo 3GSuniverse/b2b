@@ -1,13 +1,19 @@
-# Sandesh
+# Hayate
 
-Bulk email (and soon WhatsApp) for small businesses — campaigns, date-based
+Bulk email (and soon WhatsApp) for small businesses: campaigns, date-based
 automations, contacts, and deliverability safety built in. Multi-tenant from day one.
+(“Hayate” is the working name; the brand lives in `web/src/lib/brand.ts`.)
 
 ## Structure
 
 ```
 b2b/
 ├── docker-compose.yml      Postgres + Redis for local development
+├── web/                    Dashboard (React 19, Vite, Tailwind v4, Radix)
+│   └── src/
+│       ├── components/     UI kit (ui/), email preview + visual editor, contacts, campaigns
+│       ├── pages/          Overview, Campaigns, Composer, Report, Automations, Contacts, Templates, Settings
+│       └── lib/            API client, session, formatting, types
 └── server/                 API + background worker (Node, TypeScript)
     ├── drizzle/            Generated SQL migrations (committed, readable SQL)
     ├── drizzle.config.ts   Drizzle Kit config — reads DATABASE_URL from .env
@@ -29,7 +35,8 @@ b2b/
 | API | Fastify 5 + TypeScript | Fast, typed, low overhead |
 | Database | PostgreSQL 16 + Drizzle ORM | Typed queries, plain-SQL migrations, no native binaries |
 | Queue | Redis + BullMQ | Retries, rate limiting, scheduled jobs |
-| Email | Amazon SES (ap-south-1) | Cheapest reliable sending, scales to SaaS |
+| Email | Amazon SES (ap-south-1), or the company’s own Gmail | Cheapest reliable sending, scales to SaaS |
+| Dashboard | React 19 + Vite + Tailwind v4 + Radix | Accessible primitives, small and fast |
 
 The **API** and the **worker** are separate processes, so a large send never
 slows the dashboard down.
@@ -55,13 +62,41 @@ npm run dev
 npm run dev:worker
 ```
 
+Then the dashboard, in a third terminal:
+
+```bash
+cd web
+npm install
+npm run dev                   # http://localhost:5173 (proxies /api to :4000)
+```
+
+Want realistic data to click around or show a client? `cd server && npm run seed:demo`
+creates a demo company (sign in as `demo@hayate.test` / `demo-password-123`).
+Add `-- --reset` to recreate it. It refuses to run in production.
+
 Check it is alive: `curl http://localhost:4000/health`
 
 ```json
 { "status": "ok", "database": "up", "redis": "up" }
 ```
 
-## API (so far)
+## Production
+
+The API server also serves the built dashboard, so the whole product is one
+origin (simple cookies, strict CSP, no CORS):
+
+```bash
+cd web && npm ci && npm run build          # → web/dist
+cd ../server && npm ci && npm run build
+npm run db:migrate
+npm start                                   # API + dashboard on PORT
+npm run start:worker                        # sending, scheduling, automations
+```
+
+The server looks for the dashboard in `../web/dist`; set `WEB_DIST` to point
+elsewhere. Restart the server after each dashboard build (asset names change).
+
+## API
 
 All `/api` routes use a session cookie set at sign-in. Writes must be JSON.
 

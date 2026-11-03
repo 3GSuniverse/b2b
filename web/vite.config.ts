@@ -14,5 +14,5 @@ export default defineConfig({
     port: 5173,
     proxy: { '/api': api, '/u': api, '/webhooks': api, '/health': api },
   },
-  build: { outDir: 'dist', sourcemap: true, chunkSizeWarningLimit: 900 },
+  build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 900 },
 });
