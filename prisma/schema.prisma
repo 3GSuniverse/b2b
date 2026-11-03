@@ -1,0 +1,409 @@
+// =====================================================================
+//  b2b — Bulk messaging platform (Email now, WhatsApp later)
+//  Multi-tenant from day one: every business row carries tenantId.
+// =====================================================================
+
+// Prisma 7: the connection URL lives in prisma.config.ts, not here.
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------
+//  Enums
+// ---------------------------------------------------------------------
+
+enum TenantStatus {
+  ACTIVE
+  PAUSED     // auto-paused by safety checks (high bounce/complaint rate)
+  SUSPENDED  // manually suspended by platform admin
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum Channel {
+  EMAIL
+  WHATSAPP
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum SubscriptionStatus {
+  SUBSCRIBED
+  UNSUBSCRIBED
+  BOUNCED     // hard bounce — never send again
+  COMPLAINED  // marked as spam — never send again
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  PAUSED
+  SENT
+  CANCELLED
+  FAILED
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  BOUNCED
+  COMPLAINED
+  FAILED
+  SUPPRESSED // skipped because address is on suppression list
+}
+
+enum EventType {
+  SEND
+  DELIVERY
+  BOUNCE
+  COMPLAINT
+  OPEN
+  CLICK
+  UNSUBSCRIBE
+  REJECT
+}
+
+enum SuppressionReason {
+  HARD_BOUNCE
+  COMPLAINT
+  UNSUBSCRIBE
+  MANUAL
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ---------------------------------------------------------------------
+//  Tenancy & access
+// ---------------------------------------------------------------------
+
+model Tenant {
+  id            String       @id @default(cuid())
+  name          String
+  slug          String       @unique
+  status        TenantStatus @default(ACTIVE)
+  timezone      String       @default("Asia/Kolkata")
+  monthlyQuota  Int          @default(1000) // emails per month
+  pausedReason  String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  users         User[]
+  domains       SendingDomain[]
+  senders       Sender[]
+  contacts      Contact[]
+  lists         List[]
+  templates     Template[]
+  campaigns     Campaign[]
+  messages      Message[]
+  suppressions  Suppression[]
+  imports       ImportJob[]
+  auditLogs     AuditLog[]
+}
+
+model User {
+  id            String    @id @default(cuid())
+  tenantId      String
+  email         String
+  name          String
+  passwordHash  String
+  role          UserRole  @default(MEMBER)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaigns     Campaign[] @relation("CampaignCreatedBy")
+  auditLogs     AuditLog[]
+
+  @@unique([tenantId, email])
+}
+
+// ---------------------------------------------------------------------
+//  Sending identity
+// ---------------------------------------------------------------------
+
+model SendingDomain {
+  id              String             @id @default(cuid())
+  tenantId        String
+  domain          String             // e.g. kurukshetra-travels.in
+  mailFromDomain  String?            // e.g. mail.kurukshetra-travels.in
+  identityStatus  VerificationStatus @default(PENDING)
+  dkimStatus      VerificationStatus @default(PENDING)
+  mailFromStatus  VerificationStatus @default(PENDING)
+  dnsRecords      Json?              // records to show in onboarding UI
+  verifiedAt      DateTime?
+  lastCheckedAt   DateTime?
+  createdAt       DateTime           @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  senders         Sender[]
+
+  @@unique([tenantId, domain])
+}
+
+model Sender {
+  id          String   @id @default(cuid())
+  tenantId    String
+  domainId    String
+  fromName    String   // "Kurukshetra Travels"
+  fromEmail   String   // offers@kurukshetra-travels.in
+  replyTo     String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  domain      SendingDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  campaigns   Campaign[]
+
+  @@unique([tenantId, fromEmail])
+}
+
+// ---------------------------------------------------------------------
+//  Audience
+// ---------------------------------------------------------------------
+
+model Contact {
+  id              String             @id @default(cuid())
+  tenantId        String
+  email           String?
+  phone           String?            // E.164, ready for WhatsApp
+  firstName       String?
+  lastName        String?
+  attributes      Json               @default("{}") // custom fields: city, package, etc.
+  emailStatus     SubscriptionStatus @default(SUBSCRIBED)
+  whatsappStatus  SubscriptionStatus @default(UNSUBSCRIBED) // separate consent per channel
+  consentSource   String?            // "website form", "import: leads.csv"
+  consentAt       DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lists           ListMembership[]
+  messages        Message[]
+
+  @@unique([tenantId, email])
+  @@unique([tenantId, phone])
+  @@index([tenantId, emailStatus])
+}
+
+model List {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  members     ListMembership[]
+  campaigns   CampaignList[]
+
+  @@unique([tenantId, name])
+}
+
+model ListMembership {
+  listId    String
+  contactId String
+  addedAt   DateTime @default(now())
+
+  list      List    @relation(fields: [listId], references: [id], onDelete: Cascade)
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([listId, contactId])
+  @@index([contactId])
+}
+
+model ImportJob {
+  id          String       @id @default(cuid())
+  tenantId    String
+  fileName    String
+  listId      String?
+  status      ImportStatus @default(PENDING)
+  totalRows   Int          @default(0)
+  imported    Int          @default(0)
+  updated     Int          @default(0)
+  skipped     Int          @default(0)
+  errors      Json?        // [{ row, reason }]
+  createdAt   DateTime     @default(now())
+  completedAt DateTime?
+
+  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------
+//  Content & campaigns
+// ---------------------------------------------------------------------
+
+model Template {
+  id          String   @id @default(cuid())
+  tenantId    String
+  channel     Channel  @default(EMAIL)
+  name        String
+  subject     String?
+  previewText String?
+  html        String?
+  text        String?
+  design      Json?    // editor state, so templates can be re-edited visually
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaigns   Campaign[]
+}
+
+model Campaign {
+  id            String         @id @default(cuid())
+  tenantId      String
+  channel       Channel        @default(EMAIL)
+  name          String
+  status        CampaignStatus @default(DRAFT)
+  templateId    String?
+  senderId      String?
+  subject       String?        // snapshot at send time
+  html          String?        // snapshot at send time — template edits never change sent campaigns
+  scheduledAt   DateTime?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdById   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // denormalised counters for a fast dashboard
+  recipients    Int @default(0)
+  sent          Int @default(0)
+  delivered     Int @default(0)
+  bounced       Int @default(0)
+  complained    Int @default(0)
+  opened        Int @default(0)
+  clicked       Int @default(0)
+  unsubscribed  Int @default(0)
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  template      Template?      @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  sender        Sender?        @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  createdBy     User?          @relation("CampaignCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  lists         CampaignList[]
+  messages      Message[]
+  links         TrackedLink[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+}
+
+model CampaignList {
+  campaignId String
+  listId     String
+
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  list       List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, listId])
+}
+
+// ---------------------------------------------------------------------
+//  Delivery & tracking
+// ---------------------------------------------------------------------
+
+model Message {
+  id                String        @id @default(cuid())
+  tenantId          String
+  campaignId        String
+  contactId         String?
+  channel           Channel       @default(EMAIL)
+  toAddress         String
+  status            MessageStatus @default(QUEUED)
+  providerMessageId String?       @unique // SES MessageId — joins webhook events
+  error             String?
+  attempts          Int           @default(0)
+  queuedAt          DateTime      @default(now())
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  firstOpenedAt     DateTime?
+  firstClickedAt    DateTime?
+
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign          Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact           Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  events            MessageEvent[]
+
+  @@unique([campaignId, toAddress]) // one message per recipient per campaign — safe retries
+  @@index([tenantId, status])
+}
+
+model MessageEvent {
+  id          String    @id @default(cuid())
+  messageId   String
+  type        EventType
+  occurredAt  DateTime
+  detail      Json?     // bounce subtype, clicked URL, user agent...
+  createdAt   DateTime  @default(now())
+
+  message     Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([type, occurredAt])
+}
+
+model TrackedLink {
+  id          String   @id @default(cuid())
+  campaignId  String
+  url         String
+  clicks      Int      @default(0)
+
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, url])
+}
+
+model Suppression {
+  id        String            @id @default(cuid())
+  tenantId  String
+  channel   Channel           @default(EMAIL)
+  address   String            // email or phone
+  reason    SuppressionReason
+  note      String?
+  createdAt DateTime          @default(now())
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, channel, address])
+}
+
+// ---------------------------------------------------------------------
+//  Audit
+// ---------------------------------------------------------------------
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String?
+  action    String   // "campaign.send", "contact.import", "domain.verify"
+  entity    String?
+  entityId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+}
