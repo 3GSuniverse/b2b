@@ -1,6 +1,6 @@
 // The product name and the details the public pages and legal text depend on live here only.
 export const BRAND = {
-  name: 'Drona',
+  name: 'Dhrona',
   supportEmail: 'support@kurukshetra-travels.in',
   // Who runs Drona, as named in the Privacy Policy and Terms. Use the registered business name.
   operator: 'Kurukshetra Travels',

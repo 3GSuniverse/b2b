@@ -35,7 +35,7 @@ const FEATURES: Feature[] = [
   {
     id: 'payments',
     title: 'Payments followed up, politely and on time',
-    body: 'Set the advance, instalments and balance once. Drona reminds the customer before each due date, takes payment by UPI or Razorpay, and sends a numbered receipt when the money arrives.',
+    body: `Set the advance, instalments and balance once. ${BRAND.name} reminds the customer before each due date, takes payment by UPI or Razorpay, and sends a numbered receipt when the money arrives.`,
     points: ['A payment page for each trip, with UPI and card', 'Reminders by WhatsApp or email, before and after the due date', 'Overdue amounts flagged on the board and in the summary'],
     graphic: <PaymentsGraphic />,
   },
