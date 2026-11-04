@@ -704,6 +704,8 @@ export const trips = pgTable(
     bookedAt: ts(),
     // Set by outside systems (the AI call agent's call id), so a retried request doesn't add the enquiry twice
     externalRef: text(),
+    // The package this trip was sold as (if any)
+    packageId: text().references((): AnyPgColumn => packages.id, { onDelete: 'set null' }),
     // Group departures: a GROUP trip has seats and a price per person; each family's booking points at it
     groupId: text().references((): AnyPgColumn => trips.id, { onDelete: 'set null' }),
     capacity: integer(),
@@ -723,6 +725,7 @@ export const trips = pgTable(
     index().on(t.contactId),
     index().on(t.tenantId, t.startDate),
     index().on(t.groupId),
+    index().on(t.packageId),
   ],
 );
 
@@ -867,6 +870,29 @@ export interface QuoteLine {
   unitCost?: number | null; // paise, private
   rateItemId?: string | null;
 }
+
+// Ready-made packages the agency sells again and again ("Kerala 4N/5D")
+export const packages = pgTable(
+  'packages',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    name: text().notNull(),
+    destination: text(),
+    nights: integer().notNull().default(0),
+    summary: text(), // one or two lines for lists and quotes
+    pricePerAdult: integer().notNull(), // paise
+    pricePerChild: integer(), // paise; null = same as an adult
+    costPerPerson: integer(), // paise, private: what it costs the agency
+    days: jsonb().$type<QuoteDay[]>().notNull().default([]),
+    inclusions: jsonb().$type<string[]>().notNull().default([]),
+    exclusions: jsonb().$type<string[]>().notNull().default([]),
+    archivedAt: ts(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.tenantId)],
+);
 
 export const quoteStatus = pgEnum('quote_status', ['DRAFT', 'SENT', 'ACCEPTED', 'DECLINED']);
 
@@ -1024,6 +1050,7 @@ export const tripsRelations = relations(trips, ({ one, many }) => ({
   payments: many(tripPayments),
   quotes: many(quotes),
   travellers: many(tripTravellers),
+  package: one(packages, { fields: [trips.packageId], references: [packages.id] }),
 }));
 
 export const tripTravellersRelations = relations(tripTravellers, ({ one }) => ({
@@ -1045,6 +1072,7 @@ export const quotesRelations = relations(quotes, ({ one }) => ({
 }));
 
 export type Quote = typeof quotes.$inferSelect;
+export type Package = typeof packages.$inferSelect;
 export type RateItem = typeof rateItems.$inferSelect;
 export type Trip = typeof trips.$inferSelect;
 export type TripDue = typeof tripDues.$inferSelect;

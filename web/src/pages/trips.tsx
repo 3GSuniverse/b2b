@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, ChevronLeft, ChevronRight, Columns3, List, Plane, Plus, Search, Tag, Users } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Columns3, List, Package as PackageIcon, Plane, Plus, Search, Tag, Users } from 'lucide-react';
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -166,6 +166,12 @@ function TripCard({ t, onDragStart, dragging }: { t: TripSummary; onDragStart: (
         <Avatar name={t.customer.name} size={22} />
         <span className="truncate">{t.customer.name}</span>
       </div>
+      {t.package && t.package.name !== t.title && (
+        <span className="inline-flex items-center gap-1 self-start rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-semibold text-accent-strong">
+          <PackageIcon className="h-3 w-3" aria-hidden />
+          {t.package.name}
+        </span>
+      )}
       {(range || t.adults + t.children > 0) && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
           {range && (
@@ -351,6 +357,7 @@ function TripList({ tab, setTab }: { tab: ListTab; setTab: (t: ListTab) => void 
               </Link>
               <span className="truncate text-[13px] text-muted">
                 {t.customer.name} · {travellers(t)}
+                {t.package ? ` · ${t.package.name}` : ''}
               </span>
             </div>
             <div className="justify-self-end lg:hidden">
@@ -429,6 +436,10 @@ export function TripsPage() {
         description="Every enquiry, quote, booking and payment, from the first call to the trip home."
         actions={
           <>
+            <LinkButton to="/trips/packages">
+              <PackageIcon className="h-4 w-4" />
+              Packages
+            </LinkButton>
             <LinkButton to="/trips/prices">
               <Tag className="h-4 w-4" />
               Price list

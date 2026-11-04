@@ -15,6 +15,8 @@ const AutomationEditorPage = lazy(() => import('./pages/automation-editor').then
 const TemplatesPage = lazy(() => import('./pages/templates').then((m) => ({ default: m.TemplatesPage })));
 const TemplateEditorPage = lazy(() => import('./pages/template-editor').then((m) => ({ default: m.TemplateEditorPage })));
 const TripsPage = lazy(() => import('./pages/trips').then((m) => ({ default: m.TripsPage })));
+const PackagesPage = lazy(() => import('./pages/packages').then((m) => ({ default: m.PackagesPage })));
+const PackagePage = lazy(() => import('./pages/packages').then((m) => ({ default: m.PackagePage })));
 const PricesPage = lazy(() => import('./pages/prices').then((m) => ({ default: m.PricesPage })));
 const QuoteEditorPage = lazy(() => import('./pages/quote-editor').then((m) => ({ default: m.QuoteEditorPage })));
 const GroupPage = lazy(() => import('./pages/group').then((m) => ({ default: m.GroupPage })));
@@ -46,6 +48,8 @@ export function App() {
       >
         <Route index element={<Suspense fallback={<PageFallback />}><OverviewPage /></Suspense>} />
         <Route path="trips" element={<Suspense fallback={<PageFallback />}><TripsPage /></Suspense>} />
+        <Route path="trips/packages" element={<Suspense fallback={<PageFallback />}><PackagesPage /></Suspense>} />
+        <Route path="trips/packages/:id" element={<Suspense fallback={<PageFallback />}><PackagePage /></Suspense>} />
         <Route path="trips/prices" element={<Suspense fallback={<PageFallback />}><PricesPage /></Suspense>} />
         <Route path="trips/:tripId/quotes/:quoteId" element={<Suspense fallback={<PageFallback />}><QuoteEditorPage /></Suspense>} />
         <Route path="groups/:id" element={<Suspense fallback={<PageFallback />}><GroupPage /></Suspense>} />

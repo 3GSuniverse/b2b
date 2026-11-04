@@ -1,12 +1,13 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull, lt, or, sql, sum, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
-import { auditLogs, contacts, tenants, tripDues, tripPayments, trips, users, type Trip } from '../../db/schema.js';
+import { auditLogs, contacts, packages, tenants, tripDues, tripPayments, trips, users, type Trip } from '../../db/schema.js';
+import { ownedPackage, packagePrice } from '../packages/service.js';
 import { db, type Tx } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { ensureField } from '../contacts/fields.js';
 import { normalizeEmail, normalizePhone } from '../contacts/normalize.js';
 import { payPageUrl, receiptUrl, remindersFor } from '../payments/reminders.js';
-import { formatInr, localDate, rupeesToPaise, suggestSchedule, tripMoney, type DueInput } from './money.js';
+import { addDays, formatInr, localDate, rupeesToPaise, suggestSchedule, tripMoney, type DueInput } from './money.js';
 
 export interface Actor {
   tenantId: string;
@@ -58,6 +59,7 @@ const tripFields = {
   source: z.enum(TRIP_SOURCES).nullable().optional(),
   notes: z.string().trim().max(5000).nullable().optional(),
   assignedToId: z.string().nullable().optional(),
+  packageId: z.string().nullable().optional(),
 };
 
 const datesInOrder = (v: { startDate?: string | null; endDate?: string | null }) => !v.startDate || !v.endDate || v.endDate >= v.startDate;
@@ -105,6 +107,7 @@ export const listTripsQuery = z.object({
   status: z.union([z.enum(TRIP_STATUSES), z.literal('OPEN'), z.literal('CLOSED')]).optional(),
   search: z.string().trim().max(100).optional(),
   contactId: z.string().optional(),
+  packageId: z.string().optional(),
   payments: z.enum(['overdue', 'due']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
@@ -244,12 +247,14 @@ type TripWithMoney = Trip & {
   payments: (typeof tripPayments.$inferSelect)[];
   contact: typeof contacts.$inferSelect | null;
   assignedTo: { id: string; name: string } | null;
+  package: { id: string; name: string } | null;
 };
 
 const tripWith = {
   dues: true,
   payments: true,
   contact: true,
+  package: { columns: { id: true, name: true } },
   assignedTo: { columns: { id: true, name: true } },
 } as const;
 
@@ -277,6 +282,7 @@ function tripSummaryDto(t: TripWithMoney, today: string) {
       whatsappStatus: t.contact?.whatsappStatus ?? null,
     },
     assignedTo: t.assignedTo,
+    package: t.package ?? null,
     money: { paid: m.paid, balance: m.balance, overdue: m.overdue, nextDue: m.nextDue && { label: m.nextDue.label, amount: m.nextDue.remaining, dueDate: m.nextDue.dueDate, state: m.nextDue.state } },
     statusChangedAt: t.statusChangedAt,
     createdAt: t.createdAt,
@@ -291,6 +297,7 @@ export async function listTrips(tenantId: string, q: z.infer<typeof listTripsQue
   else if (q.status === 'CLOSED') where.push(inArray(trips.status, ['COMPLETED', 'LOST', 'CANCELLED']));
   else if (q.status) where.push(eq(trips.status, q.status));
   if (q.contactId) where.push(eq(trips.contactId, q.contactId));
+  if (q.packageId) where.push(eq(trips.packageId, q.packageId));
   if (q.search) {
     const term = `%${q.search.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     const digits = q.search.replace(/\D/g, '');
@@ -453,6 +460,14 @@ async function assertAssignee(tenantId: string, userId: string | null | undefine
 export async function createTrip(actor: Actor, input: z.infer<typeof createTripBody>, opts: { consentSource?: string; externalRef?: string } = {}) {
   await assertAssignee(actor.tenantId, input.assignedToId);
   const contact = await resolveCustomer(actor.tenantId, input.customer, opts.consentSource);
+  // Sold as a package: its destination, length and price fill in whatever wasn't given
+  const pkg = input.packageId ? await ownedPackage(actor.tenantId, input.packageId) : null;
+  if (pkg) {
+    input.destination ??= pkg.destination;
+    if (input.startDate && !input.endDate) input.endDate = addDays(input.startDate, pkg.nights);
+    if (input.price === undefined || input.price === null) input.price = packagePrice(pkg, input.adults ?? 1, input.children ?? 0);
+    input.title ||= pkg.name;
+  }
   const title = input.title || (input.destination ? `${input.destination} trip` : `Trip for ${fullName(contact)}`);
   const now = new Date();
   const trip = await withNextNumber(nextTripNumber(actor.tenantId), async (number) => {
@@ -479,6 +494,7 @@ export async function createTrip(actor: Actor, input: z.infer<typeof createTripB
         statusChangedAt: now,
         bookedAt: input.status === 'BOOKED' ? now : null,
         externalRef: opts.externalRef ?? null,
+        packageId: pkg?.id ?? null,
       })
       .returning();
     return row!;
@@ -496,8 +512,20 @@ export async function updateTrip(actor: Actor, id: string, input: z.infer<typeof
   if (start && end && end < start) throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { endDate: 'The return date is before the start date' } });
 
   const patch: Partial<typeof trips.$inferInsert> = {};
-  for (const k of ['title', 'destination', 'startDate', 'endDate', 'adults', 'children', 'budget', 'price', 'source', 'notes', 'assignedToId'] as const) {
+  for (const k of ['title', 'destination', 'startDate', 'endDate', 'adults', 'children', 'budget', 'price', 'source', 'notes', 'assignedToId', 'packageId'] as const) {
     if (input[k] !== undefined) (patch as Record<string, unknown>)[k] = input[k] === '' ? null : input[k];
+  }
+  // A package (new, or the same one with a different party size): the price follows it,
+  // unless the agent set a price of their own
+  const oldPkg = before.packageId ? await db.query.packages.findFirst({ where: eq(packages.id, before.packageId) }) : null;
+  const newPkg = input.packageId ? await ownedPackage(actor.tenantId, input.packageId) : input.packageId === null ? null : oldPkg;
+  if (newPkg) {
+    const wasPackagePrice = before.price === 0 || (oldPkg && before.price === packagePrice(oldPkg, before.adults, before.children));
+    if (input.price === undefined && wasPackagePrice) patch.price = packagePrice(newPkg, input.adults ?? before.adults, input.children ?? before.children);
+    if (input.packageId && input.packageId !== before.packageId) {
+      if (!before.destination && input.destination === undefined) patch.destination = newPkg.destination;
+      if (start && !end && input.endDate === undefined) patch.endDate = addDays(start, newPkg.nights);
+    }
   }
   if (input.status && input.status !== before.status) {
     if (input.status === 'COMPLETED' && !['BOOKED', 'COMPLETED'].includes(before.status)) {

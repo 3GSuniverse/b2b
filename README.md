@@ -112,6 +112,10 @@ Beyond email and WhatsApp campaigns, Hayate runs a small agency's booking work:
   (`/r/<token>`) with the amount in words; reminders at 10 am before each instalment and
   once after a missed one (WhatsApp when linked, else email); optional Razorpay with the
   agency's own keys, confirmed by a signed webhook (`/webhooks/razorpay/<company id>`).
+- **Packages** (Trips → Packages): ready-made trips with a price per adult and per child,
+  a private cost per person, the day plan and inclusions. Choosing one on an enquiry,
+  trip or group fills in the price, destination and return date, and a new quote starts
+  from its plan. Each package shows who took it, what they paid, and the margin.
 - **Quotes**: a price list of the agency's own rates; a day-by-day quote editor with
   totals, per person and private margin; the customer's page (`/q/<token>`) to accept or
   ask for changes; accepting sets up the advance and balance; a follow-up after 2 days

@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { auditLogs, messages, quotes, rateItems, senders, tenants, tripDues, trips, type Quote, type QuoteLine } from '../../db/schema.js';
+import { auditLogs, messages, packages, quotes, rateItems, senders, tenants, tripDues, trips, type Quote, type QuoteLine } from '../../db/schema.js';
 import { env } from '../../config/env.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
@@ -178,17 +178,34 @@ export async function createQuote(actor: Actor, tripId: string) {
   const latest = await db.query.quotes.findFirst({ where: eq(quotes.tripId, tripId), orderBy: [desc(quotes.version)] });
   const today = localDate(tenant.timezone);
   const nights = t.startDate && t.endDate ? Math.max(0, Math.round((Date.parse(t.endDate) - Date.parse(t.startDate)) / 86_400_000)) : 0;
+  const pkg = !latest && t.packageId ? await db.query.packages.findFirst({ where: eq(packages.id, t.packageId) }) : null;
   const base = latest
     ? { intro: latest.intro, days: latest.days, lines: latest.lines, inclusions: latest.inclusions, exclusions: latest.exclusions, terms: latest.terms, discount: latest.discount }
-    : {
+    : pkg
+      ? {
+          // Sold as a package: its plan and its prices, for this party
+          intro: `Thank you for choosing ${tenant.name}. Here is our ${pkg.name} package${pkg.summary ? `: ${pkg.summary}` : '.'}`,
+          days: pkg.days.length ? pkg.days : Array.from({ length: pkg.nights + 1 }, () => ({ title: '', description: '' })),
+          lines: [
+            { label: `${pkg.name}, per adult`, kind: 'OTHER' as const, unit: 'PER_PERSON' as const, quantity: t.adults, times: 1, unitPrice: pkg.pricePerAdult, unitCost: pkg.costPerPerson, rateItemId: null },
+            ...(t.children
+              ? [{ label: `${pkg.name}, per child`, kind: 'OTHER' as const, unit: 'PER_PERSON' as const, quantity: t.children, times: 1, unitPrice: pkg.pricePerChild ?? pkg.pricePerAdult, unitCost: pkg.costPerPerson, rateItemId: null }]
+              : []),
+          ] as QuoteLine[],
+          inclusions: pkg.inclusions.length ? pkg.inclusions : DEFAULT_INCLUSIONS,
+          exclusions: pkg.exclusions.length ? pkg.exclusions : DEFAULT_EXCLUSIONS,
+          terms: DEFAULT_TERMS,
+          discount: 0,
+        }
+      : {
         intro: `Thank you for choosing ${tenant.name}. Here is the plan we’ve put together for your ${t.destination ? `${t.destination} ` : ''}trip.`,
         days: Array.from({ length: Math.min(30, nights + 1 || 1) }, (_, i) => ({ title: i === 0 ? 'Arrival' : i === nights ? 'Departure' : '', description: '' })),
         lines: [] as QuoteLine[],
         inclusions: DEFAULT_INCLUSIONS,
         exclusions: DEFAULT_EXCLUSIONS,
-        terms: DEFAULT_TERMS,
-        discount: 0,
-      };
+          terms: DEFAULT_TERMS,
+          discount: 0,
+        };
   for (let attempt = 0; ; attempt++) {
     try {
       const [q] = await db

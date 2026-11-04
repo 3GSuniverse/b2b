@@ -18,6 +18,7 @@ import { tripMessageRoutes } from './modules/trips/followups.js';
 import { apiKeyRoutes } from './modules/api-keys/routes.js';
 import { quoteRoutes } from './modules/quotes/routes.js';
 import { groupRoutes } from './modules/groups/routes.js';
+import { packageRoutes } from './modules/packages/service.js';
 import { paymentSettingsRoutes } from './modules/payments/settings.js';
 import { publicPaymentRoutes } from './modules/payments/public.js';
 import { razorpayRoutes } from './modules/payments/razorpay.js';
@@ -111,6 +112,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(apiKeyRoutes);
   await app.register(quoteRoutes);
   await app.register(groupRoutes);
+  await app.register(packageRoutes);
   await app.register(tripMessageRoutes);
   await app.register(tripRoutes);
   await app.register(paymentSettingsRoutes);

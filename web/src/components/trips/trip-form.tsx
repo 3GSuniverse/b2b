@@ -8,7 +8,8 @@ import { Avatar } from '@/components/ui/display';
 import { Field, Input, NativeSelect, Textarea } from '@/components/ui/field';
 import { Sheet } from '@/components/ui/overlay';
 import { api, ApiError, qs } from '@/lib/api';
-import { phone as fmtPhone, rupeesInput } from '@/lib/format';
+import { inr, phone as fmtPhone, rupeesInput } from '@/lib/format';
+import { PackageSelect, usePackages } from '@/components/packages/package-sheet';
 import type { Contact, TripDetail, TripSource } from '@/lib/types';
 import { SOURCES, sanitizeRupees, useTeam } from './shared';
 
@@ -96,12 +97,41 @@ interface TripFields {
   source: TripSource | '';
   notes: string;
   assignedToId: string;
+  packageId: string;
 }
 
 function TripFieldsForm({ f, setF, err, showPrice }: { f: TripFields; setF: (f: TripFields) => void; err: (k: string) => string | undefined; showPrice: boolean }) {
   const team = useTeam();
+  const packages = usePackages();
+  const picked = packages.data?.find((p) => p.id === f.packageId);
   return (
     <>
+      {(packages.data?.length ?? 0) > 0 && (
+        <Field
+          label="Package"
+          hint={picked ? `${picked.nights}N/${picked.nights + 1}D · ${inr(picked.pricePerAdult)} per adult${picked.pricePerChild !== null ? `, ${inr(picked.pricePerChild)} per child` : ''}. The price and return date fill in.` : 'Or leave it as a custom trip.'}
+          error={err('packageId')}
+        >
+          {(p) => (
+            <PackageSelect
+              {...p}
+              value={f.packageId}
+              onChange={(id, pkg) => {
+                const adults = Number(f.adults || 0);
+                const children = Number(f.children || 0);
+                setF({
+                  ...f,
+                  packageId: id,
+                  destination: f.destination || pkg?.destination || '',
+                  endDate: pkg && f.startDate && !f.endDate ? addDaysIso(f.startDate, pkg.nights) : f.endDate,
+                  // In the edit form the price box is shown: fill it with the package price for this party
+                  price: pkg ? rupeesInput(adults * pkg.pricePerAdult + children * (pkg.pricePerChild ?? pkg.pricePerAdult)) : f.price,
+                });
+              }}
+            />
+          )}
+        </Field>
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Destination" error={err('destination')}>
           {(p) => <Input {...p} value={f.destination} onChange={(e) => setF({ ...f, destination: e.target.value })} placeholder="Kashmir" />}
@@ -184,6 +214,11 @@ function TripFieldsForm({ f, setF, err, showPrice }: { f: TripFields; setF: (f: 
 }
 
 const nonEmpty = (v: string) => (v.trim() ? v.trim() : null);
+function addDaysIso(iso: string, days: number) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 function fieldsPayload(f: TripFields) {
   return {
@@ -196,11 +231,12 @@ function fieldsPayload(f: TripFields) {
     budget: f.budget.trim() || null,
     source: f.source || null,
     notes: nonEmpty(f.notes),
+    packageId: f.packageId || null,
     ...(f.assignedToId ? { assignedToId: f.assignedToId } : {}),
   };
 }
 
-const BLANK: TripFields = { title: '', destination: '', startDate: '', endDate: '', adults: '2', children: '0', budget: '', price: '', source: '', notes: '', assignedToId: '' };
+const BLANK: TripFields = { title: '', destination: '', startDate: '', endDate: '', adults: '2', children: '0', budget: '', price: '', source: '', notes: '', assignedToId: '', packageId: '' };
 
 /** "New enquiry": a customer (new or from Contacts) and what they asked for. */
 export function NewTripSheet({ open, onClose, onCreated, contact }: { open: boolean; onClose: () => void; onCreated: (t: TripDetail) => void; contact?: Picked | null }) {
@@ -328,6 +364,7 @@ export function EditTripSheet({ trip, open, onClose, onSaved }: { trip: TripDeta
       source: trip.source ?? '',
       notes: trip.notes ?? '',
       assignedToId: trip.assignedTo?.id ?? '',
+      packageId: trip.package?.id ?? '',
     });
   }, [open, trip]);
   const m = useMutation({

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, Check, ChevronDown, Mail, MapPin, MessageCircle, MoreHorizontal, Pencil, Phone, RotateCcw, Trash2, Users, Wallet, X } from 'lucide-react';
+import { ArrowLeft, Package as PackageIcon, CalendarDays, Check, ChevronDown, Mail, MapPin, MessageCircle, MoreHorizontal, Pencil, Phone, RotateCcw, Trash2, Users, Wallet, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -221,6 +221,14 @@ function DetailsPanel({ trip, onEdit }: { trip: TripDetail; onEdit: () => void }
           </div>
         ))}
       </dl>
+      {trip.package && (
+        <Link to={`/trips/packages/${trip.package.id}`} className="flex items-center gap-2.5 rounded-[12px] bg-accent-soft px-3 py-2.5 text-[13px] text-accent-strong hover:underline">
+          <PackageIcon className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">
+            Package: <span className="font-semibold">{trip.package.name}</span>
+          </span>
+        </Link>
+      )}
       <dl className="grid grid-cols-2 gap-3 border-t border-line-soft pt-4 text-[13px]">
         <div className="flex flex-col gap-0.5">
           <dt className="text-xs text-muted">Came through</dt>

@@ -273,6 +273,7 @@ export interface TripSummary {
   source: TripSource | null;
   customer: { id: string | null; name: string; phone: string | null; email: string | null; whatsappStatus: SubscriptionStatus | null };
   assignedTo: { id: string; name: string } | null;
+  package: { id: string; name: string } | null;
   money: { paid: number; balance: number; overdue: number; nextDue: { label: string; amount: number; dueDate: string; state: DueState } | null };
   statusChangedAt: string | null;
   createdAt: string;
@@ -416,6 +417,7 @@ export interface GroupSummary {
   endDate: string | null;
   capacity: number | null;
   perPersonPrice: number | null;
+  packageId: string | null;
   seatsTaken: number;
   families: number;
   expected: number;
@@ -440,5 +442,53 @@ export interface GroupDetail extends GroupSummary {
     nextDue: { amount: number; dueDate: string; state: DueState } | null;
     travellers: Traveller[];
     detailsMissing: number;
+  }[];
+}
+
+// ---------------------------------------------------------------- Packages
+
+export interface PackageStats {
+  bookings: number;
+  enquiries: number;
+  travellers: number;
+  value: number;
+  received: number;
+  cost: number | null;
+  margin: number | null;
+}
+
+export interface Package {
+  id: string;
+  name: string;
+  destination: string | null;
+  nights: number;
+  summary: string | null;
+  pricePerAdult: number;
+  pricePerChild: number | null;
+  costPerPerson: number | null;
+  marginPerPerson: number | null;
+  days: { title: string; description: string }[];
+  inclusions: string[];
+  exclusions: string[];
+  archived: boolean;
+  stats: PackageStats;
+}
+
+export interface PackageDetail extends Package {
+  trips: {
+    id: string;
+    number: number;
+    status: TripStatus;
+    customer: string;
+    phone: string | null;
+    startDate: string | null;
+    endDate: string | null;
+    adults: number;
+    children: number;
+    price: number;
+    paid: number;
+    balance: number;
+    overdue: number;
+    groupId: string | null;
   }[];
 }

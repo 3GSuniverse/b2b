@@ -7,6 +7,7 @@ import { Segmented } from '@/components/ui/controls';
 import { Field, Input, NativeSelect, Textarea } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
 import { sanitizeRupees } from '@/components/trips/shared';
+import { PackageSelect } from '@/components/packages/package-sheet';
 import { api, ApiError } from '@/lib/api';
 import { inr, rupeesInput } from '@/lib/format';
 import type { GroupDetail } from '@/lib/types';
@@ -15,18 +16,18 @@ const errOf = (e: unknown, k: string) => (e instanceof ApiError ? e.field(k) : u
 
 /** New departure, or edit one. */
 export function GroupDialog({ open, onClose, onSaved, group }: { open: boolean; onClose: () => void; onSaved: (g: GroupDetail) => void; group?: GroupDetail | null }) {
-  const [f, setF] = useState({ title: '', destination: '', startDate: '', endDate: '', capacity: '', perPersonPrice: '', notes: '' });
+  const [f, setF] = useState({ title: '', destination: '', startDate: '', endDate: '', capacity: '', perPersonPrice: '', notes: '', packageId: '' });
   useEffect(() => {
     if (!open) return;
     setF(
       group
-        ? { title: group.title, destination: group.destination ?? '', startDate: group.startDate ?? '', endDate: group.endDate ?? '', capacity: group.capacity ? String(group.capacity) : '', perPersonPrice: rupeesInput(group.perPersonPrice), notes: group.notes ?? '' }
-        : { title: '', destination: '', startDate: '', endDate: '', capacity: '', perPersonPrice: '', notes: '' },
+        ? { title: group.title, destination: group.destination ?? '', startDate: group.startDate ?? '', endDate: group.endDate ?? '', capacity: group.capacity ? String(group.capacity) : '', perPersonPrice: rupeesInput(group.perPersonPrice), notes: group.notes ?? '', packageId: group.packageId ?? '' }
+        : { title: '', destination: '', startDate: '', endDate: '', capacity: '', perPersonPrice: '', notes: '', packageId: '' },
     );
   }, [open, group]);
   const m = useMutation({
     mutationFn: () => {
-      const body = { title: f.title, destination: f.destination || null, startDate: f.startDate || null, endDate: f.endDate || null, capacity: f.capacity ? Number(f.capacity) : null, perPersonPrice: f.perPersonPrice || null, notes: f.notes || null };
+      const body = { title: f.title, destination: f.destination || null, startDate: f.startDate || null, endDate: f.endDate || null, capacity: f.capacity ? Number(f.capacity) : null, perPersonPrice: f.perPersonPrice || null, notes: f.notes || null, packageId: f.packageId || null };
       return group ? api.patch<{ group: GroupDetail }>(`/api/groups/${group.id}`, body) : api.post<{ group: GroupDetail }>('/api/groups', body);
     },
     onSuccess: ({ group: g }) => {
@@ -53,6 +54,17 @@ export function GroupDialog({ open, onClose, onSaved, group }: { open: boolean; 
       <div className="flex flex-col gap-4">
         <Field label="Name" error={err('title')}>
           {(p) => <Input {...p} autoFocus value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="Char Dham Yatra, May 2027" />}
+        </Field>
+        <Field label="Package" hint="Optional. Fills in the destination, return date and price per person." error={err('packageId')}>
+          {(p) => (
+            <PackageSelect
+              {...p}
+              value={f.packageId}
+              onChange={(id, pkg) =>
+                setF({ ...f, packageId: id, title: f.title || pkg?.name || '', destination: f.destination || pkg?.destination || '', perPersonPrice: pkg ? rupeesInput(pkg.pricePerAdult) : f.perPersonPrice })
+              }
+            />
+          )}
         </Field>
         <Field label="Destination" error={err('destination')}>
           {(p) => <Input {...p} value={f.destination} onChange={(e) => setF({ ...f, destination: e.target.value })} placeholder="Uttarakhand" />}

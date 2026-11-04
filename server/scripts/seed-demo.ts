@@ -6,7 +6,7 @@
  *
  * Never run this against production: it refuses unless NODE_ENV is development or test.
  */
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import {
   automations,
   campaigns,
@@ -26,6 +26,7 @@ import {
   tripPayments,
   trips,
   quotes,
+  packages,
   rateItems,
   tripTravellers,
   users,
@@ -413,6 +414,26 @@ async function main() {
     await db.insert(auditLogs).values(logs);
   }
 
+  // ---- Packages, and which trips were sold as which
+  const P = (name: string, destination: string, nights: number, adult: number, child: number | null, cost: number, summary: string, days: [string, string][], inclusions: string[]) => ({
+    tenantId, name, destination, nights, summary, pricePerAdult: adult * 100, pricePerChild: child === null ? null : child * 100, costPerPerson: cost * 100,
+    days: days.map(([title, description]) => ({ title, description })), inclusions, exclusions: ['Flights or trains unless listed', 'Entry tickets and personal expenses'],
+  });
+  const pk = await db
+    .insert(packages)
+    .values([
+      P('Kerala 4N/5D', 'Kerala', 4, 24500, 12000, 18000, 'Munnar hills, a night on an Alleppey houseboat, and Kochi', [['Arrive in Kochi, drive to Munnar', 'Pickup at the airport; a scenic drive past waterfalls and spice gardens.'], ['Munnar tea gardens', 'Tea museum, Mattupetty Dam, Echo Point.'], ['Alleppey houseboat', 'Board by noon; lunch, dinner and the night on the backwaters.'], ['Fort Kochi', 'Chinese fishing nets and a Kathakali show.'], ['Departure', 'Drop at Kochi airport.']], ['Hotels and houseboat with breakfast', 'All meals on the houseboat', 'Private car with driver']),
+      P('Kashmir 6N/7D', 'Kashmir', 6, 32000, 16000, 24500, 'Srinagar houseboat, Gulmarg, Pahalgam and Sonamarg', [['Arrive in Srinagar', 'Shikara ride on Dal Lake; night on a houseboat.'], ['Gulmarg', 'Gondola rides and snow.'], ['Gulmarg to Pahalgam', 'Betaab and Aru valleys.'], ['Pahalgam', 'At leisure; pony rides optional.'], ['Sonamarg', 'Thajiwas glacier.'], ['Srinagar gardens', 'Mughal gardens and shopping.'], ['Departure', 'Drop at Srinagar airport.']], ['Hotels and houseboat with breakfast and dinner', 'Private car with driver']),
+      P('Goa beach break 3N/4D', 'Goa', 3, 15500, 8000, 11500, 'North Goa beaches and Old Goa', [['Arrive in Goa', 'Check in near Calangute.'], ['North Goa', 'Baga, Anjuna, Fort Aguada.'], ['Old Goa and Panjim', 'Churches and a river cruise.'], ['Departure', 'Airport drop.']], ['Beach resort with breakfast', 'Airport transfers', 'Sightseeing by car']),
+      P('Char Dham Yatra 11N/12D', 'Uttarakhand', 11, 42000, 30000, 33500, 'Yamunotri, Gangotri, Kedarnath and Badrinath from Haridwar', [], ['Hotels with veg meals', 'AC bus throughout', 'Darshan arrangements']),
+      P('Tirupati darshan 1N/2D', 'Tirupati', 1, 4800, 3000, 3600, 'Special entry darshan with a night in Tirupati', [], ['Hotel', 'Darshan tickets', 'Car from Tirupati station']),
+    ])
+    .returning();
+  const byDest = new Map(pk.map((x) => [x.destination, x.id]));
+  for (const [dest, pid] of byDest) {
+    await db.update(trips).set({ packageId: pid }).where(and(eq(trips.tenantId, tenantId), eq(trips.destination, dest!)));
+  }
+
   // ---- Price list and a sent quote
   const R = (kind: 'HOTEL' | 'TRANSPORT' | 'ACTIVITY' | 'TRAVEL' | 'OTHER', name: string, destination: string | null, unit: 'PER_NIGHT' | 'PER_DAY' | 'PER_PERSON' | 'PER_GROUP', price: number, cost: number) => ({ tenantId, kind, name, destination, unit, price: price * 100, cost: cost * 100 });
   const rates = await db
@@ -465,7 +486,7 @@ async function main() {
   // ---- A group yatra: four families, some details and payments in
   {
     const actor = { tenantId, userId: user!.id };
-    const g = await createGroup(actor, { title: 'Char Dham Yatra, May 2027', destination: 'Uttarakhand', startDate: '2027-05-10', endDate: '2027-05-21', capacity: 30, perPersonPrice: 4_200_000, notes: 'AC bus from Secunderabad. Helicopter for Kedarnath booked separately.' });
+    const g = await createGroup(actor, { packageId: pk.find((x) => x.destination === 'Uttarakhand')!.id, title: 'Char Dham Yatra, May 2027', destination: 'Uttarakhand', startDate: '2027-05-10', endDate: '2027-05-21', capacity: 30, perPersonPrice: 4_200_000, notes: 'AC bus from Secunderabad. Helicopter for Kedarnath booked separately.' });
     const fams = [
       { name: 'Venkata Ramana', phone: '9848011111', adults: 4, people: [['Venkata Ramana', 66, 'M', 'VEG', 'Knee trouble: lower berth please'], ['Saraswathi Ramana', 61, 'F', 'VEG', null], ['Srinivas Ramana', 38, 'M', 'VEG', null], ['Padma Srinivas', 35, 'F', 'VEG', null]], paid: 1 },
       { name: 'Lalitha Devi', phone: '9848022222', adults: 3, people: [['Lalitha Devi', 58, 'F', 'JAIN', null], ['Ramesh Babu', 62, 'M', 'VEG', 'Diabetic'], ['Anusha Babu', 29, 'F', 'VEG', null]], paid: 0.3 },

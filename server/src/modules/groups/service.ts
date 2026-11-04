@@ -7,7 +7,8 @@ import { AppError } from '../../lib/http.js';
 import { enqueueEmails, enqueueWhatsApp } from '../../queues/index.js';
 import { normalizePhone } from '../contacts/normalize.js';
 import { whatsappWebAllowed } from '../plans/entitlements.js';
-import { localDate, rupeesToPaise, tripMoney, type DueInput } from '../trips/money.js';
+import { addDays, localDate, rupeesToPaise, tripMoney, type DueInput } from '../trips/money.js';
+import { ownedPackage } from '../packages/service.js';
 import { createTrip, createTripBody, type Actor } from '../trips/service.js';
 import { getSession } from '../whatsapp/service.js';
 
@@ -35,6 +36,7 @@ export const groupBody = z.object({
   capacity: z.coerce.number().int().min(1, 'At least 1 seat').max(2000).nullable().optional(),
   perPersonPrice: z.union([money, z.literal('').transform(() => null), z.null()]).optional(),
   notes: z.string().trim().max(5000).nullable().optional(),
+  packageId: z.string().nullable().optional(),
 });
 
 async function ownedGroup(tenantId: string, id: string) {
@@ -49,6 +51,13 @@ const ACTIVE = ['ENQUIRY', 'QUOTED', 'BOOKED', 'COMPLETED'] as const;
 export async function createGroup(actor: Actor, input: z.infer<typeof groupBody>) {
   if (input.startDate && input.endDate && input.endDate < input.startDate) {
     throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { endDate: 'The return date is before the start date' } });
+  }
+  // A departure of a package: its destination, length and price per person fill in what wasn't given
+  const pkg = input.packageId ? await ownedPackage(actor.tenantId, input.packageId) : null;
+  if (pkg) {
+    input.destination ??= pkg.destination;
+    if (input.startDate && !input.endDate) input.endDate = addDays(input.startDate, pkg.nights);
+    if (input.perPersonPrice === undefined || input.perPersonPrice === null) input.perPersonPrice = pkg.pricePerAdult;
   }
   for (let attempt = 0; ; attempt++) {
     try {
@@ -69,6 +78,7 @@ export async function createGroup(actor: Actor, input: z.infer<typeof groupBody>
           capacity: input.capacity ?? null,
           perPersonPrice: input.perPersonPrice ?? null,
           notes: input.notes ?? null,
+          packageId: pkg?.id ?? null,
           createdById: actor.userId,
           assignedToId: actor.userId,
           statusChangedAt: new Date(),
@@ -86,7 +96,8 @@ export async function createGroup(actor: Actor, input: z.infer<typeof groupBody>
 export async function updateGroup(actor: Actor, id: string, input: Partial<z.infer<typeof groupBody>> & { status?: 'BOOKED' | 'CANCELLED' | 'COMPLETED' }) {
   const g = await ownedGroup(actor.tenantId, id);
   const patch: Partial<typeof trips.$inferInsert> = {};
-  for (const k of ['title', 'destination', 'startDate', 'endDate', 'capacity', 'perPersonPrice', 'notes'] as const) if (input[k] !== undefined) (patch as Record<string, unknown>)[k] = input[k];
+  for (const k of ['title', 'destination', 'startDate', 'endDate', 'capacity', 'perPersonPrice', 'notes', 'packageId'] as const) if (input[k] !== undefined) (patch as Record<string, unknown>)[k] = input[k];
+  if (input.packageId) await ownedPackage(actor.tenantId, input.packageId);
   if (input.status && input.status !== g.status) Object.assign(patch, { status: input.status, statusChangedAt: new Date() });
   if (Object.keys(patch).length) await db.update(trips).set(patch).where(eq(trips.id, id));
   // Dates and destination move with the departure for every family in it
@@ -115,6 +126,7 @@ export async function listGroups(tenantId: string) {
       endDate: g.endDate,
       capacity: g.capacity,
       perPersonPrice: g.perPersonPrice,
+      packageId: g.packageId,
       seatsTaken: mine.reduce((a, b) => a + seatsOf(b), 0),
       families: mine.length,
       expected: mine.reduce((a, b) => a + b.price, 0),
@@ -206,6 +218,7 @@ export async function addBooking(actor: Actor, groupId: string, input: z.infer<t
     price: g.perPersonPrice ? g.perPersonPrice * seats : null,
     notes: input.notes ?? null,
     status: input.status,
+    packageId: g.packageId,
   });
   await db.update(trips).set({ groupId }).where(eq(trips.id, trip.id));
   await db.insert(auditLogs).values({ tenantId: actor.tenantId, userId: actor.userId, action: 'group.booking', entity: 'trip', entityId: groupId, meta: { bookingId: trip.id, customer: trip.customer.name, seats } });
