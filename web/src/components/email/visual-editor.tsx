@@ -67,9 +67,9 @@ const EDITOR_CSS = `
   body { cursor: text; }
   *:hover:not(html):not(body):not(table):not(tbody):not(tr) { outline: 1px dashed rgba(11,122,98,.35); outline-offset: 2px; }
   img { cursor: pointer; }
-  img.drona-selected { outline: 2px solid #0B7A62 !important; outline-offset: 2px; }
+  img.drona-selected { outline: 2px solid #4A3FD1 !important; outline-offset: 2px; }
   span[data-drona-tag] { display: inline-block; background: #E4F2ED; color: #075C49; border-radius: 5px; padding: 0 5px; margin: 0 1px; font-weight: 600; font-size: .92em; line-height: 1.45; cursor: default; user-select: none; -webkit-user-select: none; }
-  span[data-drona-tag]:hover { outline: 1px solid #0B7A62 !important; }
+  span[data-drona-tag]:hover { outline: 1px solid #4A3FD1 !important; }
 `;
 
 const TAG_RE = /\{\s*([a-zA-Z_]\w*)\s*(?:\|([^{}]*))?\}/g;
@@ -307,7 +307,7 @@ export function VisualEditor({ html, onChange, fields }: { html: string; onChang
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <div className="min-h-0 flex-1 overflow-y-auto bg-[#eef0ee] p-4 sm:p-8">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#edecf7] p-4 sm:p-8">
           {mode === 'visual' ? (
             <div className="mx-auto max-w-[680px] overflow-hidden rounded-[12px] bg-white shadow-[var(--shadow-lift)]">
               <iframe ref={ref} key={source} title="Email editor" srcDoc={source} sandbox="allow-same-origin" onLoad={onLoad} className="block w-full border-0" style={{ height: 560 }} />

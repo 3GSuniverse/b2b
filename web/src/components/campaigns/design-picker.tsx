@@ -49,7 +49,7 @@ function Card({ d, selected, onPick, busy }: { d: Design; selected?: boolean; on
       aria-pressed={selected}
       className={cn(
         'group flex flex-col overflow-hidden rounded-[14px] border bg-surface text-left transition-[border,box-shadow] disabled:opacity-60',
-        selected ? 'border-accent shadow-[0_0_0_1px_var(--color-accent)]' : 'border-line hover:border-[#c9cfcb] hover:shadow-[var(--shadow-lift)]',
+        selected ? 'border-accent shadow-[0_0_0_1px_var(--color-accent)]' : 'border-line hover:border-[#c3c1e0] hover:shadow-[var(--shadow-lift)]',
       )}
     >
       <div className="relative">

@@ -54,7 +54,7 @@ export function takeoff(from?: Element | null) {
   const trail = document.createElementNS(SVG_NS, 'path');
   trail.setAttribute('d', `M${start.x} ${start.y} C${c1.x} ${c1.y} ${c2.x} ${c2.y} ${end.x} ${end.y}`);
   trail.setAttribute('fill', 'none');
-  trail.setAttribute('stroke', '#0b7a62');
+  trail.setAttribute('stroke', '#4a3fd1');
   trail.setAttribute('stroke-width', '2');
   trail.setAttribute('stroke-linecap', 'round');
   trail.setAttribute('stroke-opacity', '0.5');
@@ -66,8 +66,8 @@ export function takeoff(from?: Element | null) {
 
   // The plane
   const plane = document.createElement('div');
-  plane.style.cssText = 'position:absolute;left:0;top:0;width:44px;height:44px;margin:-22px 0 0 -22px;display:grid;place-items:center;border-radius:13px;background:#111816;box-shadow:0 12px 32px -8px rgb(17 24 22 / .45)';
-  plane.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7FE0C3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${PLANE}"/></svg>`;
+  plane.style.cssText = 'position:absolute;left:0;top:0;width:44px;height:44px;margin:-22px 0 0 -22px;display:grid;place-items:center;border-radius:13px;background:#1d1a4d;box-shadow:0 12px 32px -8px rgb(29 26 77 / .45)';
+  plane.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FF8A1F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${PLANE}"/></svg>`;
   host.appendChild(plane);
 
   const steps = 24;
@@ -92,7 +92,7 @@ export function takeoff(from?: Element | null) {
   flight.finished.finally(() => setTimeout(() => host.remove(), 400));
 }
 
-export function burst(from?: Element | null, color = '#0b7a62') {
+export function burst(from?: Element | null, color = '#0e9466') {
   if (typeof document === 'undefined' || prefersReducedMotion()) return;
   const { x, y } = centerOf(from ?? lastPointer);
   const host = layer();
@@ -101,7 +101,7 @@ export function burst(from?: Element | null, color = '#0b7a62') {
   host.appendChild(ring);
   ring.animate([{ transform: 'scale(0.6)', opacity: 0.9 }, { transform: 'scale(4.5)', opacity: 0 }], { duration: 700, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', fill: 'forwards' });
   const count = 16;
-  const colors = [color, '#7fe0c3', '#e8833a'];
+  const colors = [color, '#ff8a1f', '#4a3fd1'];
   for (let i = 0; i < count; i++) {
     const a = (i / count) * Math.PI * 2 + Math.random() * 0.3;
     const dist = 56 + Math.random() * 44;

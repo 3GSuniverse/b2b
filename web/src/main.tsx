@@ -31,7 +31,7 @@ createRoot(document.getElementById('root')!).render(
             classNames: {
               toast: '!rounded-[14px] !border-line !bg-surface !text-ink !shadow-[var(--shadow-pop)] !font-sans',
               description: '!text-muted',
-              actionButton: '!bg-ink !text-white !rounded-lg',
+              actionButton: '!bg-primary !text-on-primary !rounded-lg',
             },
           }}
         />

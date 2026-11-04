@@ -103,7 +103,7 @@ function DropZone({ onFile, busy, error }: { onFile: (f: File) => void; busy: bo
         disabled={busy}
         className={cn(
           'flex flex-col items-center gap-3 rounded-[18px] border-2 border-dashed px-6 py-14 text-center transition-colors',
-          over ? 'border-accent bg-accent-soft/60' : 'border-[#cfd5d1] bg-sunken hover:border-accent hover:bg-accent-soft/30',
+          over ? 'border-accent bg-accent-soft/60' : 'border-[#cfcde6] bg-sunken hover:border-accent hover:bg-accent-soft/30',
         )}
       >
         <span className={cn('grid h-14 w-14 place-items-center rounded-2xl bg-surface shadow-[var(--shadow-lift)] transition-transform', over && 'scale-110')}>
@@ -435,7 +435,7 @@ function ImportResult({ r }: { r: Result }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
-        <CheckCircle2 className="h-7 w-7 text-accent" />
+        <CheckCircle2 className="h-7 w-7 text-success" />
         <div>
           <p className="text-lg font-semibold tracking-tight">Import finished</p>
           <p className="tnum text-[13px] text-muted">{n(r.totalRows)} rows read</p>

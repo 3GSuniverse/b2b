@@ -89,7 +89,7 @@ export function EmailPreview({
     return (
       <div className="flex justify-center">
         <div className="w-[399px] max-w-full rounded-[44px] bg-ink p-3 shadow-[var(--shadow-pop)]">
-          <div className="overflow-hidden rounded-[34px] bg-[#f2f3f2]">
+          <div className="overflow-hidden rounded-[34px] bg-[#f4f4fb]">
             <div className="flex justify-center pb-2 pt-3">
               <span className="h-[22px] w-[96px] rounded-full bg-ink" aria-hidden />
             </div>
@@ -103,11 +103,11 @@ export function EmailPreview({
     );
   }
   return (
-    <div className="overflow-hidden rounded-[14px] border border-line bg-[#eef0ee]">
+    <div className="overflow-hidden rounded-[14px] border border-line bg-[#edecf7]">
       <div className="flex items-center gap-1.5 border-b border-line bg-sunken px-4 py-2.5" aria-hidden>
-        <span className="h-2.5 w-2.5 rounded-full bg-[#e3e6e3]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#e3e6e3]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#e3e6e3]" />
+        <span className="h-2.5 w-2.5 rounded-full bg-[#e2e1f1]" />
+        <span className="h-2.5 w-2.5 rounded-full bg-[#e2e1f1]" />
+        <span className="h-2.5 w-2.5 rounded-full bg-[#e2e1f1]" />
       </div>
       <div className="flex flex-col gap-0 bg-white">
         <div className="border-b border-line-soft px-6 py-4">

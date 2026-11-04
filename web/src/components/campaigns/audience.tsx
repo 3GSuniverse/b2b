@@ -84,7 +84,7 @@ export function AudienceEditor({ value, onChange, channel = 'EMAIL' }: { value: 
             onClick={() => onChange({ ...a, listIds: m === 'everyone' ? [] : listIds.length ? listIds : lists.data?.lists[0] ? [lists.data.lists[0].id] : [] })}
             className={cn(
               'flex items-start gap-3 rounded-[12px] border p-3.5 text-left transition-colors',
-              mode === m ? 'border-accent bg-accent-soft/50 shadow-[0_0_0_1px_var(--color-accent)]' : 'border-line hover:border-[#cfd5d1]',
+              mode === m ? 'border-accent bg-accent-soft/50 shadow-[0_0_0_1px_var(--color-accent)]' : 'border-line hover:border-[#cfcde6]',
             )}
           >
             <span className={cn('mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border-2', mode === m ? 'border-accent' : 'border-[#c2c8c4]')}>

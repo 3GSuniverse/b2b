@@ -68,6 +68,7 @@ export function Sheet({
   children,
   footer,
   width = 'max-w-xl',
+  tone,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -76,6 +77,8 @@ export function Sheet({
   children?: ReactNode;
   footer?: ReactNode;
   width?: string;
+  /** 'nav': the sidebar's colours, for the mobile menu */
+  tone?: 'nav';
 }) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -83,7 +86,8 @@ export function Sheet({
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(17_24_22/0.24)] animate-in data-[state=closed]:animate-out" />
         <DialogPrimitive.Content
           className={cn(
-            'fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-line bg-surface shadow-[var(--shadow-pop)] animate-sheet data-[state=closed]:animate-sheet-out focus:outline-none',
+            'fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l shadow-[var(--shadow-pop)] animate-sheet data-[state=closed]:animate-sheet-out focus:outline-none',
+            tone === 'nav' ? 'border-nav-line bg-nav text-nav-ink [&>div:first-child]:border-nav-line' : 'border-line bg-surface',
             width,
           )}
         >

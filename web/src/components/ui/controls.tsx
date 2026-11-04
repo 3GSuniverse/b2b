@@ -14,7 +14,7 @@ export function Switch({ checked, onCheckedChange, label, disabled }: { checked:
       onCheckedChange={onCheckedChange}
       disabled={disabled}
       aria-label={label}
-      className="relative h-6 w-11 shrink-0 rounded-full bg-[#c9cec9] transition-colors duration-300 active:scale-95 data-[state=checked]:bg-accent disabled:opacity-50"
+      className="relative h-6 w-11 shrink-0 rounded-full bg-[#d3d1ea] transition-colors duration-300 active:scale-95 data-[state=checked]:bg-accent disabled:opacity-50"
     >
       <SwitchPrimitive.Thumb className="block h-5 w-5 translate-x-0.5 rounded-full bg-white shadow-[0_1px_3px_rgb(0_0_0/0.25)] transition-transform duration-300 ease-[cubic-bezier(0.22,1.4,0.36,1)] data-[state=checked]:translate-x-[22px]" />
     </SwitchPrimitive.Root>
@@ -28,7 +28,7 @@ export function Checkbox({ checked, onCheckedChange, label, className }: { check
       onCheckedChange={(v) => onCheckedChange(v === true)}
       aria-label={label}
       className={cn(
-        'grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] border border-[#b9c0bb] bg-surface transition-colors data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent',
+        'grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] border border-[#bcbad9] bg-surface transition-colors data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent',
         className,
       )}
     >
@@ -49,7 +49,7 @@ export function Segmented<T extends string>({ value, onChange, options, label, s
       value={value}
       onValueChange={(v) => v && onChange(v as T)}
       aria-label={label}
-      className="relative inline-flex rounded-[11px] bg-[#eaedea] p-[3px]"
+      className="relative inline-flex rounded-[11px] bg-[#ecebf7] p-[3px]"
     >
       {box && (
         <span

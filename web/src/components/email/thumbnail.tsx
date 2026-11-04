@@ -4,7 +4,7 @@ import { cn } from '@/lib/cn';
 export function EmailThumbnail({ html, className, height = 220 }: { html?: string | null; className?: string; height?: number }) {
   const scale = 0.36;
   return (
-    <div className={cn('relative overflow-hidden bg-[#eef0ee]', className)} style={{ height }} aria-hidden>
+    <div className={cn('relative overflow-hidden bg-[#edecf7]', className)} style={{ height }} aria-hidden>
       {html ? (
         <iframe
           title=""
@@ -18,7 +18,7 @@ export function EmailThumbnail({ html, className, height = 220 }: { html?: strin
       ) : (
         <div className="grid h-full place-items-center text-xs text-muted">No design yet</div>
       )}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#eef0ee] to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#edecf7] to-transparent" />
     </div>
   );
 }

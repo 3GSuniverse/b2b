@@ -10,7 +10,7 @@ import type { Notification } from '@/lib/types';
 import { Popover } from './ui/overlay';
 
 const ICON = {
-  SUCCESS: <CheckCircle2 className="h-4 w-4 text-accent" />,
+  SUCCESS: <CheckCircle2 className="h-4 w-4 text-success" />,
   INFO: <Info className="h-4 w-4 text-blue-ink" />,
   WARNING: <AlertTriangle className="h-4 w-4 text-warm" />,
   ERROR: <XCircle className="h-4 w-4 text-danger" />,

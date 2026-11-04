@@ -1,11 +1,11 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, ChevronLeft, ChevronRight, Columns3, List, Package as PackageIcon, Plane, Plus, Search, Tag, Users } from 'lucide-react';
+import { AlertCircle, CalendarDays, ChevronLeft, ChevronRight, Columns3, FileText, List, MessageSquarePlus, Package as PackageIcon, Plane, PlaneTakeoff, Plus, Search, Tag, Users, Wallet } from 'lucide-react';
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Segmented, Tabs } from '@/components/ui/controls';
-import { Avatar, EmptyState, PageHeader, Panel, Skeleton } from '@/components/ui/display';
+import { Avatar, type ChipTone, EmptyState, IconChip, PageHeader, Panel, Skeleton } from '@/components/ui/display';
 import { Input } from '@/components/ui/field';
 import { PaymentChip, STATUS, travellers, TripStatusBadge } from '@/components/trips/shared';
 import { NewTripSheet } from '@/components/trips/trip-form';
@@ -45,17 +45,19 @@ function StatsStrip({ onShowOverdue }: { onShowOverdue: () => void }) {
   const s = q.data;
   const tiles = s
     ? [
-        { label: 'New enquiries', value: <CountUp value={s.counts.ENQUIRY} />, note: 'Waiting for a quote' },
-        { label: 'Quoted', value: <CountUp value={s.counts.QUOTED} />, note: s.pipelineValue ? `${inr(s.pipelineValue)} waiting on a yes` : 'Nothing waiting' },
-        { label: 'Leaving this week', value: <CountUp value={s.departingThisWeek} />, note: `${n(s.counts.BOOKED)} booked in total` },
+        { label: 'New enquiries', icon: <MessageSquarePlus />, chip: 'indigo' as ChipTone, value: <CountUp value={s.counts.ENQUIRY} />, note: 'Waiting for a quote' },
+        { label: 'Quoted', icon: <FileText />, chip: 'blue' as ChipTone, value: <CountUp value={s.counts.QUOTED} />, note: s.pipelineValue ? `${inr(s.pipelineValue)} waiting on a yes` : 'Nothing waiting' },
+        { label: 'Leaving this week', icon: <PlaneTakeoff />, chip: 'saffron' as ChipTone, value: <CountUp value={s.departingThisWeek} />, note: `${n(s.counts.BOOKED)} booked in total` },
         {
           label: 'Overdue payments',
+          icon: <AlertCircle />,
+          chip: (s.overdue > 0 ? 'red' : 'green') as ChipTone,
           value: <CountUp value={s.overdue} format={inr} step={100} />,
           note: s.overdueTrips ? `On ${s.overdueTrips} trip${s.overdueTrips > 1 ? 's' : ''} · see them` : s.dueThisWeek ? `${inr(s.dueThisWeek)} due this week` : 'Nobody is late',
           tone: s.overdue > 0 ? 'danger' : undefined,
           onClick: s.overdueTrips ? onShowOverdue : undefined,
         },
-        { label: 'Collected this month', value: <CountUp value={s.collectedThisMonth} format={inr} step={100} />, note: 'Payments recorded' },
+        { label: 'Collected this month', icon: <Wallet />, chip: 'green' as ChipTone, value: <CountUp value={s.collectedThisMonth} format={inr} step={100} />, note: 'Payments recorded' },
       ]
     : [];
   return (
@@ -71,8 +73,11 @@ function StatsStrip({ onShowOverdue }: { onShowOverdue: () => void }) {
       {tiles.map((t, i) => {
         const body = (
           <>
-            <span className="text-[13px] font-medium text-muted">{t.label}</span>
-            <span className={cn('tnum text-[26px] font-semibold leading-none tracking-[-0.03em]', t.tone === 'danger' && 'text-danger')}>{t.value}</span>
+            <span className="flex items-center gap-2.5 text-[13px] font-semibold text-muted">
+              <IconChip icon={t.icon} tone={t.chip} className="h-7 w-7 rounded-[9px] [&>svg]:h-3.5 [&>svg]:w-3.5" />
+              {t.label}
+            </span>
+            <span className={cn('tnum text-[26px] font-bold leading-none tracking-[-0.03em]', t.tone === 'danger' && 'text-danger')}>{t.value}</span>
             <span className={cn('text-xs', t.tone === 'danger' ? 'font-medium text-danger' : 'text-muted')}>{t.note}</span>
           </>
         );

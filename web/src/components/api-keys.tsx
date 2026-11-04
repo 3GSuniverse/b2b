@@ -109,7 +109,7 @@ export function ApiKeysSettings() {
           </span>
           <CopyButton value={endpoint} />
         </div>
-        <pre className="overflow-x-auto rounded-[12px] bg-ink px-4 py-3.5 text-[12px] leading-relaxed text-[#d7e3de]">{example}</pre>
+        <pre className="overflow-x-auto rounded-[12px] bg-ink px-4 py-3.5 text-[12px] leading-relaxed text-[#dcdaf7]">{example}</pre>
         <dl className="grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-[180px_minmax(0,1fr)]">
           {FIELDS.map(([f, d]) => (
             <div key={f} className="contents">

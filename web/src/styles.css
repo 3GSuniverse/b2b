@@ -1,51 +1,74 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/geist';
+@import '@fontsource-variable/plus-jakarta-sans';
 
 /* ------------------------------------------------------------------
    Design tokens — the calm direction approved on the design canvas.
    Green = healthy / go. Orange = needs attention. Nothing else shouts.
    ------------------------------------------------------------------ */
 @theme {
-  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  /* Utsav: festive indigo with saffron. Indigo is the brand (buttons, links, selection);
+     green means healthy, delivered or paid; orange needs attention. */
+  --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, sans-serif;
 
-  --color-ground: #f5f6f4;
+  --color-ground: #f4f4fb;
   --color-surface: #ffffff;
-  --color-sunken: #fafbfa;
-  --color-ink: #111816;
-  --color-ink-2: #3a433f;
-  --color-muted: #59625e;
-  --color-faint: #8a928e;
-  --color-line: #e3e6e3;
-  --color-line-soft: #eef0ee;
-  --color-hover: #eceeec;
+  --color-sunken: #f8f8fd;
+  --color-ink: #17153b;
+  --color-ink-2: #393761;
+  --color-muted: #5e5d86;
+  --color-faint: #8b8aaf;
+  --color-line: #e2e1f1;
+  --color-line-soft: #edecf7;
+  --color-hover: #ebeaf7;
 
-  --color-accent: #0b7a62;
-  --color-accent-strong: #075c49;
-  --color-accent-soft: #e4f2ed;
-  --color-accent-ring: #7fe0c3;
+  --color-accent: #4a3fd1;
+  --color-accent-strong: #3b31b4;
+  --color-accent-soft: #ecebfd;
+  --color-accent-ring: #ffb067; /* the accent on dark backgrounds */
 
-  --color-warm: #b4500a;
-  --color-warm-strong: #8a3d07;
-  --color-warm-soft: #fceee3;
-  --color-warm-chart: #e8833a;
+  --color-success: #0e9466;
+  --color-success-strong: #0a734f;
+  --color-success-soft: #ddf5ea;
 
-  /* Chart series — validated (chroma, CVD, 3:1 on white) */
-  --color-chart-1: #0f8f70;
-  --color-chart-2: #d46a1a;
+  --color-warm: #c25700;
+  --color-warm-strong: #964300;
+  --color-warm-soft: #ffeedd;
+  --color-warm-chart: #ff8a1f;
 
-  --color-danger: #b42318;
-  --color-danger-soft: #fdecea;
+  /* Chart series */
+  --color-chart-1: #4a3fd1;
+  --color-chart-2: #ff8a1f;
 
-  --color-blue-soft: #e8edf5;
-  --color-blue-ink: #2b4a73;
-  --color-plum-soft: #f1eaf5;
-  --color-plum-ink: #5b3470;
+  --color-danger: #c0283a;
+  --color-danger-soft: #fdeaec;
 
-  --radius-control: 10px;
-  --radius-panel: 16px;
+  --color-blue-soft: #e2effb;
+  --color-blue-ink: #1b5a93;
+  --color-plum-soft: #f6e8f4;
+  --color-plum-ink: #7a2b6b;
 
-  --shadow-pop: 0 1px 2px rgb(17 24 22 / 0.06), 0 12px 32px -8px rgb(17 24 22 / 0.18);
-  --shadow-lift: 0 1px 2px rgb(17 24 22 / 0.05), 0 4px 12px -4px rgb(17 24 22 / 0.08);
+  --color-primary: #4a3fd1; /* main buttons */
+  --color-primary-hover: #3b31b4;
+  --color-on-primary: #ffffff;
+  --color-highlight: #ff8a1f; /* saffron: markers, the logo, the second chart series */
+  --color-highlight-soft: #ffeedd;
+  --color-nav: #1d1a4d; /* the sidebar */
+  --color-nav-ink: #e4e2fb;
+  --color-nav-muted: #a7a4d6;
+  --color-nav-hover: rgb(255 255 255 / 0.07);
+  --color-nav-active: rgb(255 255 255 / 0.14);
+  --color-nav-active-ink: #ffffff;
+  --color-nav-line: rgb(255 255 255 / 0.1);
+  --color-nav-card: rgb(255 255 255 / 0.06);
+  --color-logo: #ff8a1f;
+  --color-logo-mark: #1d1a4d;
+
+  --radius-control: 12px;
+  --radius-button: 12px;
+  --radius-panel: 18px;
+
+  --shadow-pop: 0 1px 2px rgb(23 21 59 / 0.06), 0 16px 40px -10px rgb(23 21 59 / 0.22);
+  --shadow-lift: 0 1px 2px rgb(23 21 59 / 0.05), 0 10px 24px -10px rgb(23 21 59 / 0.18);
 
   --animate-in: fade-in 180ms ease-out;
   --animate-out: fade-out 140ms ease-in forwards;
@@ -54,6 +77,12 @@
   --animate-pop: pop-in 220ms cubic-bezier(0.22, 1.2, 0.36, 1);
   --animate-pop-out: pop-out 130ms ease-in forwards;
   --animate-check: check-in 260ms cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+
+
+:root {
+  --panel-shadow: 0 1px 2px rgb(23 21 59 / 0.04), 0 8px 24px -12px rgb(23 21 59 / 0.12);
+  --panel-border: transparent;
 }
 
 @keyframes fade-in {
@@ -95,7 +124,6 @@
     background: var(--color-ground);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    font-feature-settings: 'ss01', 'cv11';
   }
   /* Figures line up in tables and KPIs without switching to a monospace face */
   .tnum { font-variant-numeric: tabular-nums; }

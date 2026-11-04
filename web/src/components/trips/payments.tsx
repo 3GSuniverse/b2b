@@ -328,7 +328,7 @@ export function PaymentsPanel({ trip, onChange, onSetPrice }: { trip: TripDetail
         <div className="grid grid-cols-3 gap-4">
           {[
             { label: 'Agreed price', value: money.price ? <CountUp value={money.price} format={inr} step={100} /> : null },
-            { label: 'Received', value: <CountUp value={money.paid} format={inr} step={100} />, tone: money.paid > 0 ? 'text-accent-strong' : undefined },
+            { label: 'Received', value: <CountUp value={money.paid} format={inr} step={100} />, tone: money.paid > 0 ? 'text-success-strong' : undefined },
             { label: money.balance < 0 ? 'Overpaid' : 'Balance', value: <CountUp value={Math.abs(money.balance)} format={inr} step={100} />, tone: money.overdue > 0 ? 'text-danger' : undefined },
           ].map((s) => (
             <div key={s.label} className="flex min-w-0 flex-col gap-1.5">

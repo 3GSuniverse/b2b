@@ -215,7 +215,7 @@ export function ChecksPanel({ checks, loading }: { checks?: CheckT[]; loading: b
           <li key={c.id} className="flex gap-3">
             <span className="mt-0.5 shrink-0">
               {c.level === 'ok' ? (
-                <CheckCircle2 className="h-4 w-4 text-accent" aria-label="OK" />
+                <CheckCircle2 className="h-4 w-4 text-success" aria-label="OK" />
               ) : c.level === 'warning' ? (
                 <TriangleAlert className="h-4 w-4 text-warm" aria-label="Warning" />
               ) : (

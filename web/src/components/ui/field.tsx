@@ -3,7 +3,7 @@ import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type Selec
 import { cn } from '@/lib/cn';
 
 const control =
-  'w-full rounded-[var(--radius-control)] border border-[#d5dad6] bg-surface text-[14px] text-ink placeholder:text-faint transition-[border,box-shadow] duration-200 hover:border-[#c2c8c4] focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)] focus:outline-none disabled:bg-sunken disabled:text-muted aria-[invalid=true]:border-danger aria-[invalid=true]:shadow-[0_0_0_3px_var(--color-danger-soft)] aria-[invalid=true]:animate-[nudge_360ms_ease-in-out]';
+  'w-full rounded-[var(--radius-control)] border border-[#d9d8ec] bg-surface text-[14px] text-ink placeholder:text-faint transition-[border,box-shadow] duration-200 hover:border-[#c3c1e0] focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)] focus:outline-none disabled:bg-sunken disabled:text-muted aria-[invalid=true]:border-danger aria-[invalid=true]:shadow-[0_0_0_3px_var(--color-danger-soft)] aria-[invalid=true]:animate-[nudge_360ms_ease-in-out]';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { leading?: ReactNode }>(function Input(
   { className, leading, ...props },

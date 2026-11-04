@@ -5,7 +5,7 @@ import { avatarTone, initials } from '@/lib/format';
 import { useMounted } from '@/lib/motion';
 
 export function Panel({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('rounded-[var(--radius-panel)] border border-line bg-surface', className)} {...props} />;
+  return <div className={cn('rounded-[var(--radius-panel)] border border-[var(--panel-border)] bg-surface shadow-[var(--panel-shadow)]', className)} {...props} />;
 }
 
 export function PanelHeader({ title, description, action, className }: { title: ReactNode; description?: ReactNode; action?: ReactNode; className?: string }) {
@@ -34,7 +34,7 @@ export function PageHeader({ title, description, actions, back }: { title: React
 }
 
 const TONES = {
-  green: 'bg-accent-soft text-accent-strong',
+  green: 'bg-success-soft text-success-strong',
   orange: 'bg-warm-soft text-warm-strong',
   grey: 'bg-line-soft text-ink-2',
   red: 'bg-danger-soft text-danger',
@@ -83,12 +83,12 @@ export function EmptyState({ icon, title, children, action }: { icon?: ReactNode
   );
 }
 
-export function ProgressBar({ value, max = 100, tone = 'accent', label }: { value: number; max?: number; tone?: 'accent' | 'warm' | 'danger'; label: string }) {
+export function ProgressBar({ value, max = 100, tone = 'accent', label, track = 'bg-line-soft' }: { value: number; max?: number; tone?: 'accent' | 'warm' | 'danger' | 'highlight'; label: string; track?: string }) {
   const mounted = useMounted();
   const p = mounted ? Math.max(0, Math.min(100, max ? (value / max) * 100 : 0)) : 0;
-  const color = tone === 'warm' ? 'bg-warm' : tone === 'danger' ? 'bg-danger' : 'bg-accent';
+  const color = tone === 'warm' ? 'bg-warm' : tone === 'danger' ? 'bg-danger' : tone === 'highlight' ? 'bg-highlight' : 'bg-accent';
   return (
-    <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value} className="h-2 overflow-hidden rounded-full bg-line-soft">
+    <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value} className={cn('h-2 overflow-hidden rounded-full', track)}>
       <div className={cn('h-full rounded-full transition-[width] duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)]', color)} style={{ width: `${mounted ? Math.max(p, value > 0 ? 2 : 0) : 0}%` }} />
     </div>
   );
@@ -101,7 +101,7 @@ export function RingGauge({ value, limit, label, display, sub }: { value: number
   const mounted = useMounted();
   const real = Math.min(1, limit ? value / limit : 0);
   const frac = mounted ? real : 0;
-  const tone = real >= 0.8 ? 'var(--color-danger)' : real >= 0.5 ? 'var(--color-warm)' : 'var(--color-accent)';
+  const tone = real >= 0.8 ? 'var(--color-danger)' : real >= 0.5 ? 'var(--color-warm)' : 'var(--color-success)';
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="relative h-[108px] w-[108px]">
@@ -141,7 +141,7 @@ export function CopyButton({ value, label = 'Copy' }: { value: string; label?: s
       }}
       className={cn(
         'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors',
-        done ? 'border-accent-soft bg-accent-soft text-accent-strong' : 'border-line bg-surface text-ink-2 hover:bg-sunken',
+        done ? 'border-success-soft bg-success-soft text-success-strong' : 'border-line bg-surface text-ink-2 hover:bg-sunken',
       )}
       aria-label={done ? 'Copied' : `${label}: ${value}`}
     >
@@ -156,7 +156,26 @@ export function Stat({ label, value, note, noteTone }: { label: ReactNode; value
     <div className="flex flex-col gap-2.5">
       <span className="text-[13px] font-medium text-muted">{label}</span>
       <span className="tnum text-[32px] font-semibold leading-none tracking-[-0.03em]">{value}</span>
-      {note && <span className={cn('text-[13px]', noteTone === 'up' ? 'text-accent-strong' : noteTone === 'down' ? 'text-warm-strong' : 'text-muted')}>{note}</span>}
+      {note && <span className={cn('text-[13px]', noteTone === 'up' ? 'text-success-strong' : noteTone === 'down' ? 'text-warm-strong' : 'text-muted')}>{note}</span>}
     </div>
+  );
+}
+
+const CHIP = {
+  indigo: 'bg-accent-soft text-accent',
+  green: 'bg-success-soft text-success',
+  saffron: 'bg-highlight-soft text-warm',
+  plum: 'bg-plum-soft text-plum-ink',
+  red: 'bg-danger-soft text-danger',
+  blue: 'bg-blue-soft text-blue-ink',
+} as const;
+export type ChipTone = keyof typeof CHIP;
+
+/** A small coloured square holding an icon, next to a figure's label. */
+export function IconChip({ icon, tone = 'indigo', className }: { icon: ReactNode; tone?: ChipTone; className?: string }) {
+  return (
+    <span aria-hidden className={cn('grid h-8 w-8 shrink-0 place-items-center rounded-[10px] [&>svg]:h-4 [&>svg]:w-4', CHIP[tone], className)}>
+      {icon}
+    </span>
   );
 }

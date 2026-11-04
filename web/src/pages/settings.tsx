@@ -45,7 +45,7 @@ const PURPOSE: Record<DnsRecord['purpose'], string> = {
 function StatusDot({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-[13px]">
-      {ok ? <CheckCircle2 className="h-4 w-4 text-accent" /> : <Circle className="h-4 w-4 text-faint" />}
+      {ok ? <CheckCircle2 className="h-4 w-4 text-success" /> : <Circle className="h-4 w-4 text-faint" />}
       <span className={ok ? 'text-ink' : 'text-muted'}>{label}</span>
     </span>
   );

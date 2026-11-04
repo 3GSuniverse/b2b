@@ -76,7 +76,7 @@ export function PaymentChip({ trip, className, compact }: { trip: Pick<TripSumma
   }
   if (trip.price > 0 && money.balance <= 0) {
     return (
-      <span className={cn('inline-flex items-center gap-1 text-[12px] font-medium text-accent-strong', className)}>
+      <span className={cn('inline-flex items-center gap-1 text-[12px] font-medium text-success-strong', className)}>
         <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
         Fully paid
       </span>

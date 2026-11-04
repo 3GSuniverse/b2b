@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDownRight, ArrowUpRight, Check, ChevronRight, Clock3, Mail, Send, ShieldCheck, Upload } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Check, ChevronRight, Clock3, Inbox, Mail, MousePointerClick, Send, ShieldCheck, Upload, UserMinus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { LinkButton } from '@/components/ui/button';
 import { Segmented } from '@/components/ui/controls';
-import { Badge, Panel, PanelHeader, ProgressBar, RingGauge, Skeleton } from '@/components/ui/display';
+import { Badge, IconChip, Panel, PanelHeader, ProgressBar, RingGauge, Skeleton, type ChipTone } from '@/components/ui/display';
 import { Tooltip as Tip } from '@/components/ui/overlay';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -24,7 +24,7 @@ function Change({ value, suffix, invert }: { value: number | null; suffix: strin
   const Icon = up ? ArrowUpRight : ArrowDownRight;
   return (
     <span className="text-[13px] text-muted">
-      <span className={cn('tnum whitespace-nowrap font-medium', good ? 'text-accent-strong' : 'text-warm-strong')}>
+      <span className={cn('tnum whitespace-nowrap font-medium', good ? 'text-success-strong' : 'text-warm-strong')}>
         <Icon className="mr-0.5 inline h-3.5 w-3.5 align-[-2px]" aria-hidden />
         {up ? '+' : ''}
         {value}
@@ -38,11 +38,11 @@ function Change({ value, suffix, invert }: { value: number | null; suffix: strin
 function Kpis({ o }: { o: Overview }) {
   const m = o.thisMonth;
   const items = [
-    { label: 'Emails sent', value: <CountUp value={m.sent} />, note: <Change value={m.sentChange} suffix="%" /> },
-    { label: 'Delivered', value: <CountPercent value={m.deliveryRate} />, note: <span className="tnum text-[13px] text-muted">{n(m.delivered)} reached the inbox</span> },
-    { label: 'Click rate', value: <CountPercent value={m.clickRate} />, note: <Change value={m.clickRateChange} suffix=" pts" /> },
-    { label: 'Unsubscribed', value: <CountUp value={m.unsubscribed} />, note: <span className="tnum text-[13px] text-muted">{pct(m.unsubscribeRate)} of delivered</span> },
-  ];
+    { label: 'Emails sent', icon: <Send />, tone: 'indigo', value: <CountUp value={m.sent} />, note: <Change value={m.sentChange} suffix="%" /> },
+    { label: 'Delivered', icon: <Inbox />, tone: 'green', value: <CountPercent value={m.deliveryRate} />, note: <span className="tnum text-[13px] text-muted">{n(m.delivered)} reached the inbox</span> },
+    { label: 'Click rate', icon: <MousePointerClick />, tone: 'saffron', value: <CountPercent value={m.clickRate} />, note: <Change value={m.clickRateChange} suffix=" pts" /> },
+    { label: 'Unsubscribed', icon: <UserMinus />, tone: 'plum', value: <CountUp value={m.unsubscribed} />, note: <span className="tnum text-[13px] text-muted">{pct(m.unsubscribeRate)} of delivered</span> },
+  ] satisfies { label: string; icon: React.ReactNode; tone: ChipTone; value: React.ReactNode; note: React.ReactNode }[];
   return (
     <Panel className="stagger grid grid-cols-2 overflow-hidden lg:grid-cols-4">
       {items.map((k, i) => (
@@ -55,8 +55,11 @@ function Kpis({ o }: { o: Overview }) {
             i === 2 && 'lg:border-l',
           )}
         >
-          <span className="text-[13px] font-medium text-muted">{k.label}</span>
-          <span className="tnum text-[30px] font-semibold leading-none tracking-[-0.03em] sm:text-[34px]">{k.value}</span>
+          <span className="flex items-center gap-2.5 text-[13px] font-semibold text-muted">
+            <IconChip icon={k.icon} tone={k.tone} className="transition-transform duration-300 ease-[cubic-bezier(0.22,1.4,0.36,1)] group-hover/kpi:-rotate-6 group-hover/kpi:scale-110" />
+            {k.label}
+          </span>
+          <span className="tnum text-[30px] font-bold leading-none tracking-[-0.03em] sm:text-[34px]">{k.value}</span>
           {k.note}
         </div>
       ))}
@@ -453,7 +456,7 @@ function Setup({ o }: { o: Overview }) {
             <span
               className={cn(
                 'grid h-8 w-8 place-items-center rounded-full text-[13px] font-semibold',
-                s.done ? 'bg-accent text-white' : i === nextIdx ? 'bg-ink text-white' : 'bg-line-soft text-muted',
+                s.done ? 'bg-success text-white' : i === nextIdx ? 'bg-primary text-on-primary' : 'bg-line-soft text-muted',
               )}
               aria-hidden
             >
@@ -510,7 +513,7 @@ export function OverviewPage() {
         </div>
         {o.sending.defaultSender && (
           <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] text-ink-2">
-            <ShieldCheck className="h-4 w-4 text-accent" aria-hidden />
+            <ShieldCheck className="h-4 w-4 text-success" aria-hidden />
             Sending as <span className="font-semibold text-ink">{o.sending.defaultSender}</span>
           </span>
         )}

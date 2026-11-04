@@ -166,7 +166,7 @@ export function AutomationsPage() {
                 {!has('trip_date') && <Recipe icon={<Plane className="h-5 w-5" />} title="Trip reminder" body="3 days before each traveller’s trip date, at 9 AM: what to carry, pickup time, who to call." to="/automations/new?recipe=trip" />}
                 {!has('birthday') && <Recipe icon={<CakeSlice className="h-5 w-5" />} title="Birthday wishes" body="On each customer’s birthday, every year, at 8:30 AM. A warm note, maybe a small offer." to="/automations/new?recipe=birthday" />}
                 {list.length === 0 && (
-                  <button type="button" onClick={() => nav('/automations/new')} className="flex items-center gap-4 rounded-[var(--radius-panel)] border border-dashed border-[#cfd5d1] p-5 text-left hover:border-accent hover:bg-accent-soft/30">
+                  <button type="button" onClick={() => nav('/automations/new')} className="flex items-center gap-4 rounded-[var(--radius-panel)] border border-dashed border-[#cfcde6] p-5 text-left hover:border-accent hover:bg-accent-soft/30">
                     <span className="grid h-11 w-11 place-items-center rounded-[12px] bg-line-soft text-muted">
                       <Plus className="h-5 w-5" />
                     </span>

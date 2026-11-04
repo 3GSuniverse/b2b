@@ -124,9 +124,9 @@ function Flight({ to, onLand }: { to: Place; onLand: () => void }) {
 
   return (
     <g className="dispatch-flight">
-      <path ref={trail} d={d} pathLength={1} fill="none" stroke="#7FE0C3" strokeOpacity={0.55} strokeWidth={1.4} strokeDasharray="1" strokeDashoffset="1" strokeLinecap="round" />
+      <path ref={trail} d={d} pathLength={1} fill="none" stroke="#FFB067" strokeOpacity={0.55} strokeWidth={1.4} strokeDasharray="1" strokeDashoffset="1" strokeLinecap="round" />
       <g ref={plane} transform={`translate(${OFFICE.x} ${OFFICE.y}) scale(0) translate(-12 -12)`}>
-        <path d="M4 12l16-8-6 16-3-7-7-1z" fill="#111816" stroke="#7FE0C3" strokeWidth={2} strokeLinejoin="round" />
+        <path d="M4 12l16-8-6 16-3-7-7-1z" fill="#17153B" stroke="#FFB067" strokeWidth={2} strokeLinejoin="round" />
       </g>
     </g>
   );
@@ -295,7 +295,7 @@ export function DispatchPanel({ headline = true, className }: { headline?: boole
       style={{ '--px': 0, '--py': 0 } as CSSProperties}
     >
       {/* Background: the logo's plane, large and faint, drifting the other way */}
-      <svg aria-hidden className="dispatch-lean pointer-events-none absolute -right-24 -top-24 h-[420px] w-[420px] opacity-[0.07]" style={leanStyle(-16, -12)} viewBox="0 0 24 24" fill="none" stroke="#7FE0C3" strokeWidth="0.6">
+      <svg aria-hidden className="dispatch-lean pointer-events-none absolute -right-24 -top-24 h-[420px] w-[420px] opacity-[0.07]" style={leanStyle(-16, -12)} viewBox="0 0 24 24" fill="none" stroke="#FFB067" strokeWidth="0.6">
         <path d="M4 12l16-8-6 16-3-7-7-1z" />
       </svg>
 
@@ -334,7 +334,7 @@ export function DispatchPanel({ headline = true, className }: { headline?: boole
                   key={p.key}
                   d={route(OFFICE, p).d}
                   fill="none"
-                  stroke="#7FE0C3"
+                  stroke="#FFB067"
                   strokeWidth={hover === p.key ? 1.4 : 1}
                   strokeOpacity={hover === p.key ? 0.8 : 0.13}
                   strokeDasharray="2 5"
@@ -344,15 +344,15 @@ export function DispatchPanel({ headline = true, className }: { headline?: boole
               ))}
 
               {/* The office */}
-              <circle cx={OFFICE.x} cy={OFFICE.y} r={6} fill="#7FE0C3" fillOpacity={0.35} className="dispatch-beacon" />
-              <circle cx={OFFICE.x} cy={OFFICE.y} r={5.5} fill="#111816" stroke="#7FE0C3" strokeWidth={1.6} />
-              <circle cx={OFFICE.x} cy={OFFICE.y} r={2} fill="#7FE0C3" />
+              <circle cx={OFFICE.x} cy={OFFICE.y} r={6} fill="#FFB067" fillOpacity={0.35} className="dispatch-beacon" />
+              <circle cx={OFFICE.x} cy={OFFICE.y} r={5.5} fill="#17153B" stroke="#FFB067" strokeWidth={1.6} />
+              <circle cx={OFFICE.x} cy={OFFICE.y} r={2} fill="#FFB067" />
               <text x={OFFICE.x + 10} y={OFFICE.y + 4} fontSize={11} fontWeight={600} fill="white" fillOpacity={0.85}>
                 Your office
               </text>
 
               {ripples.map((r) => (
-                <circle key={r.id} cx={PLACE[r.place]!.x} cy={PLACE[r.place]!.y} r={5} fill="none" stroke="#7FE0C3" strokeWidth={1.4} className="dispatch-ripple" />
+                <circle key={r.id} cx={PLACE[r.place]!.x} cy={PLACE[r.place]!.y} r={5} fill="none" stroke="#FFB067" strokeWidth={1.4} className="dispatch-ripple" />
               ))}
 
               {PLACES.map((p) => {
@@ -360,7 +360,7 @@ export function DispatchPanel({ headline = true, className }: { headline?: boole
                 return (
                   <g key={p.key} onPointerEnter={() => setHover(p.key)} onPointerLeave={() => setHover(null)} className="cursor-default">
                     <circle cx={p.x} cy={p.y} r={14} fill="transparent" />
-                    <circle cx={p.x} cy={p.y} r={on ? 4.5 : 3.5} fill={on ? '#7FE0C3' : 'white'} fillOpacity={on ? 1 : 0.55} className="transition-all duration-300" />
+                    <circle cx={p.x} cy={p.y} r={on ? 4.5 : 3.5} fill={on ? '#FFB067' : 'white'} fillOpacity={on ? 1 : 0.55} className="transition-all duration-300" />
                     <text x={p.x} y={p.y + 17} textAnchor="middle" fontSize={10.5} fill="white" fillOpacity={on ? 0.95 : 0.5} className="transition-[fill-opacity] duration-300 select-none">
                       {p.label}
                     </text>

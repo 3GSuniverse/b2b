@@ -28,8 +28,8 @@ const NAV = [
 export function Logo({ className }: { className?: string }) {
   return (
     <span className={cn('group/logo flex items-center gap-2.5', className)}>
-      <span aria-hidden className="grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-ink">
-        <svg className="transition-transform duration-300 ease-[cubic-bezier(0.2,0.9,0.3,1.4)] group-hover/logo:-translate-y-[2px] group-hover/logo:translate-x-[2px]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7FE0C3" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <span aria-hidden className="grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-logo">
+        <svg className="stroke-logo-mark transition-transform duration-300 ease-[cubic-bezier(0.2,0.9,0.3,1.4)] group-hover/logo:-translate-y-[2px] group-hover/logo:translate-x-[2px]" width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M4 12l16-8-6 16-3-7-7-1z" />
         </svg>
       </span>
@@ -47,8 +47,8 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   const item = (lit: boolean) =>
     cn(
       'group/nav relative z-[1] flex h-10 items-center gap-3 rounded-[10px] px-3 text-sm font-medium transition-colors duration-200',
-      lit ? 'text-accent-strong' : 'text-ink-2 hover:bg-hover hover:text-ink',
-      lit && !box && 'bg-accent-soft',
+      lit ? 'text-nav-active-ink' : 'text-nav-ink hover:bg-nav-hover',
+      lit && !box && 'bg-nav-active',
     );
   const icon = 'h-[18px] w-[18px] transition-transform duration-300 ease-[cubic-bezier(0.22,1.4,0.36,1)] group-hover/nav:scale-110 group-active/nav:scale-95';
   return (
@@ -56,9 +56,11 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
       {box && (
         <span
           aria-hidden
-          className="absolute inset-x-0 rounded-[10px] bg-accent-soft"
+          className="absolute inset-x-0 rounded-[10px] bg-nav-active"
           style={{ top: box.offset, height: box.size, transition: animate ? `top 420ms ${SPRING}, height 420ms ${SPRING}` : 'none' }}
-        />
+        >
+          <span className="absolute bottom-2.5 left-0 top-2.5 w-[3px] rounded-r-full bg-highlight" />
+        </span>
       )}
       {NAV.map(({ to, label, icon: Icon, end }) => {
         const active = end ? pathname === to : pathname === to || pathname.startsWith(`${to}/`);
@@ -66,18 +68,18 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
         const lit = active && !(to === '/settings' && onWhatsapp);
         return (
           <NavLink key={to} to={to} end={end} onClick={onNavigate} data-lit={lit} className={item(lit)}>
-            <Icon className={icon} aria-hidden />
+            <Icon className={cn(icon, lit && 'text-highlight')} aria-hidden />
             {label}
           </NavLink>
         );
       })}
       {whatsapp ? (
         <NavLink to="/settings/whatsapp" onClick={onNavigate} data-lit={onWhatsapp} className={item(onWhatsapp)}>
-          <MessageCircle className={icon} aria-hidden />
+          <MessageCircle className={cn(icon, onWhatsapp && 'text-highlight')} aria-hidden />
           WhatsApp
         </NavLink>
       ) : (
-        <span className="flex h-10 items-center justify-between rounded-[10px] px-3 text-sm font-medium text-faint" aria-disabled>
+        <span className="flex h-10 items-center justify-between rounded-[10px] px-3 text-sm font-medium text-nav-muted opacity-70" aria-disabled>
           <span className="flex items-center gap-3">
             <MessageCircle className="h-[18px] w-[18px]" aria-hidden />
             WhatsApp
@@ -96,15 +98,15 @@ function QuotaCard() {
   if (!q.data) return null;
   const { used, limit, resetsOn } = q.data.quota;
   return (
-    <div className="flex flex-col gap-2.5 rounded-[14px] border border-line bg-surface p-3.5">
+    <div className="flex flex-col gap-2.5 rounded-[14px] border border-nav-line bg-nav-card p-3.5 text-nav-ink">
       <div className="flex items-baseline justify-between text-[13px]">
         <span className="font-semibold">{trial ? 'Trial emails' : 'Monthly emails'}</span>
-        <span className="tnum text-muted">
+        <span className="tnum text-nav-muted">
           <CountUp value={used} /> / {n(limit)}
         </span>
       </div>
-      <ProgressBar value={used} max={limit} label="Monthly emails used" tone={used / limit > 0.9 ? 'warm' : 'accent'} />
-      <span className="text-xs text-muted">{trial ? 'Included in your free trial' : `Resets on ${date(resetsOn, { day: 'numeric', month: 'short' })}`}</span>
+      <ProgressBar value={used} max={limit} label="Monthly emails used" tone={used / limit > 0.9 ? 'warm' : 'highlight'} track="bg-white/15" />
+      <span className="text-xs text-nav-muted">{trial ? 'Included in your free trial' : `Resets on ${date(resetsOn, { day: 'numeric', month: 'short' })}`}</span>
     </div>
   );
 }
@@ -124,11 +126,11 @@ function AccountMenu() {
     <Menu
       align="start"
       trigger={
-        <button type="button" className="flex w-full items-center gap-3 rounded-[12px] p-2 text-left hover:bg-hover">
+        <button type="button" className="flex w-full items-center gap-3 rounded-[12px] p-2 text-left text-nav-ink transition-colors hover:bg-nav-hover">
           <Avatar name={user.name} email={user.email} size={34} />
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-[13px] font-semibold">{tenant.name}</span>
-            <span className="truncate text-xs text-muted">{user.name}</span>
+            <span className="truncate text-xs text-nav-muted">{user.name}</span>
           </span>
         </button>
       }
@@ -146,7 +148,7 @@ function AccountMenu() {
 
 function Sidebar() {
   return (
-    <aside className="hidden w-[248px] shrink-0 border-r border-line bg-sunken lg:block">
+    <aside className="hidden w-[248px] shrink-0 border-r border-nav-line bg-nav text-nav-ink lg:block">
       <div className="sticky top-0 flex h-screen flex-col gap-7 px-4 py-6">
         <Logo className="px-2" />
         <NavItems />
@@ -169,7 +171,7 @@ function TopBar({ onSearch, onMenu }: { onSearch: () => void; onMenu: () => void
       <button
         type="button"
         onClick={onSearch}
-        className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[var(--radius-control)] border border-line bg-surface px-3.5 text-left text-sm text-faint hover:border-[#d2d7d3] sm:max-w-80"
+        className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[var(--radius-control)] border border-line bg-surface px-3.5 text-left text-sm text-faint hover:border-[#cfcde6] sm:max-w-80"
       >
         <Search className="h-4 w-4 shrink-0 text-muted" aria-hidden />
         <span className="min-w-0 flex-1 truncate">Search contacts, campaigns…</span>
@@ -283,7 +285,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
         </div>
       </div>
       <CommandPalette open={palette} onOpenChange={setPalette} />
-      <Sheet open={mobileNav} onOpenChange={setMobileNav} title={<Logo />} width="max-w-[300px]">
+      <Sheet open={mobileNav} onOpenChange={setMobileNav} title={<Logo />} width="max-w-[300px]" tone="nav">
         <div className="flex h-full flex-col gap-6">
           <NavItems onNavigate={() => setMobileNav(false)} />
           <div className="mt-auto flex flex-col gap-3">

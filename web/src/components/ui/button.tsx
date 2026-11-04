@@ -5,13 +5,13 @@ import { Link, type LinkProps } from 'react-router-dom';
 import { cn } from '@/lib/cn';
 
 export const buttonStyles = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] font-semibold transition-[background,box-shadow,color,transform,border-color] duration-200 ease-[cubic-bezier(0.22,1.2,0.36,1)] active:scale-[0.97] active:duration-75 disabled:pointer-events-none disabled:opacity-50 select-none',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-button)] font-semibold transition-[background,box-shadow,color,transform,border-color] duration-200 ease-[cubic-bezier(0.22,1.2,0.36,1)] active:scale-[0.97] active:duration-75 disabled:pointer-events-none disabled:opacity-50 select-none',
   {
     variants: {
       variant: {
-        primary: 'bg-ink text-white hover:bg-[#25302c] shadow-[inset_0_-1px_0_rgb(0_0_0/0.25)]',
+        primary: 'bg-primary text-on-primary hover:bg-primary-hover shadow-[inset_0_-1px_0_rgb(0_0_0/0.2),0_1px_2px_rgb(0_0_0/0.06)] hover:shadow-[inset_0_-1px_0_rgb(0_0_0/0.2),0_6px_16px_-6px_var(--color-primary)]',
         accent: 'bg-accent text-white hover:bg-accent-strong',
-        secondary: 'bg-surface text-ink border border-line hover:bg-sunken hover:border-[#d2d7d3]',
+        secondary: 'bg-surface text-ink border border-line hover:bg-sunken hover:border-[#cfcde6]',
         ghost: 'text-ink-2 hover:bg-hover hover:text-ink',
         danger: 'bg-danger text-white hover:bg-[#931c13]',
         'danger-ghost': 'text-danger hover:bg-danger-soft',

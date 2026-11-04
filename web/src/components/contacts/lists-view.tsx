@@ -95,7 +95,7 @@ export function ListsView({ lists, onOpen }: { lists?: ContactList[]; onOpen: (i
           <button
             type="button"
             onClick={() => setEditing({ name: '', description: '' })}
-            className="flex min-h-[148px] flex-col items-center justify-center gap-2 rounded-[var(--radius-panel)] border border-dashed border-[#cfd5d1] text-sm font-semibold text-ink-2 hover:border-accent hover:bg-accent-soft/40 hover:text-accent-strong"
+            className="flex min-h-[148px] flex-col items-center justify-center gap-2 rounded-[var(--radius-panel)] border border-dashed border-[#cfcde6] text-sm font-semibold text-ink-2 hover:border-accent hover:bg-accent-soft/40 hover:text-accent-strong"
           >
             <ListPlus className="h-5 w-5" />
             New list
