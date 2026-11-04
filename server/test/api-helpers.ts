@@ -24,6 +24,7 @@ export function api(app: App, cookie: string) {
     get: (url: string) => app.inject({ method: 'GET', url, headers: { cookie } }),
     post: (url: string, payload?: object) => app.inject({ method: 'POST', url, headers: { cookie }, payload }),
     patch: (url: string, payload: object) => app.inject({ method: 'PATCH', url, headers: { cookie }, payload }),
+    put: (url: string, payload: object) => app.inject({ method: 'PUT', url, headers: { cookie }, payload }),
     del: (url: string) => app.inject({ method: 'DELETE', url, headers: { cookie } }),
   };
 }

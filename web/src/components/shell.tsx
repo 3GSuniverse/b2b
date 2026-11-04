@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock3, FileText, LayoutDashboard, LogOut, Menu as MenuIcon, MessageCircle, Plus, Search, Send, Settings, Users } from 'lucide-react';
+import { Clock3, FileText, LayoutDashboard, LogOut, Menu as MenuIcon, MessageCircle, Plane, Plus, Search, Send, Settings, Users } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
@@ -16,6 +16,7 @@ import { Menu, MenuItem, MenuSeparator, Sheet } from './ui/overlay';
 
 const NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
+  { to: '/trips', label: 'Trips', icon: Plane },
   { to: '/campaigns', label: 'Campaigns', icon: Send },
   { to: '/automations', label: 'Automations', icon: Clock3 },
   { to: '/contacts', label: 'Contacts', icon: Users },

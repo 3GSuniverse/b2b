@@ -21,6 +21,10 @@ import {
   templates,
   tenants,
   trackedLinks,
+  auditLogs,
+  tripDues,
+  tripPayments,
+  trips,
   users,
 } from '../src/db/schema.js';
 import { env } from '../src/config/env.js';
@@ -326,6 +330,83 @@ async function main() {
       clicked: 5,
     },
   ]);
+
+  // ---- Trips: a believable week at a travel desk
+  const people = (await db.query.contacts.findMany({ where: eq(contacts.tenantId, tenantId), limit: 40 })).filter((c) => c.phone && c.firstName);
+  const day = (offset: number) => isoDay(daysAgo(-offset));
+  type Seed = {
+    title: string; destination: string; start: number | null; nights: number; adults: number; children?: number; budget?: number; price?: number;
+    status: 'ENQUIRY' | 'QUOTED' | 'BOOKED' | 'COMPLETED' | 'LOST' | 'CANCELLED'; source: string; age: number; notes?: string; lostReason?: string;
+    dues?: { label: string; share: number; due: number }[]; paid?: { share: number; ago: number; method: 'UPI' | 'CASH' | 'BANK' | 'CARD'; ref?: string }[];
+  };
+  const SEED_TRIPS: Seed[] = [
+    { title: 'Kashmir family trip', destination: 'Kashmir', start: 46, nights: 6, adults: 4, children: 1, budget: 120000, status: 'ENQUIRY', source: 'PHONE', age: 0, notes: 'Wants a houseboat night on Dal Lake. Grandmother travelling, needs ground-floor rooms.' },
+    { title: 'Goa with friends', destination: 'Goa', start: 30, nights: 3, adults: 6, budget: 90000, status: 'ENQUIRY', source: 'WHATSAPP', age: 1 },
+    { title: 'Tirupati darshan', destination: 'Tirupati', start: 12, nights: 1, adults: 3, budget: 15000, status: 'ENQUIRY', source: 'WALK_IN', age: 2, notes: 'Special entry darshan tickets needed.' },
+    { title: 'Honeymoon, Andaman', destination: 'Andaman', start: 70, nights: 5, adults: 2, budget: 150000, status: 'ENQUIRY', source: 'REFERRAL', age: 3 },
+    { title: 'Hampi weekend', destination: 'Hampi', start: null, nights: 2, adults: 2, status: 'ENQUIRY', source: 'WEBSITE', age: 4 },
+    { title: 'Kerala backwaters', destination: 'Kerala', start: 38, nights: 4, adults: 2, budget: 50000, price: 48500, status: 'QUOTED', source: 'PHONE', age: 3, dues: [{ label: 'Advance', share: 0.25, due: 0 }, { label: 'Balance', share: 0.75, due: 23 }] },
+    { title: 'Rajasthan forts tour', destination: 'Rajasthan', start: 55, nights: 7, adults: 4, price: 186000, status: 'QUOTED', source: 'EMAIL', age: 5 },
+    { title: 'Sikkim and Darjeeling', destination: 'Sikkim', start: 62, nights: 6, adults: 3, children: 1, price: 124000, status: 'QUOTED', source: 'WHATSAPP', age: 6 },
+    { title: 'Ooty getaway', destination: 'Ooty', start: 20, nights: 2, adults: 2, price: 22500, status: 'QUOTED', source: 'PHONE', age: 8 },
+    { title: 'Char Dham yatra', destination: 'Uttarakhand', start: 4, nights: 9, adults: 6, price: 270000, status: 'BOOKED', source: 'REFERRAL', age: 34, notes: 'Group of 6 from one family. Helicopter for Kedarnath booked separately.',
+      dues: [{ label: 'Advance', share: 0.3, due: -30 }, { label: '2nd instalment', share: 0.4, due: -12 }, { label: 'Balance', share: 0.3, due: -2 }], paid: [{ share: 0.3, ago: 30, method: 'BANK', ref: 'NEFT 88213' }, { share: 0.4, ago: 11, method: 'UPI', ref: '4411 2290 7613' }] },
+    { title: 'Goa beaches', destination: 'Goa', start: 6, nights: 3, adults: 4, price: 62000, status: 'BOOKED', source: 'WHATSAPP', age: 20,
+      dues: [{ label: 'Advance', share: 0.25, due: -18 }, { label: 'Balance', share: 0.75, due: 2 }], paid: [{ share: 0.25, ago: 18, method: 'UPI', ref: '3390 1182 0045' }] },
+    { title: 'Ladakh bike trip', destination: 'Ladakh', start: 26, nights: 8, adults: 2, price: 136000, status: 'BOOKED', source: 'WEBSITE', age: 15,
+      dues: [{ label: 'Advance', share: 0.25, due: -14 }, { label: 'Balance', share: 0.75, due: 11 }], paid: [{ share: 0.25, ago: 1, method: 'CARD' }] },
+    { title: 'Varanasi and Prayagraj', destination: 'Varanasi', start: 17, nights: 4, adults: 2, price: 38000, status: 'BOOKED', source: 'PHONE', age: 12,
+      dues: [{ label: 'Advance', share: 0.5, due: -10 }, { label: 'Balance', share: 0.5, due: -1 }], paid: [{ share: 0.5, ago: 2, method: 'CASH' }] },
+    { title: 'Andaman islands', destination: 'Andaman', start: 33, nights: 5, adults: 2, price: 145000, status: 'BOOKED', source: 'REFERRAL', age: 22,
+      dues: [{ label: 'Advance', share: 0.3, due: -21 }, { label: 'Balance', share: 0.7, due: 18 }], paid: [{ share: 0.3, ago: 21, method: 'BANK', ref: 'IMPS 55120' }] },
+    { title: 'Coorg coffee estates', destination: 'Coorg', start: -40, nights: 3, adults: 2, price: 34000, status: 'COMPLETED', source: 'WHATSAPP', age: 70,
+      dues: [{ label: 'Advance', share: 0.3, due: -66 }, { label: 'Balance', share: 0.7, due: -50 }], paid: [{ share: 0.3, ago: 66, method: 'UPI' }, { share: 0.7, ago: 50, method: 'UPI' }] },
+    { title: 'Mysore Dasara', destination: 'Mysuru', start: -25, nights: 2, adults: 5, price: 41000, status: 'COMPLETED', source: 'PHONE', age: 48, paid: [{ share: 1, ago: 30, method: 'CASH' }] },
+    { title: 'Araku valley', destination: 'Araku', start: -12, nights: 2, adults: 4, price: 26000, status: 'COMPLETED', source: 'WALK_IN', age: 30, paid: [{ share: 1, ago: 20, method: 'UPI' }] },
+    { title: 'Dubai shopping', destination: 'Dubai', start: 40, nights: 4, adults: 2, budget: 90000, price: 112000, status: 'LOST', source: 'PHONE', age: 16, lostReason: 'Price too high' },
+    { title: 'Shimla Manali', destination: 'Himachal', start: 25, nights: 6, adults: 4, price: 98000, status: 'LOST', source: 'WEBSITE', age: 19, lostReason: 'Booked with another agency' },
+    { title: 'Vizag beach weekend', destination: 'Visakhapatnam', start: 9, nights: 2, adults: 3, price: 21000, status: 'CANCELLED', source: 'PHONE', age: 25, lostReason: 'Dates changed',
+      dues: [{ label: 'Advance', share: 0.3, due: -20 }], paid: [{ share: 0.3, ago: 20, method: 'UPI' }] },
+  ];
+  let receipt = 0;
+  for (const [i, t] of SEED_TRIPS.entries()) {
+    const c = people[i % people.length]!;
+    const price = (t.price ?? 0) * 100;
+    const created = daysAgo(t.age, 11);
+    const [row] = await db
+      .insert(trips)
+      .values({
+        tenantId, number: i + 1, status: t.status, contactId: c.id, customerName: [c.firstName, c.lastName].filter(Boolean).join(' '),
+        title: t.title, destination: t.destination, startDate: t.start === null ? null : day(t.start), endDate: t.start === null ? null : day(t.start + t.nights),
+        adults: t.adults, children: t.children ?? 0, budget: t.budget ? t.budget * 100 : null, price, source: t.source, notes: t.notes ?? null,
+        lostReason: t.lostReason ?? null, assignedToId: user!.id, createdById: user!.id, statusChangedAt: daysAgo(Math.max(0, t.age - 2)),
+        bookedAt: ['BOOKED', 'COMPLETED', 'CANCELLED'].includes(t.status) ? daysAgo(Math.max(0, t.age - 2)) : null, createdAt: created, updatedAt: daysAgo(Math.max(0, t.age - 2)),
+      })
+      .returning();
+    const logs: (typeof auditLogs.$inferInsert)[] = [{ tenantId, userId: user!.id, action: 'trip.create', entity: 'trip', entityId: row!.id, createdAt: created }];
+    if (t.dues) {
+      // Last instalment takes the rounding, so the schedule adds up to the price exactly
+      let left = price;
+      await db.insert(tripDues).values(
+        t.dues.map((d, k) => {
+          const amount = k === t.dues!.length - 1 ? left : Math.round((price * d.share) / 50000) * 50000;
+          left -= amount;
+          return { tenantId, tripId: row!.id, label: d.label, amount, dueDate: day(d.due), position: k };
+        }),
+      );
+      logs.push({ tenantId, userId: user!.id, action: 'trip.schedule', entity: 'trip', entityId: row!.id, meta: { count: t.dues.length, total: `₹${(price / 100).toLocaleString('en-IN')}` }, createdAt: daysAgo(Math.max(0, t.age - 1)) });
+    }
+    for (const p of t.paid ?? []) {
+      const amount = p.share === 1 ? price : Math.round((price * p.share) / 50000) * 50000;
+      receipt++;
+      await db.insert(tripPayments).values({ tenantId, tripId: row!.id, receiptNumber: receipt, amount, method: p.method, reference: p.ref ?? null, paidAt: daysAgo(p.ago, 15), recordedById: user!.id, createdAt: daysAgo(p.ago, 15) });
+      logs.push({ tenantId, userId: user!.id, action: 'trip.payment', entity: 'trip', entityId: row!.id, meta: { receipt, amount: `₹${(amount / 100).toLocaleString('en-IN')}`, method: p.method }, createdAt: daysAgo(p.ago, 15) });
+    }
+    if (t.status !== 'ENQUIRY') {
+      logs.push({ tenantId, userId: user!.id, action: 'trip.status', entity: 'trip', entityId: row!.id, meta: { from: 'ENQUIRY', to: t.status, reason: t.lostReason }, createdAt: daysAgo(Math.max(0, t.age - 2)) });
+    }
+    await db.insert(auditLogs).values(logs);
+  }
 
   await db.insert(notifications).values({
     tenantId,

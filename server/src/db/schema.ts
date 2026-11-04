@@ -627,6 +627,108 @@ export const notifications = pgTable(
 );
 
 // ---------------------------------------------------------------------
+//  Trips — the agency's work: an enquiry that becomes a booking, then a trip.
+//  Money is stored in paise (integers), never floats.
+// ---------------------------------------------------------------------
+
+export const tripStatus = pgEnum('trip_status', [
+  'ENQUIRY', // someone asked
+  'QUOTED', // a price was sent
+  'BOOKED', // confirmed (advance paid or agreed)
+  'COMPLETED', // back home
+  'LOST', // went elsewhere / didn't travel
+  'CANCELLED', // booked, then cancelled
+]);
+export const tripKind = pgEnum('trip_kind', ['PRIVATE', 'GROUP']);
+export const paymentMethod = pgEnum('payment_method', ['UPI', 'CASH', 'BANK', 'CARD', 'ONLINE', 'OTHER']);
+
+export const trips = pgTable(
+  'trips',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    number: integer().notNull(), // per company: shown as #12
+    kind: tripKind().notNull().default('PRIVATE'),
+    status: tripStatus().notNull().default('ENQUIRY'),
+    // The customer. Kept nullable so erasing a contact doesn't erase the money history.
+    contactId: text().references(() => contacts.id, { onDelete: 'set null' }),
+    customerName: text().notNull(), // snapshot, for receipts and after erasure
+    title: text().notNull(),
+    destination: text(),
+    startDate: date({ mode: 'string' }),
+    endDate: date({ mode: 'string' }),
+    adults: integer().notNull().default(1),
+    children: integer().notNull().default(0),
+    budget: integer(), // paise, what the customer said
+    price: integer().notNull().default(0), // paise, the agreed total
+    source: text(), // PHONE, WHATSAPP, WALK_IN, WEBSITE, REFERRAL, CALL_AGENT, OTHER
+    notes: text(),
+    lostReason: text(),
+    assignedToId: text().references(() => users.id, { onDelete: 'set null' }),
+    createdById: text().references(() => users.id, { onDelete: 'set null' }),
+    statusChangedAt: ts(),
+    bookedAt: ts(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex().on(t.tenantId, t.number),
+    index().on(t.tenantId, t.status),
+    index().on(t.contactId),
+    index().on(t.tenantId, t.startDate),
+  ],
+);
+
+// What the customer owes and when: Advance, 2nd instalment, Balance…
+export const tripDues = pgTable(
+  'trip_dues',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    tripId: text()
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    label: text().notNull(),
+    amount: integer().notNull(), // paise
+    dueDate: date({ mode: 'string' }).notNull(),
+    position: integer().notNull().default(0),
+    remindedAt: ts(), // last reminder sent for this due
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.tripId), index().on(t.tenantId, t.dueDate)],
+);
+
+// Money received. Applied to dues oldest-first. Corrections are voided, never deleted.
+export const tripPayments = pgTable(
+  'trip_payments',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    tripId: text()
+      .notNull()
+      .references(() => trips.id, { onDelete: 'no action' }), // a trip with payments can't be deleted
+    receiptNumber: integer().notNull(), // per company, never reused
+    amount: integer().notNull(), // paise
+    method: paymentMethod().notNull(),
+    reference: text(), // UPI ref / cheque no / bank txn id
+    note: text(),
+    paidAt: timestamp({ withTimezone: true }).notNull(),
+    // Online payments: the provider's id, so a webhook delivered twice records once
+    providerPaymentId: text().unique(),
+    // Customers can open their receipt without signing in
+    publicToken: text()
+      .notNull()
+      .unique()
+      .$defaultFn(() => createId() + createId()),
+    recordedById: text().references(() => users.id, { onDelete: 'set null' }),
+    voidedAt: ts(),
+    voidReason: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex().on(t.tenantId, t.receiptNumber), index().on(t.tripId), index().on(t.tenantId, t.paidAt)],
+);
+
+// ---------------------------------------------------------------------
 //  Relations (for the relational query API)
 // ---------------------------------------------------------------------
 
@@ -699,6 +801,26 @@ export const automationsRelations = relations(automations, ({ one }) => ({
   template: one(templates, { fields: [automations.templateId], references: [templates.id] }),
 }));
 
+export const tripsRelations = relations(trips, ({ one, many }) => ({
+  tenant: one(tenants, { fields: [trips.tenantId], references: [tenants.id] }),
+  contact: one(contacts, { fields: [trips.contactId], references: [contacts.id] }),
+  assignedTo: one(users, { fields: [trips.assignedToId], references: [users.id] }),
+  dues: many(tripDues),
+  payments: many(tripPayments),
+}));
+
+export const tripDuesRelations = relations(tripDues, ({ one }) => ({
+  trip: one(trips, { fields: [tripDues.tripId], references: [trips.id] }),
+}));
+
+export const tripPaymentsRelations = relations(tripPayments, ({ one }) => ({
+  trip: one(trips, { fields: [tripPayments.tripId], references: [trips.id] }),
+  tenant: one(tenants, { fields: [tripPayments.tenantId], references: [tenants.id] }),
+}));
+
+export type Trip = typeof trips.$inferSelect;
+export type TripDue = typeof tripDues.$inferSelect;
+export type TripPayment = typeof tripPayments.$inferSelect;
 export type Tenant = typeof tenants.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;
 export type Campaign = typeof campaigns.$inferSelect;

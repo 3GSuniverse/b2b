@@ -249,3 +249,84 @@ export interface WhatsAppStatus {
   connectedAt: string | null;
   qr: string | null; // data: URL while linking
 }
+
+// ---------------------------------------------------------------- Trips
+
+export type TripStatus = 'ENQUIRY' | 'QUOTED' | 'BOOKED' | 'COMPLETED' | 'LOST' | 'CANCELLED';
+export type TripSource = 'PHONE' | 'WHATSAPP' | 'WALK_IN' | 'WEBSITE' | 'REFERRAL' | 'CALL_AGENT' | 'EMAIL' | 'OTHER';
+export type DueState = 'PAID' | 'PART_PAID' | 'OVERDUE' | 'DUE_TODAY' | 'UPCOMING';
+export type PaymentMethod = 'UPI' | 'CASH' | 'BANK' | 'CARD' | 'ONLINE' | 'OTHER';
+
+export interface TripSummary {
+  id: string;
+  number: number;
+  kind: 'PRIVATE' | 'GROUP';
+  status: TripStatus;
+  title: string;
+  destination: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  adults: number;
+  children: number;
+  budget: number | null; // paise
+  price: number; // paise
+  source: TripSource | null;
+  customer: { id: string | null; name: string; phone: string | null; email: string | null; whatsappStatus: SubscriptionStatus | null };
+  assignedTo: { id: string; name: string } | null;
+  money: { paid: number; balance: number; overdue: number; nextDue: { label: string; amount: number; dueDate: string; state: DueState } | null };
+  statusChangedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TripDue {
+  id: string;
+  label: string;
+  amount: number;
+  dueDate: string;
+  paid: number;
+  remaining: number;
+  state: DueState;
+  remindedAt: string | null;
+}
+
+export interface TripPayment {
+  id: string;
+  receiptNumber: number;
+  amount: number;
+  method: PaymentMethod;
+  reference: string | null;
+  note: string | null;
+  paidAt: string;
+  recordedBy: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+  receiptToken: string;
+}
+
+export interface TripDetail extends Omit<TripSummary, 'money'> {
+  notes: string | null;
+  lostReason: string | null;
+  bookedAt: string | null;
+  money: TripSummary['money'] & { price: number; scheduled: number; unscheduled: number; dues: TripDue[] };
+  payments: TripPayment[];
+  suggestedSchedule: { label: string; amount: number; dueDate: string }[] | null;
+  activity: { id: string; action: string; meta: Record<string, unknown> | null; by: string | null; createdAt: string }[];
+}
+
+export interface TripStats {
+  counts: Record<TripStatus, number>;
+  pipelineValue: number;
+  collectedThisMonth: number;
+  overdue: number;
+  overdueTrips: number;
+  dueThisWeek: number;
+  departingThisWeek: number;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: 'OWNER' | 'ADMIN' | 'MEMBER';
+}

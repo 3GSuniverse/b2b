@@ -8,6 +8,7 @@ import { deleteExpiredSessions } from '../auth/sessions.js';
 import { notify } from '../notifications/service.js';
 import { runAutomationsTick } from '../automations/engine.js';
 import { runTrialLifecycle } from '../plans/trial-lifecycle.js';
+import { completeFinishedTrips } from '../trips/service.js';
 
 export interface TickResult {
   started: string[];
@@ -20,7 +21,8 @@ export async function runMaintenanceTick() {
   const domains = await refreshPendingDomains();
   await deleteExpiredSessions();
   const trials = await runTrialLifecycle();
-  return { domains, trials };
+  const tripsCompleted = await completeFinishedTrips();
+  return { domains, trials, tripsCompleted };
 }
 
 /**

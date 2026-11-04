@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Mail, MessageCircle, Phone, ShieldAlert, Trash2 } from 'lucide-react';
+import { Mail, MessageCircle, Phone, Plus, ShieldAlert, Trash2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { PaymentChip, TripStatusBadge } from '@/components/trips/shared';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -8,9 +10,9 @@ import { Avatar, Badge, CopyButton, Skeleton } from '@/components/ui/display';
 import { Field, Input, Textarea } from '@/components/ui/field';
 import { Dialog, Sheet } from '@/components/ui/overlay';
 import { api, ApiError } from '@/lib/api';
-import { date, dateTime, phone as formatPhone } from '@/lib/format';
+import { date, dateRange, dateTime, phone as formatPhone } from '@/lib/format';
 import { SubscriptionBadge } from '@/lib/status';
-import type { Contact, ContactList, CustomField } from '@/lib/types';
+import type { Contact, ContactList, CustomField, TripSummary } from '@/lib/types';
 
 export function useFields() {
   return useQuery({ queryKey: ['fields'], queryFn: () => api.get<{ fields: CustomField[] }>('/api/fields'), staleTime: 60_000 });
@@ -168,6 +170,8 @@ export function ContactSheet({ id, onClose, onChanged, lists }: { id: string | n
           </div>
         ) : (
           <div className="flex flex-col gap-6">
+            <ContactTrips contactId={c.id} />
+
             <Section title="Email">
               <div className="flex flex-col gap-3 rounded-[14px] border border-line p-4">
                 <div className="flex items-center gap-3">
@@ -309,5 +313,43 @@ export function ContactSheet({ id, onClose, onChanged, lists }: { id: string | n
         }
       />
     </>
+  );
+}
+
+/** Their trips, newest first, and a quick way to add one. */
+function ContactTrips({ contactId }: { contactId: string }) {
+  const nav = useNavigate();
+  const q = useQuery({
+    queryKey: ['trips', 'contact', contactId],
+    queryFn: () => api.get<{ trips: TripSummary[] }>(`/api/trips?contactId=${contactId}&pageSize=10`).then((r) => r.trips),
+  });
+  const trips = q.data ?? [];
+  return (
+    <Section title="Trips">
+      {q.isPending ? (
+        <Skeleton className="h-14" />
+      ) : (
+        <div className="flex flex-col gap-2">
+          {trips.map((t) => (
+            <Link key={t.id} to={`/trips/${t.id}`} className="flex items-center justify-between gap-3 rounded-[12px] border border-line px-3.5 py-2.5 hover:bg-hover">
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-semibold">
+                  {t.title} <span className="tnum font-normal text-faint">#{t.number}</span>
+                </span>
+                <span className="truncate text-xs text-muted">{dateRange(t.startDate, t.endDate) ?? 'Dates not set'}</span>
+              </span>
+              <span className="flex shrink-0 flex-col items-end gap-1">
+                <TripStatusBadge status={t.status} />
+                <PaymentChip trip={t} />
+              </span>
+            </Link>
+          ))}
+          <Button size="sm" variant="ghost" className="self-start" onClick={() => nav(`/trips?new=1&contact=${contactId}`)}>
+            <Plus className="h-4 w-4" />
+            {trips.length ? 'New enquiry for them' : 'Add an enquiry for them'}
+          </Button>
+        </div>
+      )}
+    </Section>
   );
 }

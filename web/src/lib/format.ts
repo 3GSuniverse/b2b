@@ -71,3 +71,56 @@ export function phone(p: string | null | undefined) {
   const m = /^\+91(\d{5})(\d{5})$/.exec(p);
   return m ? `+91 ${m[1]} ${m[2]}` : p;
 }
+
+/** Paise → "₹18,500" (paise shown only when there are any). */
+export function inr(paise: number | null | undefined) {
+  const p = paise ?? 0;
+  const sign = p < 0 ? '−' : '';
+  const r = Math.abs(p) / 100;
+  return `${sign}₹${r.toLocaleString('en-IN', { minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
+}
+
+/** Short form for tight spaces: ₹4.5L, ₹1.2Cr, ₹18.5k */
+export function inrShort(paise: number | null | undefined) {
+  const r = (paise ?? 0) / 100;
+  if (r >= 1e7) return `₹${+(r / 1e7).toFixed(2)}Cr`;
+  if (r >= 1e5) return `₹${+(r / 1e5).toFixed(2)}L`;
+  if (r >= 1e3) return `₹${+(r / 1e3).toFixed(1)}k`;
+  return `₹${r.toLocaleString('en-IN')}`;
+}
+
+/** Paise → the rupee value for an input box ("18500", "18500.5") */
+export const rupeesInput = (paise: number | null | undefined) => (paise ? (paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '');
+
+/** Today in the browser, YYYY-MM-DD */
+export function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** "12–18 Dec 2026", "28 Dec – 3 Jan 2027", "12 Dec 2026" */
+export function dateRange(start: string | null | undefined, end: string | null | undefined) {
+  if (!start) return null;
+  const s = new Date(`${start}T00:00:00`);
+  const e = end ? new Date(`${end}T00:00:00`) : null;
+  const year = (d: Date) => d.getFullYear();
+  const dm = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  if (!e || start === end) return `${dm(s)} ${year(s)}`;
+  if (year(s) !== year(e)) return `${dm(s)} ${year(s)} – ${dm(e)} ${year(e)}`;
+  if (s.getMonth() === e.getMonth()) return `${s.getDate()}–${dm(e)} ${year(e)}`;
+  return `${dm(s)} – ${dm(e)} ${year(e)}`;
+}
+
+/** Days and nights: 12–18 Dec → "7 days" */
+export function tripLength(start: string | null | undefined, end: string | null | undefined) {
+  if (!start || !end) return null;
+  const days = Math.round((new Date(`${end}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime()) / 86_400_000) + 1;
+  return days === 1 ? 'Day trip' : `${days} days`;
+}
+
+/** "12 Dec" with the year only when it isn't this year */
+export function shortDate(iso: string | null | undefined) {
+  if (!iso) return '';
+  const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) });
+}
