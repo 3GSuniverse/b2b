@@ -68,8 +68,8 @@ describe('connecting a domain', () => {
     expect(d).toMatchObject({ domain: 'abcholidays.com', mailFromDomain: 'mail.abcholidays.com', status: 'pending', readyToSend: false });
 
     const byPurpose = (p: string) => d.records.filter((r: DnsRecord) => r.purpose === p);
-    expect(byPurpose('ownership')[0]).toMatchObject({ type: 'TXT', name: '_sandesh.abcholidays.com' });
-    expect(byPurpose('ownership')[0].value).toMatch(/^sandesh-verify=/);
+    expect(byPurpose('ownership')[0]).toMatchObject({ type: 'TXT', name: '_drona.abcholidays.com' });
+    expect(byPurpose('ownership')[0].value).toMatch(/^drona-verify=/);
     expect(byPurpose('dkim')).toHaveLength(3);
     expect(byPurpose('dkim')[0].value).toMatch(/\.dkim\.amazonses\.com$/);
     expect(byPurpose('mail_from_mx')[0]).toMatchObject({ type: 'MX', name: 'mail.abcholidays.com', value: 'feedback-smtp.ap-south-1.amazonses.com', priority: 10 });

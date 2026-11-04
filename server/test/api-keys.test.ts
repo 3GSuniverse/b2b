@@ -27,7 +27,7 @@ describe('API keys', () => {
     const r = await c.post('/api/api-keys', { name: 'AI call agent' });
     expect(r.statusCode).toBe(201);
     const { key, apiKey } = r.json();
-    expect(key).toMatch(/^hy_live_[A-Za-z0-9]{32}$/);
+    expect(key).toMatch(/^dr_live_[A-Za-z0-9]{32}$/);
     const row = await db.query.apiKeys.findFirst({ where: eq(apiKeys.id, apiKey.id) });
     expect(row!.keyHash).not.toContain(key);
     expect(JSON.stringify((await c.get('/api/api-keys')).json())).not.toContain(key);
@@ -41,7 +41,7 @@ describe('API keys', () => {
     const { cookie, json } = await signup(app);
     await db.update(users).set({ role: 'MEMBER' }).where(eq(users.id, json.user.id));
     expect((await api(app, cookie).post('/api/api-keys', { name: 'x' })).statusCode).toBe(403);
-    expect((await lead('hy_live_notarealkey', { name: 'A', phone: '9000000001' })).json().error).toBe('invalid_api_key');
+    expect((await lead('dr_live_notarealkey', { name: 'A', phone: '9000000001' })).json().error).toBe('invalid_api_key');
     expect((await app.inject({ method: 'POST', url: '/api/v1/leads', payload: { name: 'A' } })).json().error).toBe('missing_api_key');
   });
 });

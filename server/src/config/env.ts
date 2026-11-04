@@ -16,7 +16,7 @@ const schema = z.object({
   AWS_REGION: z.string().default('ap-south-1'),
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
-  SES_CONFIGURATION_SET: z.string().default('sandesh-events'),
+  SES_CONFIGURATION_SET: z.string().default('drona-events'),
 
   SEND_RATE_PER_SECOND: z.coerce.number().positive().default(1),
   // Free trial for new companies

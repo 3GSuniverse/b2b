@@ -1,0 +1,331 @@
+#!/usr/bin/env bash
+# drona: run the Drona server on this VM.
+#
+#   drona install           first time: Docker, settings, start everything, nightly backups
+#   drona deploy            get the latest code from GitHub, back up, update, restart
+#   drona status            what's running and whether it's healthy
+#   drona logs [api|worker] follow the logs (Ctrl+C to stop)
+#   drona restart | stop    restart or stop everything
+#   drona backup            back up the database now
+#   drona restore <file>    put a backup back (asks first)
+#   drona plan <owner email> [paid [emails] | trial <days>]
+#   drona feature whatsapp-web <owner email> on|off
+#   drona move-from-hayate  one time only, on a server first installed under the old name
+set -euo pipefail
+
+DEPLOY_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+REPO_DIR="$(dirname "$DEPLOY_DIR")"
+ENV_FILE="$DEPLOY_DIR/.env"
+BACKUP_DIR="$DEPLOY_DIR/backups"
+KEEP_DAYS=14
+
+bold() { printf '\033[1m%s\033[0m\n' "$*"; }
+ok() { printf '\033[32m✓\033[0m %s\n' "$*"; }
+warn() { printf '\033[33m!\033[0m %s\n' "$*"; }
+die() {
+  printf '\033[31m✗ %s\033[0m\n' "$*" >&2
+  exit 1
+}
+
+compose() {
+  [[ -f "$ENV_FILE" ]] || die "No settings yet. Run: drona install"
+  docker compose -p drona -f "$DEPLOY_DIR/docker-compose.yml" --env-file "$ENV_FILE" "$@"
+}
+
+env_value() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+
+wait_healthy() {
+  local port url i
+  port="$(env_value DRONA_PORT)"
+  url="http://127.0.0.1:${port:-4100}/health"
+  for i in $(seq 1 45); do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      ok "Healthy: $url"
+      return 0
+    fi
+    sleep 2
+  done
+  compose ps
+  compose logs --tail 60 api worker migrate || true
+  die "The app didn't become healthy. The logs above show why."
+}
+
+# The app runs as a different user inside the container, so it needs read access to these files.
+# The folder can be entered but not listed by others; the VM has a single login anyway.
+fix_secrets() {
+  [[ -d "$DEPLOY_DIR/secrets" ]] || return 0
+  chmod 711 "$DEPLOY_DIR/secrets"
+  find "$DEPLOY_DIR/secrets" -type f -exec chmod 644 {} +
+}
+
+cmd_install() {
+  bold "Installing Drona on $(hostname)"
+
+  if ! command -v docker >/dev/null 2>&1; then
+    bold "Installing Docker (official installer from get.docker.com)…"
+    curl -fsSL https://get.docker.com | sudo sh
+    sudo usermod -aG docker "$USER" || true
+    warn "Docker installed. Log out and back in (or run 'newgrp docker'), then run 'drona install' again."
+    exit 0
+  fi
+  docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is missing. Install it with: sudo apt install -y docker-compose-plugin"
+  if ! docker info >/dev/null 2>&1; then
+    sudo usermod -aG docker "$USER" || true
+    die "Your user can't use Docker yet. Close this SSH window, open a new one, and run 'drona install' again."
+  fi
+  ok "Docker is ready"
+
+  # Small VMs (e2-small has 2 GB) run out of memory while building the dashboard without swap
+  local mem_mb
+  mem_mb="$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)"
+  if [[ "$mem_mb" -lt 3500 && -z "$(swapon --show 2>/dev/null)" ]]; then
+    bold "Adding 2 GB of swap (this VM has ${mem_mb} MB of memory)…"
+    sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile
+    grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+    ok "Swap added"
+  fi
+
+  if [[ ! -f "$ENV_FILE" ]]; then
+    cp "$DEPLOY_DIR/.env.example" "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    sed -i "s|^APP_SECRET=.*|APP_SECRET=$(openssl rand -hex 32)|" "$ENV_FILE"
+    sed -i "s|^TOKEN_ENCRYPTION_KEY=.*|TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)|" "$ENV_FILE"
+    sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" "$ENV_FILE"
+
+    read -r -p "Public address [https://dhrona.kurukshetra-travels.in]: " url
+    url="${url:-https://dhrona.kurukshetra-travels.in}"
+    url="${url%/}"
+    sed -i "s|^PUBLIC_URL=.*|PUBLIC_URL=$url|; s|^APP_URL=.*|APP_URL=$url|; s|^GOOGLE_REDIRECT_URI=.*|GOOGLE_REDIRECT_URI=$url/api/integrations/gmail/callback|" "$ENV_FILE"
+
+    read -r -p "Port on this VM for the Cloudflare tunnel [4100]: " port
+    sed -i "s|^DRONA_PORT=.*|DRONA_PORT=${port:-4100}|" "$ENV_FILE"
+
+    read -r -p "AWS access key ID for SES (Enter to skip; emails will only be printed): " key
+    if [[ -n "$key" ]]; then
+      read -r -s -p "AWS secret access key: " secret
+      echo
+      sed -i "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=$key|; s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=$secret|" "$ENV_FILE"
+      read -r -p "SNS topic ARN for bounces (Enter to add later): " arn
+      [[ -n "$arn" ]] && sed -i "s|^SES_SNS_TOPIC_ARN=.*|SES_SNS_TOPIC_ARN=$arn|" "$ENV_FILE"
+    else
+      sed -i "s|^EMAIL_PROVIDER=.*|EMAIL_PROVIDER=log|" "$ENV_FILE"
+      warn "No AWS keys: emails won't really be sent. Add them later in $ENV_FILE, then 'drona restart'."
+    fi
+    ok "Settings saved to $ENV_FILE (readable only by you)"
+  else
+    ok "Using existing settings in $ENV_FILE"
+  fi
+
+  mkdir -p "$DEPLOY_DIR/secrets" "$BACKUP_DIR"
+  chmod 700 "$BACKUP_DIR"
+  fix_secrets
+
+  # The 'drona' command, from anywhere
+  sudo ln -sf "$DEPLOY_DIR/drona" /usr/local/bin/drona
+  ok "The 'drona' command is installed"
+
+  # Nightly backup at 02:30 server time (a VM with no crontab yet is normal, not an error)
+  if command -v crontab >/dev/null 2>&1; then
+    local line="30 2 * * * $DEPLOY_DIR/drona backup >> $BACKUP_DIR/backup.log 2>&1"
+    local current
+    current="$(crontab -l 2>/dev/null || true)"
+    { printf '%s\n' "$current" | grep -v 'drona backup' | grep -v '^$' || true; echo "$line"; } | crontab -
+    ok "Nightly database backup scheduled (02:30)"
+  else
+    warn "cron isn't installed, so there's no nightly backup. Install it with: sudo apt install -y cron, then run 'drona install' again."
+  fi
+
+  bold "Building and starting (the first build takes a few minutes)…"
+  compose build
+  compose up -d
+  wait_healthy
+  bold "Drona is running."
+  echo "Next: point the Cloudflare tunnel at http://localhost:$(env_value DRONA_PORT) (see deploy/README.md)."
+}
+
+cmd_deploy() {
+  bold "Deploying the latest version"
+  if git -C "$REPO_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    if [[ -n "$(git -C "$REPO_DIR" status --porcelain --untracked-files=no)" ]]; then
+      die "There are local changes to the code on this VM. Commit or discard them first (git -C $REPO_DIR status)."
+    fi
+    git -C "$REPO_DIR" pull --ff-only
+    ok "Code: $(git -C "$REPO_DIR" log -1 --format='%h %s')"
+  fi
+  if compose ps --status running --services 2>/dev/null | grep -q postgres; then
+    cmd_backup
+  fi
+  fix_secrets
+  compose build
+  # Migrations run first (the 'migrate' service); the API and worker start only if they succeed
+  compose up -d --remove-orphans
+  wait_healthy
+  docker image prune -f >/dev/null 2>&1 || true
+  bold "Deployed."
+}
+
+cmd_backup() {
+  mkdir -p "$BACKUP_DIR"
+  local file
+  file="$BACKUP_DIR/drona-$(date +%Y%m%d-%H%M%S).sql.gz"
+  compose exec -T postgres pg_dump -U drona --no-owner drona | gzip >"$file"
+  [[ -s "$file" ]] || die "Backup came out empty: $file"
+  ok "Backup: $file ($(du -h "$file" | cut -f1))"
+  find "$BACKUP_DIR" -name 'drona-*.sql.gz' -mtime +"$KEEP_DAYS" -delete
+  local bucket
+  bucket="$(env_value BACKUP_BUCKET)"
+  if [[ -n "$bucket" ]]; then
+    if command -v gcloud >/dev/null 2>&1; then
+      gcloud storage cp "$file" "$bucket/" --quiet && ok "Copied to $bucket"
+    else
+      warn "BACKUP_BUCKET is set but gcloud isn't installed; kept the local copy only"
+    fi
+  fi
+}
+
+cmd_restore() {
+  local file="${1:-}"
+  [[ -f "$file" ]] || die "Usage: drona restore deploy/backups/drona-YYYYMMDD-HHMMSS.sql.gz"
+  warn "This replaces ALL current data with the backup from $(basename "$file")."
+  read -r -p "Type RESTORE to continue: " answer
+  [[ "$answer" == "RESTORE" ]] || die "Cancelled"
+  cmd_backup
+  compose stop api worker
+  compose exec -T postgres psql -U drona -d postgres -c 'DROP DATABASE IF EXISTS drona WITH (FORCE);' -c 'CREATE DATABASE drona OWNER drona;'
+  gunzip -c "$file" | compose exec -T postgres psql -q -U drona -d drona
+  compose up -d
+  wait_healthy
+  ok "Restored from $(basename "$file")"
+}
+
+# ---- One time only: the server was first installed under the old name, Hayate ------------------
+# Moves the database and queued jobs from the old 'hayate' containers into the new 'drona' ones.
+# The old app is only removed once Drona is healthy with the data; until then nothing is lost.
+old_ids() { docker ps -aq --filter "label=com.docker.compose.project=hayate" ${1:+--filter "label=com.docker.compose.service=$1"}; }
+
+cmd_move_from_hayate() {
+  [[ -f "$ENV_FILE" ]] || die "No settings in $ENV_FILE. Did you move the folder? Run: mv ~/hayate ~/drona"
+  if [[ -z "$(old_ids postgres)" ]]; then
+    if compose ps --status running --services 2>/dev/null | grep -q api; then
+      ok "Already moved: Drona is running and there's no old Hayate app left."
+      return 0
+    fi
+    die "No old Hayate database found on this VM, so there's nothing to move. For a fresh setup run: drona install"
+  fi
+  bold "Moving your data from Hayate to Drona"
+
+  # A failed earlier attempt leaves an empty or half-filled Drona database. The real data is still in Hayate's.
+  if docker volume inspect drona_pgdata >/dev/null 2>&1; then
+    warn "Removing the Drona database left by an earlier attempt (your data is still in Hayate's)"
+    compose down >/dev/null 2>&1 || true
+    docker volume rm drona_pgdata drona_redisdata >/dev/null 2>&1 || true
+  fi
+
+  # 1. Stop the old app so nothing changes after the copy, then copy the database
+  docker stop $(old_ids api) $(old_ids worker) >/dev/null 2>&1 || true
+  docker start "$(old_ids postgres)" >/dev/null
+  local i file ts
+  for i in $(seq 1 30); do
+    docker exec "$(old_ids postgres)" pg_isready -U hayate >/dev/null 2>&1 && break
+    sleep 2
+  done
+  mkdir -p "$BACKUP_DIR" && chmod 700 "$BACKUP_DIR"
+  ts="$(date +%Y%m%d-%H%M%S)"
+  file="$BACKUP_DIR/before-rename-$ts.sql.gz"
+  docker exec "$(old_ids postgres)" pg_dump -U hayate --no-owner --no-privileges hayate | gzip >"$file"
+  gunzip -c "$file" | grep -q 'CREATE TABLE' || die "The copy of the database came out empty ($file). Nothing was changed; start the old app again with: docker start \$(docker ps -aq --filter label=com.docker.compose.project=hayate)"
+  ok "Database copied: $file ($(du -h "$file" | cut -f1))"
+
+  # 2. Settings: new folder name inside the container, new port setting name
+  cp "$ENV_FILE" "$BACKUP_DIR/env-before-rename-$ts"
+  chmod 600 "$BACKUP_DIR/env-before-rename-$ts"
+  sed -i 's|/etc/hayate/|/etc/drona/|g; s|^HAYATE_PORT=|DRONA_PORT=|' "$ENV_FILE"
+  ok "Settings updated (old copy: $BACKUP_DIR/env-before-rename-$ts)"
+
+  # 3. Stop the old queue store cleanly (it saves to disk), then copy it so scheduled sends and reminders keep their times
+  docker stop $(old_ids) >/dev/null
+  compose create postgres redis
+  docker run --rm -v hayate_redisdata:/from:ro -v drona_redisdata:/to redis:7-alpine sh -c 'cp -a /from/. /to/'
+  ok "Scheduled jobs copied"
+
+  # 4. Start the new database and put the data in
+  compose up -d postgres redis
+  for i in $(seq 1 30); do
+    compose exec -T postgres pg_isready -U drona >/dev/null 2>&1 && break
+    sleep 2
+  done
+  sleep 2
+  gunzip -c "$file" | compose exec -T postgres psql -q -v ON_ERROR_STOP=1 -U drona -d drona >/dev/null \
+    || die "Putting the data into Drona failed (see above). Your old app is untouched: run 'drona move-from-hayate' again, or start the old one with: docker start \$(docker ps -aq --filter label=com.docker.compose.project=hayate)"
+  ok "Data is in the Drona database"
+
+  # 5. Build and start Drona
+  fix_secrets
+  compose build
+  compose up -d
+  wait_healthy
+
+  # 6. The command and the nightly backup under the new name
+  sudo ln -sf "$DEPLOY_DIR/drona" /usr/local/bin/drona
+  sudo rm -f /usr/local/bin/hayate
+  if command -v crontab >/dev/null 2>&1; then
+    local line="30 2 * * * $DEPLOY_DIR/drona backup >> $BACKUP_DIR/backup.log 2>&1" current
+    current="$(crontab -l 2>/dev/null || true)"
+    { printf '%s\n' "$current" | grep -v -E '(hayate|drona) backup' | grep -v '^$' || true; echo "$line"; } | crontab -
+  fi
+  ok "The 'drona' command and the nightly backup are set up"
+
+  # 7. Only now remove the old containers. Their data volumes stay, just in case.
+  docker rm $(old_ids) >/dev/null
+  docker image rm hayate:latest >/dev/null 2>&1 || true
+  cmd_backup
+  bold "Done. Drona is running with all your data."
+  echo "The old Hayate data is kept as a spare. Once you've checked everything for a few days, free the space with:"
+  echo "  docker volume rm hayate_pgdata hayate_redisdata"
+}
+
+# Until the one-time move is done, the old app holds the database and the port
+needs_move() {
+  if command -v docker >/dev/null 2>&1 && [[ -n "$(old_ids postgres 2>/dev/null)" ]]; then
+    die "This VM still runs the app under its old name. Run this once first: drona move-from-hayate"
+  fi
+}
+case "${1:-help}" in
+  install | deploy | restart | backup | restore) needs_move ;;
+esac
+
+case "${1:-help}" in
+  move-from-hayate) cmd_move_from_hayate ;;
+  install) cmd_install ;;
+  deploy) cmd_deploy ;;
+  status)
+    compose ps
+    curl -fsS "http://127.0.0.1:$(env_value DRONA_PORT)/health" && echo
+    ;;
+  logs)
+    shift
+    compose logs -f --tail 100 "${@:-api worker}"
+    ;;
+  restart)
+    fix_secrets
+    compose up -d --force-recreate api worker
+    wait_healthy
+    ;;
+  stop) compose stop ;;
+  backup) cmd_backup ;;
+  restore)
+    shift
+    cmd_restore "${1:-}"
+    ;;
+  plan)
+    shift
+    compose exec -T api node dist/cli/plan.js "$@"
+    ;;
+  feature)
+    shift
+    compose exec -T api node dist/cli/feature.js "$@"
+    ;;
+  *)
+    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+esac

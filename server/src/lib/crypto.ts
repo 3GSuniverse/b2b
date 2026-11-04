@@ -11,6 +11,7 @@ function encryptionKey(): Buffer {
       key = Buffer.from(env.TOKEN_ENCRYPTION_KEY, 'base64');
       if (key.length !== 32) throw new Error('TOKEN_ENCRYPTION_KEY must be 32 bytes, base64-encoded');
     } else {
+      // The salt is the product's original working name. Changing it would make secrets already stored unreadable.
       key = Buffer.from(hkdfSync('sha256', env.APP_SECRET, 'sandesh', 'token-encryption-v1', 32));
     }
   }

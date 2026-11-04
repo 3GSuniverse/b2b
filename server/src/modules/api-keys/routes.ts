@@ -11,7 +11,7 @@ import { createTrip, TRIP_SOURCES } from '../trips/service.js';
 
 /**
  * Keys for other systems — the AI call agent, a website enquiry form — to add enquiries.
- *   Authorization: Bearer hy_live_…
+ *   Authorization: Bearer dr_live_…
  * The full key is shown once, when it's made. Only its sha256 is stored.
  */
 
@@ -19,14 +19,15 @@ const hash = (key: string) => createHash('sha256').update(key).digest('hex');
 const ALPHABET = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function newKey() {
   const bytes = randomBytes(32);
-  return `hy_live_${Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join('')}`;
+  return `dr_live_${Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join('')}`;
 }
 
 /** preHandler for /api/v1: a valid, unrevoked key of an active company. */
 async function requireApiKey(req: FastifyRequest) {
   const header = String(req.headers.authorization ?? '');
   const key = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-  if (!key.startsWith('hy_live_')) throw new AppError(401, 'missing_api_key', 'Send your API key as: Authorization: Bearer hy_live_…');
+  // hy_live_: keys made before the rename to Drona keep working
+  if (!key.startsWith('dr_live_') && !key.startsWith('hy_live_')) throw new AppError(401, 'missing_api_key', 'Send your API key as: Authorization: Bearer dr_live_…');
   const row = await db.query.apiKeys.findFirst({ where: and(eq(apiKeys.keyHash, hash(key)), isNull(apiKeys.revokedAt)) });
   if (!row) throw new AppError(401, 'invalid_api_key', 'This API key isn’t valid, or it was revoked');
   const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, row.tenantId) });

@@ -1,5 +1,5 @@
 // =====================================================================
-//  Sandesh — database schema (Drizzle ORM, PostgreSQL)
+//  Drona — database schema (Drizzle ORM, PostgreSQL)
 //  Multi-tenant from day one: every business row carries tenantId.
 //  TS names are camelCase; columns are snake_case (casing set in db client).
 // =====================================================================
@@ -226,7 +226,7 @@ export const sendingDomains = pgTable(
     // Without it, a company could "claim" a domain someone else already verified in SES.
     ownershipToken: text()
       .notNull()
-      .$defaultFn(() => `sandesh-verify=${createId()}`),
+      .$defaultFn(() => `drona-verify=${createId()}`),
     ownershipStatus: verificationStatus().notNull().default('PENDING'),
     identityStatus: verificationStatus().notNull().default('PENDING'),
     dkimStatus: verificationStatus().notNull().default('PENDING'),

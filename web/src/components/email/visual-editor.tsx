@@ -63,13 +63,13 @@ function ToolButton({ label, onClick, children, active }: { label: string; onCli
 
 /** Styles that only exist inside the editor frame (never saved into the email). */
 const EDITOR_CSS = `
-  [data-hayate-editor] { outline: none; }
+  [data-drona-editor] { outline: none; }
   body { cursor: text; }
   *:hover:not(html):not(body):not(table):not(tbody):not(tr) { outline: 1px dashed rgba(11,122,98,.35); outline-offset: 2px; }
   img { cursor: pointer; }
-  img.hayate-selected { outline: 2px solid #0B7A62 !important; outline-offset: 2px; }
-  span[data-hayate-tag] { display: inline-block; background: #E4F2ED; color: #075C49; border-radius: 5px; padding: 0 5px; margin: 0 1px; font-weight: 600; font-size: .92em; line-height: 1.45; cursor: default; user-select: none; -webkit-user-select: none; }
-  span[data-hayate-tag]:hover { outline: 1px solid #0B7A62 !important; }
+  img.drona-selected { outline: 2px solid #0B7A62 !important; outline-offset: 2px; }
+  span[data-drona-tag] { display: inline-block; background: #E4F2ED; color: #075C49; border-radius: 5px; padding: 0 5px; margin: 0 1px; font-weight: 600; font-size: .92em; line-height: 1.45; cursor: default; user-select: none; -webkit-user-select: none; }
+  span[data-drona-tag]:hover { outline: 1px solid #0B7A62 !important; }
 `;
 
 const TAG_RE = /\{\s*([a-zA-Z_]\w*)\s*(?:\|([^{}]*))?\}/g;
@@ -82,7 +82,7 @@ const tagLabel = (key: string, fallback?: string) => {
 function chipFor(doc: Document, raw: string) {
   const m = new RegExp(TAG_RE.source).exec(raw)!;
   const span = doc.createElement('span');
-  span.setAttribute('data-hayate-tag', raw);
+  span.setAttribute('data-drona-tag', raw);
   span.setAttribute('contenteditable', 'false');
   span.textContent = tagLabel(m[1]!, m[2]);
   return span;
@@ -91,7 +91,7 @@ function chipFor(doc: Document, raw: string) {
 /** Turns {first_name|there} text into chips throughout the body. */
 function chipify(doc: Document) {
   const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) => (n.parentElement?.closest('style,script,title,[data-hayate-tag]') ? NodeFilter.FILTER_REJECT : new RegExp(TAG_RE.source).test(n.nodeValue ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
+    acceptNode: (n) => (n.parentElement?.closest('style,script,title,[data-drona-tag]') ? NodeFilter.FILTER_REJECT : new RegExp(TAG_RE.source).test(n.nodeValue ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
   });
   const nodes: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
@@ -112,10 +112,10 @@ function chipify(doc: Document) {
 /** The HTML to save: chips back to {tags}, editor-only styles and markers removed. */
 function cleanHtml(doc: Document) {
   const clone = doc.documentElement.cloneNode(true) as HTMLElement;
-  clone.querySelector('#hayate-editor-css')?.remove();
-  clone.querySelectorAll('[data-hayate-tag]').forEach((el) => el.replaceWith(doc.createTextNode(el.getAttribute('data-hayate-tag') ?? '')));
-  clone.querySelectorAll('.hayate-selected').forEach((e) => {
-    e.classList.remove('hayate-selected');
+  clone.querySelector('#drona-editor-css')?.remove();
+  clone.querySelectorAll('[data-drona-tag]').forEach((el) => el.replaceWith(doc.createTextNode(el.getAttribute('data-drona-tag') ?? '')));
+  clone.querySelectorAll('.drona-selected').forEach((e) => {
+    e.classList.remove('drona-selected');
     if (!e.getAttribute('class')) e.removeAttribute('class');
   });
   return '<!DOCTYPE html>\n' + clone.outerHTML;
@@ -163,7 +163,7 @@ export function VisualEditor({ html, onChange, fields }: { html: string; onChang
     if (!d) return;
     d.designMode = 'on';
     const style = d.createElement('style');
-    style.id = 'hayate-editor-css';
+    style.id = 'drona-editor-css';
     style.textContent = EDITOR_CSS;
     d.head?.appendChild(style);
     chipify(d);
@@ -171,10 +171,10 @@ export function VisualEditor({ html, onChange, fields }: { html: string; onChang
     d.addEventListener('keyup', refreshState);
     d.addEventListener('mouseup', refreshState);
     d.addEventListener('click', (e) => {
-      d.querySelectorAll('.hayate-selected').forEach((x) => x.classList.remove('hayate-selected'));
+      d.querySelectorAll('.drona-selected').forEach((x) => x.classList.remove('drona-selected'));
       const t = e.target as HTMLElement;
       if (t.tagName === 'IMG') {
-        t.classList.add('hayate-selected');
+        t.classList.add('drona-selected');
         const el = t as HTMLImageElement;
         setImg({ el, src: el.getAttribute('src') ?? '', alt: el.getAttribute('alt') ?? '' });
       } else setImg(null);

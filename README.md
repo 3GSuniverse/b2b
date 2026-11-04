@@ -1,8 +1,8 @@
-# Hayate
+# Drona
 
 Bulk email (and soon WhatsApp) for small businesses: campaigns, date-based
 automations, contacts, and deliverability safety built in. Multi-tenant from day one.
-(“Hayate” is the working name; the brand lives in `web/src/lib/brand.ts`.)
+(“Drona” is the working name; the brand lives in `web/src/lib/brand.ts`.)
 
 ## Structure
 
@@ -71,7 +71,7 @@ npm run dev                   # http://localhost:5173 (proxies /api to :4000)
 ```
 
 Want realistic data to click around or show a client? `cd server && npm run seed:demo`
-creates a demo company (sign in as `demo@hayate.test` / `demo-password-123`).
+creates a demo company (sign in as `demo@drona.test` / `demo-password-123`).
 Add `-- --reset` to recreate it. It refuses to run in production.
 
 Check it is alive: `curl http://localhost:4000/health`
@@ -82,7 +82,7 @@ Check it is alive: `curl http://localhost:4000/health`
 
 ## Production
 
-**To put it live on a server, follow [deploy/README.md](deploy/README.md)** (one always-on VM, Docker, a Cloudflare tunnel, and the `hayate` command for deploys, backups and plans). What it does underneath:
+**To put it live on a server, follow [deploy/README.md](deploy/README.md)** (one always-on VM, Docker, a Cloudflare tunnel, and the `drona` command for deploys, backups and plans). What it does underneath:
 
 The API server also serves the built dashboard, so the whole product is one
 origin (simple cookies, strict CSP, no CORS):
@@ -100,7 +100,7 @@ elsewhere. Restart the server after each dashboard build (asset names change).
 
 ## For travel agencies: trips, payments, quotes, groups
 
-Beyond email and WhatsApp campaigns, Hayate runs a small agency's booking work:
+Beyond email and WhatsApp campaigns, Drona runs a small agency's booking work:
 
 - **Trips** (`/trips`): enquiry → quoted → booked → completed on a drag-and-drop board.
   Each trip has a payment schedule (advance, instalments, balance), numbered receipts
@@ -129,7 +129,7 @@ Beyond email and WhatsApp campaigns, Hayate runs a small agency's booking work:
   request and "where next?", each off until switched on. Review and "where next?" need
   the customer's consent; booking messages (reminders, trip starting) don't.
 - **Leads API** for the AI call agent or a website form: Settings → API keys, then
-  `POST /api/v1/leads` with `Authorization: Bearer hy_live_…`. `externalId` makes retries safe.
+  `POST /api/v1/leads` with `Authorization: Bearer dr_live_…`. `externalId` makes retries safe.
 
 ## Plans, free trial and WhatsApp
 

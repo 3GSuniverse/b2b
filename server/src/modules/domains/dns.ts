@@ -53,7 +53,8 @@ export function setDnsLookup(l: DnsLookup) {
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/\.$/, '');
 
-export const ownershipHost = (domain: string) => `_sandesh.${domain}`;
+/** Where the ownership TXT record goes. Domains added before the rename to Drona keep their old record name. */
+export const ownershipHost = (domain: string, token?: string) => (token?.startsWith('sandesh-verify=') ? `_sandesh.${domain}` : `_drona.${domain}`);
 
 export function buildDnsRecords(input: {
   domain: string;
@@ -63,7 +64,7 @@ export function buildDnsRecords(input: {
   region: string;
 }): DnsRecord[] {
   return [
-    { purpose: 'ownership', type: 'TXT', name: ownershipHost(input.domain), value: input.ownershipToken, required: true },
+    { purpose: 'ownership', type: 'TXT', name: ownershipHost(input.domain, input.ownershipToken), value: input.ownershipToken, required: true },
     ...input.dkimTokens.map(
       (t): DnsRecord => ({
         purpose: 'dkim',

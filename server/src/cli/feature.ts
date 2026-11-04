@@ -1,7 +1,7 @@
 /**
  * Operator switch for features that aren't self-serve.
  *
- *   hayate feature whatsapp-web <company slug or owner email> on|off
+ *   drona feature whatsapp-web <company slug or owner email> on|off
  *
  * WhatsApp Web sending is unofficial: it stays off unless the operator turns it
  * on for a specific company, so it can never become part of what's sold by accident.
@@ -13,7 +13,7 @@ import { closeDatabase, db } from '../lib/db.js';
 async function main() {
   const [feature, who, state = ""] = process.argv.slice(2);
   if (feature !== 'whatsapp-web' || !who || !['on', 'off'].includes(state ?? '')) {
-    console.error('Usage: hayate feature whatsapp-web <company slug or owner email> on|off');
+    console.error('Usage: drona feature whatsapp-web <company slug or owner email> on|off');
     process.exitCode = 1;
     return;
   }

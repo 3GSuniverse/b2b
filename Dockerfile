@@ -1,5 +1,5 @@
 # One image for the whole product: the API (which also serves the dashboard) and the worker.
-# Build:  docker build -t hayate .
+# Build:  docker build -t drona .
 
 # ---- 1. Dashboard (React) -> static files
 FROM node:22-slim AS web

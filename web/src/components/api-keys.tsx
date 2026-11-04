@@ -55,7 +55,7 @@ export function ApiKeysSettings() {
   });
   const endpoint = `${location.origin}/api/v1/leads`;
   const example = `curl -X POST ${endpoint} \\
-  -H "Authorization: Bearer hy_live_…" \\
+  -H "Authorization: Bearer dr_live_…" \\
   -H "Content-Type: application/json" \\
   -d '{"name":"Suresh Nair","phone":"9848055555","destination":"Goa",
        "startDate":"2026-12-24","endDate":"2026-12-28","adults":4,

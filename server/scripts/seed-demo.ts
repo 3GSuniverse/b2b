@@ -1,7 +1,7 @@
 /**
  * Fills a demo company with realistic data so the dashboard can be shown to a client.
  *
- *   npm run seed:demo            → creates demo@hayate.test / demo-password-123
+ *   npm run seed:demo            → creates demo@drona.test / demo-password-123
  *   npm run seed:demo -- --reset → deletes and recreates that company first
  *
  * Never run this against production: it refuses unless NODE_ENV is development or test.
@@ -43,7 +43,7 @@ if (env.NODE_ENV === 'production') {
   process.exit(1);
 }
 
-const EMAIL = 'demo@hayate.test';
+const EMAIL = 'demo@drona.test';
 const PASSWORD = 'demo-password-123';
 const DOMAIN = 'kurukshetra-travels.in';
 

@@ -1,9 +1,9 @@
 # Production: everything runs on one always-on VM, reachable only through the Cloudflare tunnel.
-# Used by deploy/hayate (install, deploy, backup). Settings come from deploy/.env.
-name: hayate
+# Used by deploy/drona (install, deploy, backup). Settings come from deploy/.env.
+name: drona
 
 x-app: &app
-  image: hayate:latest
+  image: drona:latest
   build:
     context: ..
     dockerfile: Dockerfile
@@ -11,11 +11,11 @@ x-app: &app
   env_file: .env
   environment:
     NODE_ENV: production
-    DATABASE_URL: postgresql://hayate:${POSTGRES_PASSWORD}@postgres:5432/hayate
+    DATABASE_URL: postgresql://drona:${POSTGRES_PASSWORD}@postgres:5432/drona
     REDIS_URL: redis://redis:6379
   volumes:
     # Google OAuth client file for "Connect Gmail" (optional), kept outside git
-    - ./secrets:/etc/hayate:ro
+    - ./secrets:/etc/drona:ro
   depends_on:
     postgres:
       condition: service_healthy
@@ -30,13 +30,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: hayate
+      POSTGRES_USER: drona
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: hayate
+      POSTGRES_DB: drona
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U hayate']
+      test: ['CMD-SHELL', 'pg_isready -U drona']
       interval: 5s
       retries: 20
     logging:
@@ -72,7 +72,7 @@ services:
     command: ['node', 'dist/server.js']
     # Only this VM can reach it; the public gets in through the Cloudflare tunnel
     ports:
-      - '127.0.0.1:${HAYATE_PORT:-4000}:4000'
+      - '127.0.0.1:${DRONA_PORT:-4000}:4000'
     depends_on:
       migrate:
         condition: service_completed_successfully
