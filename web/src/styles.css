@@ -201,6 +201,35 @@ tbody > tr {
 .doc a:hover { color: var(--color-accent-strong); }
 .doc strong { color: var(--color-ink); font-weight: 600; }
 
+/* ---- Public home page illustrations ---- */
+@keyframes board-move {
+  0%, 22% { transform: none; opacity: 1; }
+  48%, 84% { transform: translate(calc(100% + 12px), 148px); opacity: 1; }
+  94% { transform: translate(calc(100% + 12px), 148px); opacity: 0; }
+  100% { transform: none; opacity: 0; }
+}
+.board-move { animation: board-move 6.5s cubic-bezier(0.65, 0, 0.25, 1) infinite; }
+@keyframes pay-ring-in { from { stroke-dasharray: 0 100; } }
+.pay-ring { animation: pay-ring-in 1.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes bell-swing {
+  0%, 70%, 100% { transform: rotate(0); }
+  76% { transform: rotate(16deg); }
+  82% { transform: rotate(-12deg); }
+  88% { transform: rotate(7deg); }
+  94% { transform: rotate(-3deg); }
+}
+.pay-bell { transform-origin: top center; animation: bell-swing 3.2s ease-in-out infinite; }
+@keyframes toast-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.pay-toast { animation: toast-bob 4s ease-in-out infinite; }
+@keyframes seat-in {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.seat-in { animation: seat-in 380ms cubic-bezier(0.22, 1.4, 0.36, 1) both; }
+
 /* ---- Sign-in and sign-up: the one orchestrated entrance, and the live dispatch map ---- */
 @keyframes rise {
   from { opacity: 0; transform: translateY(12px); }

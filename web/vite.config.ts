@@ -14,5 +14,6 @@ export default defineConfig({
     port: 5173,
     proxy: { '/api': api, '/u': api, '/webhooks': api, '/health': api, '^/[pqr]/': api }, // /p, /r: customers' trip pages and receipts
   },
-  build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 900 },
+  // assetsInlineLimit 0: small font files stay real files, because the security policy only allows fonts from this site
+  build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 900, assetsInlineLimit: 0 },
 });

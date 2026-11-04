@@ -7,12 +7,21 @@ import { cn } from '@/lib/cn';
 
 /** Pages anyone can open without signing in: the home page, Privacy Policy and Terms. */
 
-export function PublicHeader() {
+export function PublicHeader({ sections }: { sections?: { href: string; label: string }[] }) {
   return (
     <header className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
       <Link to="/" aria-label={`${BRAND.name} home`}>
         <Logo />
       </Link>
+      {sections && (
+        <nav aria-label="On this page" className="hidden items-center gap-1 md:flex">
+          {sections.map((s) => (
+            <a key={s.href} href={s.href} className="rounded-full px-3.5 py-2 text-sm font-semibold text-ink-2 transition-colors hover:bg-surface hover:text-ink">
+              {s.label}
+            </a>
+          ))}
+        </nav>
+      )}
       <nav aria-label="Account" className="flex items-center gap-2">
         <LinkButton to="/signin" variant="ghost" size="sm">
           Sign in
