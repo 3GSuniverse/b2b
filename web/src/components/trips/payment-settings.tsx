@@ -36,6 +36,7 @@ export const TAG_LABEL: Record<string, string> = {
   start_date: 'Start date',
   return_date: 'Return date',
   review_link: 'Review link',
+  quote_link: 'Quote link',
   first_name: 'First name',
   full_name: 'Full name',
   amount: 'Amount due',

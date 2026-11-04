@@ -25,6 +25,8 @@ import {
   tripDues,
   tripPayments,
   trips,
+  quotes,
+  rateItems,
   users,
 } from '../src/db/schema.js';
 import { env } from '../src/config/env.js';
@@ -345,7 +347,7 @@ async function main() {
     { title: 'Tirupati darshan', destination: 'Tirupati', start: 12, nights: 1, adults: 3, budget: 15000, status: 'ENQUIRY', source: 'WALK_IN', age: 2, notes: 'Special entry darshan tickets needed.' },
     { title: 'Honeymoon, Andaman', destination: 'Andaman', start: 70, nights: 5, adults: 2, budget: 150000, status: 'ENQUIRY', source: 'REFERRAL', age: 3 },
     { title: 'Hampi weekend', destination: 'Hampi', start: null, nights: 2, adults: 2, status: 'ENQUIRY', source: 'WEBSITE', age: 4 },
-    { title: 'Kerala backwaters', destination: 'Kerala', start: 38, nights: 4, adults: 2, budget: 50000, price: 48500, status: 'QUOTED', source: 'PHONE', age: 3, dues: [{ label: 'Advance', share: 0.25, due: 0 }, { label: 'Balance', share: 0.75, due: 23 }] },
+    { title: 'Kerala backwaters', destination: 'Kerala', start: 38, nights: 4, adults: 2, budget: 50000, price: 48500, status: 'QUOTED', source: 'PHONE', age: 3 },
     { title: 'Rajasthan forts tour', destination: 'Rajasthan', start: 55, nights: 7, adults: 4, price: 186000, status: 'QUOTED', source: 'EMAIL', age: 5 },
     { title: 'Sikkim and Darjeeling', destination: 'Sikkim', start: 62, nights: 6, adults: 3, children: 1, price: 124000, status: 'QUOTED', source: 'WHATSAPP', age: 6 },
     { title: 'Ooty getaway', destination: 'Ooty', start: 20, nights: 2, adults: 2, price: 22500, status: 'QUOTED', source: 'PHONE', age: 8 },
@@ -406,6 +408,55 @@ async function main() {
       logs.push({ tenantId, userId: user!.id, action: 'trip.status', entity: 'trip', entityId: row!.id, meta: { from: 'ENQUIRY', to: t.status, reason: t.lostReason }, createdAt: daysAgo(Math.max(0, t.age - 2)) });
     }
     await db.insert(auditLogs).values(logs);
+  }
+
+  // ---- Price list and a sent quote
+  const R = (kind: 'HOTEL' | 'TRANSPORT' | 'ACTIVITY' | 'TRAVEL' | 'OTHER', name: string, destination: string | null, unit: 'PER_NIGHT' | 'PER_DAY' | 'PER_PERSON' | 'PER_GROUP', price: number, cost: number) => ({ tenantId, kind, name, destination, unit, price: price * 100, cost: cost * 100 });
+  const rates = await db
+    .insert(rateItems)
+    .values([
+      R('HOTEL', 'Munnar hill resort, deluxe room', 'Kerala', 'PER_NIGHT', 6500, 5000),
+      R('HOTEL', 'Alleppey houseboat, deluxe (with meals)', 'Kerala', 'PER_NIGHT', 9500, 7000),
+      R('HOTEL', 'Kochi heritage hotel', 'Kerala', 'PER_NIGHT', 4800, 3600),
+      R('TRANSPORT', 'Innova Crysta with driver', 'Kerala', 'PER_DAY', 4200, 3000),
+      R('ACTIVITY', 'Kathakali show', 'Kerala', 'PER_PERSON', 500, 350),
+      R('ACTIVITY', 'Tea museum and plantation walk', 'Kerala', 'PER_PERSON', 300, 200),
+      R('HOTEL', 'Srinagar houseboat, Dal Lake', 'Kashmir', 'PER_NIGHT', 7500, 5500),
+      R('HOTEL', 'Gulmarg hotel, valley view', 'Kashmir', 'PER_NIGHT', 8200, 6200),
+      R('TRANSPORT', 'Tempo Traveller 12-seater', 'Kashmir', 'PER_DAY', 6000, 4500),
+      R('ACTIVITY', 'Gulmarg gondola, phase 1 and 2', 'Kashmir', 'PER_PERSON', 2700, 2700),
+      R('HOTEL', 'Calangute beach resort', 'Goa', 'PER_NIGHT', 5500, 4200),
+      R('TRANSPORT', 'Airport transfers, both ways', 'Goa', 'PER_GROUP', 3000, 2200),
+      R('TRAVEL', 'Flights, Hyderabad return', null, 'PER_PERSON', 9800, 9200),
+      R('OTHER', 'Travel insurance', null, 'PER_PERSON', 650, 400),
+    ])
+    .returning();
+  const rate = (name: string) => rates.find((r) => r.name === name)!;
+  const kerala = await db.query.trips.findFirst({ where: (t, { and, eq }) => and(eq(t.tenantId, tenantId), eq(t.title, 'Kerala backwaters')) });
+  if (kerala) {
+    const line = (name: string, quantity: number, times: number) => {
+      const r = rate(name);
+      return { label: r.name, kind: r.kind, unit: r.unit, quantity, times, unitPrice: r.price, unitCost: r.cost, rateItemId: r.id };
+    };
+    const lines = [line('Munnar hill resort, deluxe room', 1, 2), line('Alleppey houseboat, deluxe (with meals)', 1, 1), line('Kochi heritage hotel', 1, 1), line('Innova Crysta with driver', 1, 5), line('Kathakali show', 2, 1)];
+    const total = lines.reduce((a, l) => a + l.quantity * l.times * l.unitPrice, 0);
+    await db.insert(quotes).values({
+      tenantId, tripId: kerala.id, version: 1, status: 'SENT', total,
+      intro: 'Thank you for choosing Kurukshetra Travels. Here is a relaxed plan for your Kerala trip: hills, backwaters and a night on a houseboat.',
+      days: [
+        { title: 'Arrive in Kochi, drive to Munnar', description: 'Pickup at Kochi airport. A scenic 4-hour drive past waterfalls and spice gardens to Munnar. Evening at leisure.' },
+        { title: 'Munnar tea gardens', description: 'Tea museum and plantation walk, Mattupetty Dam and Echo Point. Back to the resort by evening.' },
+        { title: 'Munnar to Alleppey houseboat', description: 'Drive down to Alleppey and board your private houseboat by noon. Lunch, dinner and the night on the backwaters.' },
+        { title: 'Kochi heritage walk', description: 'Check out after breakfast and drive to Kochi. Fort Kochi, the Chinese fishing nets and a Kathakali show in the evening.' },
+        { title: 'Departure', description: 'Breakfast, then drop at Kochi airport.' },
+      ],
+      lines,
+      inclusions: ['All hotels and the houseboat as listed, with breakfast', 'All meals on the houseboat', 'Private Innova Crysta for 5 days with driver', 'Kathakali show tickets'],
+      exclusions: ['Flights', 'Lunch and dinner except on the houseboat', 'Entry tickets not listed'],
+      terms: 'A 25% advance confirms the booking; the balance is due 15 days before departure.',
+      validUntil: day(4), sentAt: daysAgo(2, 12), viewedAt: daysAgo(1, 19), createdById: user!.id,
+    });
+    await db.update(trips).set({ price: total }).where(eq(trips.id, kerala.id));
   }
 
   await db.insert(notifications).values({

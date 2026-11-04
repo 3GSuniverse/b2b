@@ -1,9 +1,9 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, ChevronLeft, ChevronRight, Columns3, List, Plane, Plus, Search, Users } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Columns3, List, Plane, Plus, Search, Tag, Users } from 'lucide-react';
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
+import { Button, LinkButton } from '@/components/ui/button';
 import { Segmented, Tabs } from '@/components/ui/controls';
 import { Avatar, EmptyState, PageHeader, Panel, Skeleton } from '@/components/ui/display';
 import { Input } from '@/components/ui/field';
@@ -380,10 +380,16 @@ export function TripsPage() {
         title="Trips"
         description="Every enquiry, quote, booking and payment, from the first call to the trip home."
         actions={
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" />
-            New enquiry
-          </Button>
+          <>
+            <LinkButton to="/trips/prices">
+              <Tag className="h-4 w-4" />
+              Price list
+            </LinkButton>
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4" />
+              New enquiry
+            </Button>
+          </>
         }
       />
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link2, Plane, Star, Sunrise } from 'lucide-react';
+import { FileText, Link2, Plane, Star, Sunrise } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { cn } from '@/lib/cn';
 import { useSession } from '@/lib/session';
 import { ReminderText } from './payment-settings';
 
-type Kind = 'PRE_TRIP' | 'REVIEW' | 'WHERE_NEXT';
+type Kind = 'PRE_TRIP' | 'REVIEW' | 'WHERE_NEXT' | 'QUOTE_FOLLOWUP';
 interface One {
   enabled: boolean;
   days: number;
@@ -22,11 +22,12 @@ export interface TripMessages {
   preTrip: One;
   review: One & { url: string | null };
   whereNext: One;
+  quoteFollowup: One;
   defaults: Record<Kind, string>;
   tags: string[];
 }
-type Draft = Pick<TripMessages, 'channel' | 'preTrip' | 'review' | 'whereNext'>;
-const pick = (s: TripMessages): Draft => ({ channel: s.channel, preTrip: s.preTrip, review: s.review, whereNext: s.whereNext });
+type Draft = Pick<TripMessages, 'channel' | 'preTrip' | 'review' | 'whereNext' | 'quoteFollowup'>;
+const pick = (s: TripMessages): Draft => ({ channel: s.channel, preTrip: s.preTrip, review: s.review, whereNext: s.whereNext, quoteFollowup: s.quoteFollowup });
 
 const SAMPLE = { destination: 'Kerala', trip: 'Kerala backwaters', start_date: '12 Dec 2026', return_date: '16 Dec 2026' };
 
@@ -83,7 +84,7 @@ export function TripMessagesSettings() {
   const s = q.data;
   const err = (k: string) => (save.error instanceof ApiError ? save.error.field(k) : undefined);
   const dirty = JSON.stringify(d) !== JSON.stringify(pick(s));
-  const set = <K extends 'preTrip' | 'review' | 'whereNext'>(k: K, patch: Partial<Draft[K]>) => setD({ ...d, [k]: { ...d[k], ...patch } });
+  const set = <K extends 'preTrip' | 'review' | 'whereNext' | 'quoteFollowup'>(k: K, patch: Partial<Draft[K]>) => setD({ ...d, [k]: { ...d[k], ...patch } });
 
   return (
     <div className="flex flex-col gap-5">
@@ -104,6 +105,20 @@ export function TripMessagesSettings() {
           </div>
         }
       />
+
+      <MessageCard
+        icon={<FileText className="h-5 w-5" />}
+        title="Follow up on quotes"
+        description="If a customer hasn’t answered a quote you sent, one friendly nudge with the link. Whoever quotes and follows up first usually gets the booking."
+        enabled={d.quoteFollowup.enabled}
+        onToggle={(v) => set('quoteFollowup', { enabled: v })}
+        canEdit={canEdit}
+      >
+        <Field label="Days after sending" error={err('quoteFollowup.days')} className="sm:w-56">
+          {(p) => <Input {...p} type="number" min={1} max={14} disabled={!canEdit} value={d.quoteFollowup.days} onChange={(e) => set('quoteFollowup', { days: Number(e.target.value) })} />}
+        </Field>
+        <ReminderText label="Message" value={d.quoteFollowup.text} onChange={(v) => set('quoteFollowup', { text: v })} fallback={s.defaults.QUOTE_FOLLOWUP} tags={s.tags} error={err('quoteFollowup.text')} company={tenant.name} vars={{ ...SAMPLE, quote_link: `${location.origin}/q/…` }} />
+      </MessageCard>
 
       <MessageCard
         icon={<Plane className="h-5 w-5" />}

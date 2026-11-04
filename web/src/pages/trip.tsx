@@ -8,6 +8,7 @@ import { Avatar, Panel, PanelHeader, Skeleton } from '@/components/ui/display';
 import { Field, Input } from '@/components/ui/field';
 import { Dialog, Menu, MenuItem, MenuSeparator } from '@/components/ui/overlay';
 import { PaymentsPanel } from '@/components/trips/payments';
+import { QuotesPanel } from '@/components/quotes/quotes-panel';
 import { METHODS, SOURCES, STATUS, travellers, TripStatusBadge } from '@/components/trips/shared';
 import { EditTripSheet } from '@/components/trips/trip-form';
 import { api } from '@/lib/api';
@@ -252,8 +253,12 @@ function describe(a: TripDetail['activity'][number]) {
       return `${m.amount} received by ${METHODS[m.method as PaymentMethod] ?? m.method} · receipt #${m.receipt}`;
     case 'trip.payment_void':
       return `Receipt #${m.receipt} (${m.amount}) cancelled · ${m.reason}`;
+    case 'trip.quote': {
+      const v = Number(m.version) > 1 ? ` v${m.version}` : '';
+      return { created: `Quote${v} started`, sent: `Quote${v} sent${m.via === 'EMAIL' ? ' by email' : ''} · ${m.total}`, accepted: `Customer accepted quote${v} · ${m.total}`, declined: `Customer asked for changes to quote${v}${m.note ? `: “${m.note}”` : ''}` }[m.step as string] ?? 'Quote updated';
+    }
     case 'trip.followup':
-      return `${{ PRE_TRIP: '“Trip starts soon” message', REVIEW: 'Review request', WHERE_NEXT: '“Where next?” message' }[m.kind as string] ?? 'Message'} sent by ${m.channel === 'WHATSAPP' ? 'WhatsApp' : 'email'}`;
+      return `${{ PRE_TRIP: '“Trip starts soon” message', REVIEW: 'Review request', WHERE_NEXT: '“Where next?” message', QUOTE_FOLLOWUP: 'Quote follow-up' }[m.kind as string] ?? 'Message'} sent by ${m.channel === 'WHATSAPP' ? 'WhatsApp' : 'email'}`;
     case 'trip.reminder':
       return `Payment reminder sent for ${m.label} by ${m.channel === 'WHATSAPP' ? 'WhatsApp' : 'email'}`;
     default:
@@ -388,7 +393,9 @@ export function TripPage() {
 
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-6">
+          {(trip.status === 'ENQUIRY' || trip.status === 'QUOTED') && <QuotesPanel trip={trip} />}
           <PaymentsPanel trip={trip} onChange={update} onSetPrice={() => setEditing(true)} />
+          {!(trip.status === 'ENQUIRY' || trip.status === 'QUOTED') && <QuotesPanel trip={trip} />}
           <ActivityPanel trip={trip} />
         </div>
         <aside className="order-first flex flex-col gap-6 lg:sticky lg:top-6 lg:order-none">

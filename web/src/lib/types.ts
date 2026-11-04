@@ -332,3 +332,54 @@ export interface TeamMember {
   email: string;
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
 }
+
+// ---------------------------------------------------------------- Quotes
+
+export type RateKind = 'HOTEL' | 'TRANSPORT' | 'ACTIVITY' | 'TRAVEL' | 'OTHER';
+export type RateUnit = 'PER_NIGHT' | 'PER_DAY' | 'PER_PERSON' | 'PER_GROUP';
+
+export interface RateItem {
+  id: string;
+  kind: RateKind;
+  name: string;
+  destination: string | null;
+  unit: RateUnit;
+  price: number; // paise
+  cost: number | null;
+  notes: string | null;
+}
+
+export interface QuoteLine {
+  label: string;
+  kind: RateKind;
+  unit: RateUnit;
+  quantity: number;
+  times: number;
+  unitPrice: number;
+  unitCost?: number | null;
+  rateItemId?: string | null;
+  total?: number;
+  needsPrice?: boolean;
+}
+
+export interface Quote {
+  id: string;
+  tripId: string;
+  version: number;
+  status: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'DECLINED';
+  intro: string | null;
+  days: { title: string; description: string }[];
+  lines: QuoteLine[];
+  inclusions: string[];
+  exclusions: string[];
+  terms: string | null;
+  validUntil: string | null;
+  totals: { subtotal: number; discount: number; total: number; perPerson: number | null; margin: number | null };
+  url: string;
+  sentAt: string | null;
+  viewedAt: string | null;
+  respondedAt: string | null;
+  responseNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
