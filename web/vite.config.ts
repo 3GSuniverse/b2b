@@ -12,7 +12,7 @@ export default defineConfig({
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   server: {
     port: 5173,
-    proxy: { '/api': api, '/u': api, '/webhooks': api, '/health': api },
+    proxy: { '/api': api, '/u': api, '/webhooks': api, '/health': api, '^/[pr]/': api }, // /p, /r: customers' trip pages and receipts
   },
   build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 900 },
 });

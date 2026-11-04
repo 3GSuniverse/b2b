@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MessageCircle, Phone, QrCode, RotateCcw } from 'lucide-react';
+import { CheckCircle2, CreditCard, KeyRound, MessageCircle, Phone, QrCode, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/controls';
-import { Panel, PanelHeader, Skeleton } from '@/components/ui/display';
+import { Badge, CopyButton, Panel, PanelHeader, Skeleton } from '@/components/ui/display';
 import { Field, Input, NativeSelect, Textarea } from '@/components/ui/field';
+import { Dialog } from '@/components/ui/overlay';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { phone as fmtPhone } from '@/lib/format';
@@ -122,6 +123,132 @@ function ReminderText({ label, value, onChange, fallback, tags, error, company }
   );
 }
 
+/** Online payments through the agency's own Razorpay account. Keys are write-only from here. */
+function RazorpayPanel({ s, canEdit }: { s: PaymentSettings; canEdit: boolean }) {
+  const qc = useQueryClient();
+  const { tenant } = useSession();
+  const [f, setF] = useState({ keyId: '', keySecret: '', webhookSecret: '' });
+  const [disconnecting, setDisconnecting] = useState(false);
+  const webhookUrl = `${location.origin}/webhooks/razorpay/${tenant.id}`;
+  const save = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.patch<{ settings: PaymentSettings }>('/api/payments/settings', body),
+    onSuccess: ({ settings }, body) => {
+      qc.setQueryData(['payment-settings'], settings);
+      setF({ keyId: '', keySecret: '', webhookSecret: '' });
+      setDisconnecting(false);
+      toast.success(body.razorpayKeyId === null ? 'Razorpay disconnected' : 'Razorpay saved');
+    },
+  });
+  const err = (k: string) => (save.error instanceof ApiError ? save.error.field(k) : undefined);
+  const rz = s.razorpay;
+  return (
+    <Panel className="flex flex-col gap-5 p-5 sm:p-6">
+      <div className="flex items-start justify-between gap-4">
+        <PanelHeader
+          title="Online payments (optional)"
+          description="Connect your own Razorpay account and customers can also pay by card or net banking. Payments are recorded and receipted by themselves. Money goes to your Razorpay account; Razorpay charges its usual fee."
+        />
+        {rz.connected && (
+          <Badge tone="green" dot>
+            Connected
+          </Badge>
+        )}
+      </div>
+      {rz.connected ? (
+        <div className="flex flex-col gap-4">
+          <dl className="grid gap-3 text-[13px] sm:grid-cols-2">
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-xs text-muted">Key ID</dt>
+              <dd className="font-mono text-[13px]">{rz.keyId}</dd>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-xs text-muted">Automatic recording</dt>
+              <dd className={cn('flex items-center gap-1.5', rz.webhookSet ? 'text-accent-strong' : 'text-warm-strong')}>
+                {rz.webhookSet ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : null}
+                {rz.webhookSet ? 'On' : 'Add the webhook secret below'}
+              </dd>
+            </div>
+          </dl>
+          {!rz.webhookSet && canEdit && (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <Field label="Webhook secret" className="flex-1" error={err('razorpayWebhookSecret')}>
+                {(p) => <Input {...p} type="password" autoComplete="off" value={f.webhookSecret} onChange={(e) => setF({ ...f, webhookSecret: e.target.value })} />}
+              </Field>
+              <Button variant="primary" disabled={!f.webhookSecret} loading={save.isPending} onClick={() => save.mutate({ razorpayWebhookSecret: f.webhookSecret })}>
+                Save secret
+              </Button>
+            </div>
+          )}
+          <WebhookUrl url={webhookUrl} />
+          {canEdit && (
+            <Button size="sm" variant="danger-ghost" className="self-start" onClick={() => setDisconnecting(true)}>
+              Disconnect Razorpay
+            </Button>
+          )}
+        </div>
+      ) : canEdit ? (
+        <div className="flex flex-col gap-4">
+          <ol className="flex flex-col gap-2 text-[13px] text-ink-2">
+            <li>1. In the Razorpay Dashboard, open <b>Account &amp; Settings → API Keys</b> and generate a key. Copy the Key ID and Key Secret here.</li>
+            <li>2. Open <b>Webhooks → Add New Webhook</b>. Paste the address below, make up a secret, tick <b>payment_link.paid</b>, and save. Put the same secret here.</li>
+          </ol>
+          <WebhookUrl url={webhookUrl} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Key ID" error={err('razorpayKeyId')}>
+              {(p) => <Input {...p} leading={<KeyRound className="h-4 w-4" />} value={f.keyId} onChange={(e) => setF({ ...f, keyId: e.target.value.trim() })} placeholder="rzp_live_…" spellCheck={false} autoCapitalize="none" />}
+            </Field>
+            <Field label="Key secret" error={err('razorpayKeySecret')}>
+              {(p) => <Input {...p} type="password" autoComplete="off" value={f.keySecret} onChange={(e) => setF({ ...f, keySecret: e.target.value })} />}
+            </Field>
+          </div>
+          <Field label="Webhook secret" hint="The secret you made up for the webhook in step 2." error={err('razorpayWebhookSecret')}>
+            {(p) => <Input {...p} type="password" autoComplete="off" value={f.webhookSecret} onChange={(e) => setF({ ...f, webhookSecret: e.target.value })} />}
+          </Field>
+          <Button
+            variant="primary"
+            className="self-start"
+            disabled={!f.keyId || !f.keySecret}
+            loading={save.isPending}
+            onClick={() => save.mutate({ razorpayKeyId: f.keyId, razorpayKeySecret: f.keySecret, ...(f.webhookSecret ? { razorpayWebhookSecret: f.webhookSecret } : {}) })}
+          >
+            <CreditCard className="h-4 w-4" />
+            Connect Razorpay
+          </Button>
+          <p className="text-xs text-muted">Keys are stored encrypted and are never shown again, not even to admins.</p>
+        </div>
+      ) : (
+        <p className="text-[13px] text-muted">Not connected. An admin can connect it.</p>
+      )}
+      <Dialog
+        open={disconnecting}
+        onOpenChange={setDisconnecting}
+        title="Disconnect Razorpay?"
+        description="Customers can no longer pay online, and the keys are deleted. UPI payments keep working."
+        footer={
+          <>
+            <Button onClick={() => setDisconnecting(false)}>Keep it</Button>
+            <Button variant="danger" loading={save.isPending} onClick={() => save.mutate({ razorpayKeyId: null })}>
+              Disconnect
+            </Button>
+          </>
+        }
+      />
+    </Panel>
+  );
+}
+
+function WebhookUrl({ url }: { url: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-[12px] bg-sunken px-3.5 py-2.5">
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-xs text-muted">Webhook address</span>
+        <span className="truncate font-mono text-[13px]">{url}</span>
+      </span>
+      <CopyButton value={url} />
+    </div>
+  );
+}
+
 type Draft = Pick<PaymentSettings, 'upiId' | 'upiName' | 'contactPhone' | 'remindersEnabled' | 'daysBefore' | 'overdueReminder' | 'channel' | 'beforeText' | 'overdueText'>;
 
 export function PaymentSettingsPanel() {
@@ -212,6 +339,8 @@ export function PaymentSettingsPanel() {
           </p>
         </div>
       </Panel>
+
+      <RazorpayPanel s={s} canEdit={canEdit} />
 
       {canEdit && (
         <div className="sticky bottom-4 z-10 flex justify-end">

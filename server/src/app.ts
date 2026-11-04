@@ -16,6 +16,7 @@ import { templateRoutes } from './modules/templates/routes.js';
 import { tripRoutes } from './modules/trips/routes.js';
 import { paymentSettingsRoutes } from './modules/payments/settings.js';
 import { publicPaymentRoutes } from './modules/payments/public.js';
+import { razorpayRoutes } from './modules/payments/razorpay.js';
 import { contactRoutes } from './modules/contacts/routes.js';
 import { notificationRoutes } from './modules/notifications/service.js';
 import { overviewRoutes } from './modules/overview/service.js';
@@ -106,6 +107,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(tripRoutes);
   await app.register(paymentSettingsRoutes);
   await app.register(publicPaymentRoutes);
+  await app.register(razorpayRoutes);
   await app.register(overviewRoutes);
   await app.register(whatsappRoutes);
   await app.register(notificationRoutes);

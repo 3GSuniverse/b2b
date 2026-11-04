@@ -140,16 +140,19 @@ export async function publicPaymentRoutes(app: FastifyInstance) {
     } else {
       const label = m.overdue > 0 ? 'Overdue' : m.nextDue ? `${m.nextDue.label} · due ${d(m.nextDue.dueDate)}` : 'Balance';
       let pay = '';
+      const online = s.razorpayKeyId && s.razorpaySecretEnc && nowPaise >= 100
+        ? `<form method="post" action="/p/${trip.publicToken}/pay" class="stack" style="margin-top:${s.upiId ? '10px' : '16px'}"><button class="btn${s.upiId ? ' secondary' : ''}" type="submit">Pay ${formatInr(nowPaise)} online${s.upiId ? ' (card, net banking)' : ''}</button></form>`
+        : '';
       if (s.upiId) {
         const link = upiLink({ upiId: s.upiId, payeeName: s.upiName ?? tenant.name, paise: nowPaise, note: `Trip ${trip.number} ${trip.title}` });
         const qr = await QRCode.toDataURL(link, { margin: 1, width: 264, color: { dark: '#111816', light: '#ffffff' } });
         const told = waLink(contactPhone, `Hi, I’ve paid ${formatInr(nowPaise)} for trip #${trip.number} (${trip.title}). UPI reference: `);
-        pay = `<div class="stack"><a class="btn" href="${e(link)}">Pay ${formatInr(nowPaise)} with a UPI app</a></div>
+        pay = `<div class="stack"><a class="btn" href="${e(link)}">Pay ${formatInr(nowPaise)} with a UPI app</a></div>${online}
 <div class="upi"><img src="${qr}" alt="UPI QR code for ${formatInr(nowPaise)}"><div><p>Or scan with GPay, PhonePe, Paytm or your bank app. Paying to</p><code>${e(s.upiId).replace('@', '@<wbr>')}</code><div>${e(s.upiName ?? tenant.name)}</div><button class="copy noprint" type="button" data-copy="${e(s.upiId)}">Copy UPI ID</button></div></div>
 <p class="note">${told ? `After paying, <a href="${e(told)}">send us the UPI reference on WhatsApp</a> and we’ll send your receipt.` : 'After paying, send the UPI reference to your travel agent and they’ll send your receipt.'}</p>`;
       } else {
         const ask = waLink(contactPhone, `Hi, how can I pay ${formatInr(nowPaise)} for trip #${trip.number} (${trip.title})?`);
-        pay = `<div class="stack">${ask ? `<a class="btn" href="${e(ask)}">Ask how to pay on WhatsApp</a>` : ''}</div><p class="note">Please contact ${e(tenant.name)} to pay.</p>`;
+        pay = online || `<div class="stack">${ask ? `<a class="btn" href="${e(ask)}">Ask how to pay on WhatsApp</a>` : ''}</div><p class="note">Please contact ${e(tenant.name)} to pay.</p>`;
       }
       dueCard = `<div class="card ${dueClass}"><div class="due-label">${e(label)}</div><div class="amount">${formatInr(nowPaise)}</div>${m.price > 0 ? `<div class="meta">${formatInr(m.paid)} paid of ${formatInr(m.price)}</div>` : ''}${pay}</div>`;
     }
@@ -167,7 +170,13 @@ export async function publicPaymentRoutes(app: FastifyInstance) {
           .join('')}</div>`
       : '';
     const footer = `<footer>${[tenant.name, tenant.postalAddress, prettyPhone(contactPhone)].filter(Boolean).map((x) => e(x!)).join('<br>')}</footer>`;
-    return send(reply, layout(`${trip.title} · ${tenant.name}`, `${brand}${head}${dueCard}${schedule}${received}${footer}`));
+    const q = req.query as { paid?: string; error?: string };
+    const banner = q.paid
+      ? `<div class="card paid"><div class="due-label">Thank you!</div><div class="meta" style="margin:0">Your payment is being confirmed. Your receipt appears below within a minute; refresh this page to see it.</div></div>`
+      : q.error
+        ? `<div class="card overdue"><div class="due-label">Online payment isn’t available right now</div><div class="meta" style="margin:0">Please pay by UPI below, or contact ${e(tenant.name)}.</div></div>`
+        : '';
+    return send(reply, layout(`${trip.title} · ${tenant.name}`, `${brand}${banner}${head}${dueCard}${schedule}${received}${footer}`));
   });
 
   app.get<{ Params: { token: string } }>('/r/:token', async (req, reply) => {

@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
@@ -6,6 +7,8 @@ import { closeDatabase, db } from '../src/lib/db.js';
 import { closeRedis } from '../src/lib/redis.js';
 import { MemoryEmailProvider } from '../src/modules/email/memory-provider.js';
 import { runPaymentReminders } from '../src/modules/payments/reminders.js';
+import { setRazorpayClient } from '../src/modules/payments/razorpay.js';
+import { encryptSecret } from '../src/lib/crypto.js';
 import { rupeesInWords, upiLink } from '../src/modules/payments/upi.js';
 import { processSendJob } from '../src/modules/sending/send-message.js';
 import { addDays } from '../src/modules/trips/money.js';
@@ -251,5 +254,58 @@ describe('editing a schedule', () => {
     const second = (await c.put(`/api/trips/${t.id}/dues`, { dues: [{ label: 'Advance', amount: 10000, dueDate: '2026-12-01' }, { label: 'Balance', amount: 20000, dueDate: '2026-12-22' }] })).json().trip;
     expect(second.money.dues[0].id).toBe(first.money.dues[0].id); // unchanged
     expect(second.money.dues[1].id).not.toBe(first.money.dues[1].id); // new date
+  });
+});
+
+describe('online payments with the agency’s own Razorpay', () => {
+  const created: { amount: number; notes: Record<string, string> }[] = [];
+  setRazorpayClient({
+    async createPaymentLink(creds, input) {
+      if (creds.keySecret !== 'key-secret-1234') throw new Error('bad keys');
+      created.push({ amount: input.amount, notes: input.notes });
+      return { id: 'plink_1', shortUrl: 'https://rzp.io/i/abc' };
+    },
+  });
+  const WEBHOOK_SECRET = 'whsec-agency-1';
+  const razorpay = { razorpayKeyId: 'rzp_test_abcdefgh12', razorpayKeySecretEnc: encryptSecret('key-secret-1234'), razorpayWebhookSecretEnc: encryptSecret(WEBHOOK_SECRET) };
+
+  function paidEvent(tripId: string, paymentId = 'pay_123', amount = 4_500_000) {
+    return JSON.stringify({ event: 'payment_link.paid', payload: { payment: { entity: { id: paymentId, amount, method: 'upi' } }, payment_link: { entity: { id: 'plink_1', notes: { trip_id: tripId } } } } });
+  }
+  const sign = (body: string, secret = WEBHOOK_SECRET) => createHmac('sha256', secret).update(body).digest('hex');
+
+  it('“Pay online” makes a link for what’s due now and sends the customer to it', async () => {
+    const { trip } = await bookedTrip({ dueIn: 5, tenant: { paymentSettings: razorpay } });
+    const page = await app.inject({ method: 'GET', url: `/p/${trip.publicToken}` });
+    expect(page.body).toContain(`action="/p/${trip.publicToken}/pay"`);
+    const r = await app.inject({ method: 'POST', url: `/p/${trip.publicToken}/pay` });
+    expect(r.statusCode).toBe(303);
+    expect(r.headers.location).toBe('https://rzp.io/i/abc');
+    expect(created.at(-1)).toMatchObject({ amount: 4_500_000, notes: { trip_id: trip.id } });
+  });
+
+  it('a signed “paid” webhook records the payment once and tells the company', async () => {
+    const { trip, tenant } = await bookedTrip({ dueIn: 5, tenant: { paymentSettings: razorpay } });
+    const body = paidEvent(trip.id);
+    const post = (b: string, sig: string) => app.inject({ method: 'POST', url: `/webhooks/razorpay/${tenant.id}`, headers: { 'content-type': 'application/json', 'x-razorpay-signature': sig }, payload: b });
+
+    expect((await post(body, sign(body, 'wrong-secret'))).statusCode).toBe(401);
+    expect((await post(body, sign(body))).statusCode).toBe(200);
+    expect((await post(body, sign(body))).json()).toMatchObject({ ok: true, duplicate: true }); // Razorpay retries
+
+    const pays = await db.select().from(tripPayments).where(eq(tripPayments.tripId, trip.id));
+    expect(pays).toHaveLength(1);
+    expect(pays[0]).toMatchObject({ amount: 4_500_000, method: 'ONLINE', providerPaymentId: 'pay_123', recordedById: null });
+    const n = await db.select().from(notifications).where(and(eq(notifications.tenantId, tenant.id), eq(notifications.type, 'payments.received')));
+    expect(n[0]!.title).toBe('₹45,000 received online from Lakshmi Prasad');
+  });
+
+  it('a webhook can’t record a payment on another company’s trip', async () => {
+    const a = await bookedTrip({ dueIn: 5, tenant: { paymentSettings: razorpay } });
+    const b = await bookedTrip({ dueIn: 5 });
+    const body = paidEvent(b.trip.id, 'pay_999');
+    const r = await app.inject({ method: 'POST', url: `/webhooks/razorpay/${a.tenant.id}`, headers: { 'content-type': 'application/json', 'x-razorpay-signature': sign(body) }, payload: body });
+    expect(r.statusCode).toBe(404);
+    expect(await db.select().from(tripPayments).where(eq(tripPayments.tripId, b.trip.id))).toHaveLength(0);
   });
 });
