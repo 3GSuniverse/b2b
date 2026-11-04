@@ -22,7 +22,7 @@ const anthropic: AiClient = {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: env.AI_MODEL, max_tokens: maxTokens, system, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: env.AI_MODEL ?? 'claude-sonnet-5-5', max_tokens: maxTokens, system, messages: [{ role: 'user', content: prompt }] }),
       signal: AbortSignal.timeout(90_000),
     });
     const data = (await res.json().catch(() => ({}))) as { content?: { type: string; text?: string }[]; error?: { message?: string } };
@@ -31,12 +31,45 @@ const anthropic: AiClient = {
   },
 };
 
+const openai: AiClient = {
+  async complete({ system, prompt, maxTokens }) {
+    const model = env.AI_MODEL ?? 'gpt-5-mini';
+    // GPT-5 and o-series models think before answering; that thinking counts toward the token limit
+    const reasoning = /^(gpt-5|o\d)/.test(model);
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${env.OPENAI_API_KEY!}` },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: prompt },
+        ],
+        max_completion_tokens: reasoning ? maxTokens * 3 : maxTokens,
+        ...(reasoning ? { reasoning_effort: 'low' } : {}),
+      }),
+      signal: AbortSignal.timeout(90_000),
+    });
+    const data = (await res.json().catch(() => ({}))) as { choices?: { message?: { content?: string | null } }[]; error?: { message?: string } };
+    if (!res.ok) throw new AppError(502, 'ai_error', `The AI service answered with an error: ${data.error?.message ?? res.status}`);
+    return data.choices?.[0]?.message?.content ?? '';
+  },
+};
+
+export const providers = { anthropic, openai }; // exported for tests
+
 let client: AiClient | null = null;
 export function setAiClient(c: AiClient | null) {
   client = c;
 }
-export const aiEnabled = () => !!client || !!env.ANTHROPIC_API_KEY;
-const getClient = () => client ?? (env.ANTHROPIC_API_KEY ? anthropic : null);
+/** Which provider is set up: the one AI_PROVIDER names, else whichever key is present (Anthropic first). */
+export function aiProvider(): 'anthropic' | 'openai' | null {
+  const has = { anthropic: !!env.ANTHROPIC_API_KEY, openai: !!env.OPENAI_API_KEY };
+  if (env.AI_PROVIDER) return has[env.AI_PROVIDER] ? env.AI_PROVIDER : null;
+  return has.anthropic ? 'anthropic' : has.openai ? 'openai' : null;
+}
+export const aiEnabled = () => !!client || aiProvider() !== null;
+const getClient = () => client ?? ({ anthropic, openai, none: null } as const)[aiProvider() ?? 'none'];
 
 const LANG = { en: 'English', te: 'Telugu (Telugu script)', hi: 'Hindi (Devanagari script)' } as const;
 export const draftBody = z.object({

@@ -140,8 +140,8 @@ const sections: DocSection[] = [
             <strong>Razorpay</strong>: if an agency connects its Razorpay account, its customers’ online payments are handled by Razorpay. Card and bank details go to Razorpay, not to us; we only receive a payment confirmation.
           </li>
           <li>
-            <strong>Anthropic</strong>: when someone uses “Draft with AI” on a quote, we send the trip details (destination, dates, number of travellers, budget, the agent’s notes) and the agency’s price list to Anthropic’s Claude to
-            write a draft. We don’t send the customer’s name, phone number or email address.
+            <strong>An AI provider (Anthropic or OpenAI)</strong>: when someone uses “Draft with AI” on a quote, we send the trip details (destination, dates, number of travellers, budget, the agent’s notes) and the agency’s price
+            list to the AI provider to write a draft. We don’t send the customer’s name, phone number or email address.
           </li>
         </ul>
         <p>We may also disclose data if Indian law requires it, or to protect people from harm or fraud.</p>

@@ -42,8 +42,11 @@ const schema = z.object({
   GOOGLE_OAUTH_JSON: z.string().optional(),
 
   // "Draft with AI" in quotes (Anthropic's Claude). Without a key the button is hidden.
+  // Either provider works; with both keys set, AI_PROVIDER picks (Anthropic otherwise)
   ANTHROPIC_API_KEY: z.string().optional(),
-  AI_MODEL: z.string().default('claude-sonnet-5-5'),
+  OPENAI_API_KEY: z.string().optional(),
+  AI_PROVIDER: z.enum(['anthropic', 'openai']).optional(),
+  AI_MODEL: z.string().optional(), // default: claude-sonnet-5-5 or gpt-5-mini
   AI_DRAFTS_PER_DAY: z.coerce.number().int().min(0).default(40), // per company
 });
 
