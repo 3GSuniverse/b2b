@@ -222,7 +222,7 @@ export async function runTripFollowups(
 
       for (const { kind, where } of wanted) {
         const rows = await db.query.trips.findMany({
-          where: and(eq(trips.tenantId, tenant.id), where, sql`not exists (select 1 from trip_followups f where f.trip_id = "trips"."id" and f.kind = ${kind})`),
+          where: and(eq(trips.tenantId, tenant.id), eq(trips.kind, 'PRIVATE'), where, sql`not exists (select 1 from trip_followups f where f.trip_id = "trips"."id" and f.kind = ${kind})`),
           with: { contact: true },
           limit: 500,
         });

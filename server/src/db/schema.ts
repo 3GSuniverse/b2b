@@ -704,6 +704,10 @@ export const trips = pgTable(
     bookedAt: ts(),
     // Set by outside systems (the AI call agent's call id), so a retried request doesn't add the enquiry twice
     externalRef: text(),
+    // Group departures: a GROUP trip has seats and a price per person; each family's booking points at it
+    groupId: text().references((): AnyPgColumn => trips.id, { onDelete: 'set null' }),
+    capacity: integer(),
+    perPersonPrice: integer(), // paise
     // The customer's page for this trip (what's due, pay by UPI, receipts). Unguessable.
     publicToken: text()
       .notNull()
@@ -718,7 +722,37 @@ export const trips = pgTable(
     index().on(t.tenantId, t.status),
     index().on(t.contactId),
     index().on(t.tenantId, t.startDate),
+    index().on(t.groupId),
   ],
+);
+
+// The people travelling on a booking: for tickets, rooms and seats. ID numbers are encrypted.
+export const tripTravellers = pgTable(
+  'trip_travellers',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    tripId: text()
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    position: integer().notNull().default(0),
+    name: text().notNull(),
+    age: integer(),
+    gender: text(), // F, M, O
+    phone: text(),
+    idType: text(), // AADHAAR, PASSPORT, VOTER_ID, DRIVING_LICENCE, PAN, OTHER
+    idNumberEnc: text(), // AES-GCM
+    idLast4: text(), // shown in the dashboard instead of the number
+    food: text(), // VEG, NON_VEG, JAIN, OTHER
+    needs: text(), // wheelchair, medical, anything to know
+    emergencyName: text(),
+    emergencyPhone: text(),
+    room: text(),
+    seat: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.tripId)],
 );
 
 // What the customer owes and when: Advance, 2nd instalment, Balance…
@@ -989,6 +1023,11 @@ export const tripsRelations = relations(trips, ({ one, many }) => ({
   dues: many(tripDues),
   payments: many(tripPayments),
   quotes: many(quotes),
+  travellers: many(tripTravellers),
+}));
+
+export const tripTravellersRelations = relations(tripTravellers, ({ one }) => ({
+  trip: one(trips, { fields: [tripTravellers.tripId], references: [trips.id] }),
 }));
 
 export const tripDuesRelations = relations(tripDues, ({ one }) => ({

@@ -286,7 +286,7 @@ function tripSummaryDto(t: TripWithMoney, today: string) {
 
 export async function listTrips(tenantId: string, q: z.infer<typeof listTripsQuery>) {
   const today = localDate(await tenantTz(tenantId));
-  const where: SQL[] = [eq(trips.tenantId, tenantId)];
+  const where: SQL[] = [eq(trips.tenantId, tenantId), eq(trips.kind, 'PRIVATE')];
   if (q.status === 'OPEN') where.push(inArray(trips.status, OPEN_STATUSES));
   else if (q.status === 'CLOSED') where.push(inArray(trips.status, ['COMPLETED', 'LOST', 'CANCELLED']));
   else if (q.status) where.push(eq(trips.status, q.status));
@@ -338,7 +338,7 @@ export async function listTrips(tenantId: string, q: z.infer<typeof listTripsQue
 export async function tripStats(tenantId: string) {
   const tz = await tenantTz(tenantId);
   const today = localDate(tz);
-  const byStatus = await db.select({ status: trips.status, n: count(), value: sum(trips.price).mapWith(Number) }).from(trips).where(eq(trips.tenantId, tenantId)).groupBy(trips.status);
+  const byStatus = await db.select({ status: trips.status, n: count(), value: sum(trips.price).mapWith(Number) }).from(trips).where(and(eq(trips.tenantId, tenantId), eq(trips.kind, 'PRIVATE'))).groupBy(trips.status);
   const s = Object.fromEntries(byStatus.map((r) => [r.status, r]));
   const monthStart = `${today.slice(0, 7)}-01`;
   const [collected] = await db
@@ -369,7 +369,7 @@ export async function tripStats(tenantId: string) {
   const departing = await db
     .select({ n: count() })
     .from(trips)
-    .where(and(eq(trips.tenantId, tenantId), eq(trips.status, 'BOOKED'), sql`${trips.startDate} between ${today}::date and ${weekEndIso}::date`));
+    .where(and(eq(trips.tenantId, tenantId), eq(trips.kind, 'PRIVATE'), eq(trips.status, 'BOOKED'), sql`${trips.startDate} between ${today}::date and ${weekEndIso}::date`));
 
   return {
     counts: Object.fromEntries(TRIP_STATUSES.map((st) => [st, s[st]?.n ?? 0])) as Record<TripStatus, number>,
@@ -433,6 +433,8 @@ export async function getTrip(tenantId: string, id: string) {
       })),
     suggestedSchedule: t.dues.length ? null : suggestSchedule(t.price, t.startDate, today),
     payPageUrl: payPageUrl(t.publicToken),
+    travellersUrl: `${payPageUrl(t.publicToken)}/travellers`,
+    group: t.groupId ? ((await db.query.trips.findFirst({ where: eq(trips.id, t.groupId), columns: { id: true, title: true, number: true } })) ?? null) : null,
     reminders: (await remindersFor(t.id)).map((r) => ({ ...r, dueLabel: t.dues.find((d) => d.id === r.dueId)?.label ?? null })),
     activity: activity.map((a) => ({ ...a, by: a.userId ? (recordedBy.get(a.userId) ?? null) : null })),
   };

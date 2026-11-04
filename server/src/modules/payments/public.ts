@@ -169,6 +169,11 @@ export async function publicPaymentRoutes(app: FastifyInstance) {
           .map((p) => `<div class="row"><div class="l">${formatInr(p.amount)}<span>${d(p.paidAt.toISOString())} · ${METHOD[p.method]}</span></div><div class="r"><a href="/r/${p.publicToken}">Receipt #${p.receiptNumber}</a></div></div>`)
           .join('')}</div>`
       : '';
+    const party = trip.adults + trip.children;
+    const travellersCard =
+      trip.status === 'BOOKED' || trip.status === 'QUOTED'
+        ? `<div class="card"><h2>Traveller details</h2><p class="meta" style="margin:0 0 12px">Names and ID details for tickets and check-in${party > 1 ? `, for all ${party} travellers` : ''}.</p><a class="btn secondary" href="/p/${trip.publicToken}/travellers">Fill in traveller details</a></div>`
+        : '';
     const footer = `<footer>${[tenant.name, tenant.postalAddress, prettyPhone(contactPhone)].filter(Boolean).map((x) => e(x!)).join('<br>')}</footer>`;
     const q = req.query as { paid?: string; error?: string };
     const banner = q.paid
@@ -176,7 +181,7 @@ export async function publicPaymentRoutes(app: FastifyInstance) {
       : q.error
         ? `<div class="card overdue"><div class="due-label">Online payment isn’t available right now</div><div class="meta" style="margin:0">Please pay by UPI below, or contact ${e(tenant.name)}.</div></div>`
         : '';
-    return send(reply, layout(`${trip.title} · ${tenant.name}`, `${brand}${banner}${head}${dueCard}${schedule}${received}${footer}`));
+    return send(reply, layout(`${trip.title} · ${tenant.name}`, `${brand}${banner}${head}${dueCard}${schedule}${received}${travellersCard}${footer}`));
   });
 
   app.get<{ Params: { token: string } }>('/r/:token', async (req, reply) => {
