@@ -57,6 +57,13 @@
       "when": 1793762066957,
       "tag": "0007_trips",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793762957886,
+      "tag": "0008_payments",
+      "breakpoints": true
     }
   ]
 }

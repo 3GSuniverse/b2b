@@ -5,6 +5,7 @@ import { db, type Tx } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { ensureField } from '../contacts/fields.js';
 import { normalizeEmail, normalizePhone } from '../contacts/normalize.js';
+import { payPageUrl, receiptUrl, remindersFor } from '../payments/reminders.js';
 import { formatInr, localDate, rupeesToPaise, suggestSchedule, tripMoney, type DueInput } from './money.js';
 
 export interface Actor {
@@ -428,9 +429,11 @@ export async function getTrip(tenantId: string, id: string) {
         recordedBy: p.recordedById ? (recordedBy.get(p.recordedById) ?? null) : null,
         voidedAt: p.voidedAt,
         voidReason: p.voidReason,
-        receiptToken: p.publicToken,
+        receiptUrl: receiptUrl(p.publicToken),
       })),
     suggestedSchedule: t.dues.length ? null : suggestSchedule(t.price, t.startDate, today),
+    payPageUrl: payPageUrl(t.publicToken),
+    reminders: (await remindersFor(t.id)).map((r) => ({ ...r, dueLabel: t.dues.find((d) => d.id === r.dueId)?.label ?? null })),
     activity: activity.map((a) => ({ ...a, by: a.userId ? (recordedBy.get(a.userId) ?? null) : null })),
   };
 }
@@ -531,22 +534,21 @@ export async function setDues(actor: Actor, id: string, input: z.infer<typeof du
   const t = await ownedTrip(actor.tenantId, id);
   const total = input.dues.reduce((a, d) => a + d.amount, 0);
   await db.transaction(async (tx) => {
-    // Keep "reminded" marks for dues that didn't change, so nobody gets the same reminder twice
-    const reminded = new Map(t.dues.map((d) => [`${d.label}|${d.amount}|${d.dueDate}`, d.remindedAt]));
-    await tx.delete(tripDues).where(eq(tripDues.tripId, id));
-    if (input.dues.length) {
-      await tx.insert(tripDues).values(
-        input.dues.map((d, i) => ({
-          tenantId: actor.tenantId,
-          tripId: id,
-          label: d.label,
-          amount: d.amount,
-          dueDate: d.dueDate,
-          position: i,
-          remindedAt: reminded.get(`${d.label}|${d.amount}|${d.dueDate}`) ?? null,
-        })),
-      );
+    // Instalments that didn't change keep their identity, so reminders already sent for them aren't sent again
+    const keyOf = (d: { label: string; amount: number; dueDate: string }) => `${d.label}|${d.amount}|${d.dueDate}`;
+    const existing = new Map(t.dues.map((d) => [keyOf(d), d.id]));
+    const keep = new Set<string>();
+    for (const [i, d] of input.dues.entries()) {
+      const id = existing.get(keyOf(d));
+      if (id && !keep.has(id)) {
+        keep.add(id);
+        await tx.update(tripDues).set({ position: i }).where(eq(tripDues.id, id));
+      } else {
+        await tx.insert(tripDues).values({ tenantId: actor.tenantId, tripId: t.id, label: d.label, amount: d.amount, dueDate: d.dueDate, position: i });
+      }
     }
+    const gone = t.dues.filter((d) => !keep.has(d.id)).map((d) => d.id);
+    if (gone.length) await tx.delete(tripDues).where(inArray(tripDues.id, gone));
     // A schedule with no price yet sets the price
     if (t.price === 0 && total > 0) await tx.update(trips).set({ price: total }).where(eq(trips.id, id));
     await audit(actor, 'trip.schedule', id, { count: input.dues.length, total: formatInr(total) }, tx);

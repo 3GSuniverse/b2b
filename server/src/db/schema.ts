@@ -8,6 +8,7 @@ import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  type AnyPgColumn,
   date,
   index,
   integer,
@@ -128,9 +129,27 @@ export const tenants = pgTable('tenants', {
   trialEndedAt: ts(), // set once the end-of-trial clean-up has run
   // Unofficial WhatsApp Web sending: on during an active trial. This flag is an operator override for testing.
   whatsappWebEnabled: boolean().notNull().default(false),
+  // How customers pay and get reminded (UPI ID, reminder timing and wording, Razorpay keys)
+  paymentSettings: jsonb().$type<PaymentSettings>().notNull().default({}),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+export type ReminderChannel = 'AUTO' | 'WHATSAPP' | 'EMAIL';
+export interface PaymentSettings {
+  upiId?: string; // where customers pay: name@bank
+  upiName?: string; // the name UPI apps show
+  contactPhone?: string; // E.164, for "send us the payment screenshot"
+  remindersEnabled?: boolean; // default on
+  daysBefore?: number; // reminder this many days before a due date (default 3)
+  overdueReminder?: boolean; // one reminder the day after a missed date (default on)
+  channel?: ReminderChannel; // AUTO: WhatsApp when linked, else email
+  beforeText?: string;
+  overdueText?: string;
+  razorpayKeyId?: string;
+  razorpayKeySecretEnc?: string; // AES-GCM, never sent to the browser
+  razorpayWebhookSecretEnc?: string;
+}
 
 export const users = pgTable(
   'users',
@@ -465,6 +484,10 @@ export const messages = pgTable(
     tenantId: tenantRef(),
     campaignId: text().references(() => campaigns.id, { onDelete: 'cascade' }), // null for automations
     automationId: text().references(() => automations.id, { onDelete: 'cascade' }),
+    // Service messages about a trip (payment reminders): content is stored on the message itself
+    tripId: text().references((): AnyPgColumn => trips.id, { onDelete: 'set null' }),
+    subject: text(),
+    body: text(),
     contactId: text().references(() => contacts.id, { onDelete: 'set null' }),
     senderId: text().references(() => senders.id, { onDelete: 'set null' }), // which mailbox/domain sent it
     channel: channel().notNull().default('EMAIL'),
@@ -668,6 +691,11 @@ export const trips = pgTable(
     createdById: text().references(() => users.id, { onDelete: 'set null' }),
     statusChangedAt: ts(),
     bookedAt: ts(),
+    // The customer's page for this trip (what's due, pay by UPI, receipts). Unguessable.
+    publicToken: text()
+      .notNull()
+      .unique()
+      .$defaultFn(() => createId() + createId()),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -726,6 +754,29 @@ export const tripPayments = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex().on(t.tenantId, t.receiptNumber), index().on(t.tripId), index().on(t.tenantId, t.paidAt)],
+);
+
+export const reminderKind = pgEnum('reminder_kind', ['BEFORE', 'OVERDUE']);
+
+// One row per reminder sent: each due gets each kind at most once, whatever reruns
+export const tripReminders = pgTable(
+  'trip_reminders',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    tripId: text()
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    dueId: text()
+      .notNull()
+      .references(() => tripDues.id, { onDelete: 'cascade' }),
+    kind: reminderKind().notNull(),
+    channel: channel(), // null when nothing could be sent (no phone/email/sender)
+    messageId: text().references(() => messages.id, { onDelete: 'set null' }),
+    skipReason: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex().on(t.dueId, t.kind), index().on(t.tripId)],
 );
 
 // ---------------------------------------------------------------------
@@ -788,6 +839,8 @@ export const campaignsRelations = relations(campaigns, ({ one, many }) => ({
 
 export const messagesRelations = relations(messages, ({ one, many }) => ({
   tenant: one(tenants, { fields: [messages.tenantId], references: [tenants.id] }),
+  trip: one(trips, { fields: [messages.tripId], references: [trips.id] }),
+  sender: one(senders, { fields: [messages.senderId], references: [senders.id] }),
   campaign: one(campaigns, { fields: [messages.campaignId], references: [campaigns.id] }),
   automation: one(automations, { fields: [messages.automationId], references: [automations.id] }),
   contact: one(contacts, { fields: [messages.contactId], references: [contacts.id] }),

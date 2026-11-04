@@ -1,17 +1,38 @@
 import { useMutation } from '@tanstack/react-query';
-import { Ban, CalendarClock, MoreHorizontal, Plus, ReceiptText, Trash2, Wallet } from 'lucide-react';
+import { Ban, BellRing, CalendarClock, Copy, ExternalLink, Link2, MessageCircle, MoreHorizontal, Plus, ReceiptText, Trash2, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge, Panel, PanelHeader } from '@/components/ui/display';
 import { Field, Input } from '@/components/ui/field';
-import { Dialog, Menu, MenuItem } from '@/components/ui/overlay';
+import { Dialog, Menu, MenuItem, MenuSeparator } from '@/components/ui/overlay';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { dateTime, inr, rupeesInput, shortDate, todayIso } from '@/lib/format';
+import { ago, dateTime, inr, rupeesInput, shortDate, todayIso } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import type { PaymentMethod, TripDetail } from '@/lib/types';
 import { DUE_STATE, METHODS, sanitizeRupees } from './shared';
+
+/** Opens WhatsApp (app or web) with a message ready to send from the agent's own number. */
+export function waShare(phone: string | null, text: string) {
+  const to = phone ? phone.replace(/\D/g, '') : '';
+  return `https://wa.me/${to}?text=${encodeURIComponent(text)}`;
+}
+
+async function copy(text: string, what: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success(`${what} copied`);
+  } catch {
+    toast.error('Couldn’t copy. Select the link and copy it yourself.');
+  }
+}
+
+const SKIP: Record<string, string> = {
+  no_phone_or_email: 'no phone or email',
+  no_channel: 'WhatsApp not linked and no email',
+  contact_removed: 'contact removed',
+};
 
 const toPaise = (v: string) => {
   const clean = v.replace(/[,\s]/g, '');
@@ -331,12 +352,42 @@ export function PaymentsPanel({ trip, onChange, onSetPrice }: { trip: TripDetail
         )}
       </div>
 
+      {!closed && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-soft bg-sunken px-5 py-3 sm:px-6">
+          <span className="flex min-w-0 items-center gap-2 text-[13px]">
+            <Link2 className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+            <span className="min-w-0">
+              <span className="font-medium">Customer’s page</span>
+              <span className="text-muted"> · what’s due, pay by UPI, receipts</span>
+            </span>
+          </span>
+          <span className="flex gap-1.5">
+            <a
+              className="inline-flex h-8 items-center gap-1.5 rounded-[9px] bg-[#128c4a] px-3 text-[13px] font-semibold text-white hover:bg-[#0f7a40]"
+              href={waShare(trip.customer.phone, `Hi ${trip.customer.name.split(' ')[0]}, here are the details and payment options for your ${trip.title}: ${trip.payPageUrl}`)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle className="h-3.5 w-3.5" aria-hidden />
+              Send
+            </a>
+            <Button size="sm" variant="ghost" onClick={() => copy(trip.payPageUrl, 'Link')} aria-label="Copy the customer’s page link">
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+            <a className="inline-flex h-8 w-8 items-center justify-center rounded-[9px] text-muted hover:bg-hover hover:text-ink" href={trip.payPageUrl} target="_blank" rel="noreferrer" aria-label="Open the customer’s page">
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </span>
+        </div>
+      )}
+
       {money.dues.length > 0 && (
         <div className="border-t border-line-soft">
           <h3 className="px-5 pb-1 pt-4 text-[13px] font-semibold sm:px-6">Schedule</h3>
           <ol className="flex flex-col">
             {money.dues.map((d) => {
               const st = DUE_STATE[d.state];
+              const last = trip.reminders.find((r) => r.dueId === d.id);
               return (
                 <li key={d.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-3 sm:grid-cols-[minmax(0,1fr)_120px_120px_100px] sm:px-6">
                   <span className="flex min-w-0 flex-col">
@@ -344,6 +395,14 @@ export function PaymentsPanel({ trip, onChange, onSetPrice }: { trip: TripDetail
                     <span className="text-xs text-muted sm:hidden">
                       Due {shortDate(d.dueDate)} · {inr(d.amount)}
                     </span>
+                    {last && (
+                      <span className={cn('flex items-center gap-1 text-xs', last.channel ? 'text-muted' : 'text-warm-strong')}>
+                        <BellRing className="h-3 w-3" aria-hidden />
+                        {last.channel
+                          ? `${last.kind === 'OVERDUE' ? 'Overdue reminder' : 'Reminder'} sent ${ago(last.createdAt)} by ${last.channel === 'WHATSAPP' ? 'WhatsApp' : 'email'}${last.status === 'FAILED' ? ' (failed)' : ''}`
+                          : `Couldn’t remind: ${SKIP[last.skipReason ?? ''] ?? last.skipReason}`}
+                      </span>
+                    )}
                   </span>
                   <span className="tnum hidden text-[13px] text-ink-2 sm:block">{shortDate(d.dueDate)}</span>
                   <span className="tnum hidden text-right text-[13px] font-medium sm:block">{inr(d.amount)}</span>
@@ -389,21 +448,42 @@ export function PaymentsPanel({ trip, onChange, onSetPrice }: { trip: TripDetail
                   </span>
                 </span>
                 <span className={cn('tnum text-sm font-semibold', p.voidedAt && 'line-through')}>{inr(p.amount)}</span>
-                {!p.voidedAt && canVoid ? (
-                  <Menu
-                    trigger={
-                      <button type="button" className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-hover hover:text-ink" aria-label={`Options for receipt ${p.receiptNumber}`}>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </button>
-                    }
-                  >
-                    <MenuItem danger icon={<Ban />} onSelect={() => setVoiding(p.id)}>
-                      Cancel this receipt
+                <Menu
+                  trigger={
+                    <button type="button" className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-hover hover:text-ink" aria-label={`Options for receipt ${p.receiptNumber}`}>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  }
+                >
+                  <MenuItem icon={<ExternalLink />} onSelect={() => window.open(p.receiptUrl, '_blank', 'noopener')}>
+                    Open receipt
+                  </MenuItem>
+                  {!p.voidedAt && (
+                    <MenuItem
+                      icon={<MessageCircle />}
+                      onSelect={() =>
+                        window.open(
+                          waShare(trip.customer.phone, `Hi ${trip.customer.name.split(' ')[0]}, thank you! We’ve received ${inr(p.amount)} for your ${trip.title}. Your receipt: ${p.receiptUrl}`),
+                          '_blank',
+                          'noopener',
+                        )
+                      }
+                    >
+                      Send on WhatsApp
                     </MenuItem>
-                  </Menu>
-                ) : (
-                  <span />
-                )}
+                  )}
+                  <MenuItem icon={<Copy />} onSelect={() => copy(p.receiptUrl, 'Receipt link')}>
+                    Copy link
+                  </MenuItem>
+                  {!p.voidedAt && canVoid && (
+                    <>
+                      <MenuSeparator />
+                      <MenuItem danger icon={<Ban />} onSelect={() => setVoiding(p.id)}>
+                        Cancel this receipt
+                      </MenuItem>
+                    </>
+                  )}
+                </Menu>
               </li>
             ))}
           </ul>
@@ -423,9 +503,19 @@ export function PaymentsPanel({ trip, onChange, onSetPrice }: { trip: TripDetail
         trip={trip}
         open={recording}
         onClose={() => setRecording(false)}
-        onSaved={(t) => {
+        onSaved={(t, receipt) => {
           setRecording(false);
           onChange(t);
+          const p = t.payments.find((x) => x.receiptNumber === receipt);
+          if (p && t.customer.phone) {
+            toast(`Send receipt #${receipt} to ${t.customer.name.split(' ')[0]}?`, {
+              action: {
+                label: 'WhatsApp',
+                onClick: () => window.open(waShare(t.customer.phone, `Hi ${t.customer.name.split(' ')[0]}, thank you! We’ve received ${inr(p.amount)} for your ${t.title}. Your receipt: ${p.receiptUrl}`), '_blank', 'noopener'),
+              },
+              duration: 10_000,
+            });
+          }
         }}
       />
       <VoidDialog

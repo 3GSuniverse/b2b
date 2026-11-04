@@ -10,6 +10,7 @@ import { bumpCounter } from './counters.js';
 import { trialEnded } from '../plans/entitlements.js';
 import { notify } from '../notifications/service.js';
 import { syncAutomationSend } from '../automations/engine.js';
+import { payPageUrl, serviceEmailHtml } from '../payments/reminders.js';
 
 export type SendOutcome =
   | 'sent'
@@ -102,6 +103,8 @@ export async function processSendJob(
       contact: true,
       campaign: { with: { sender: { with: { connection: true } } } },
       automation: { with: { sender: { with: { connection: true } }, template: true } },
+      sender: { with: { connection: true } },
+      trip: { columns: { publicToken: true } },
     },
   });
 
@@ -118,10 +121,13 @@ export async function processSendJob(
     return 'failed';
   }
 
+  // A service message about the customer's own booking (a payment reminder), not marketing
+  const service = !msg.campaignId && !msg.automationId && !!msg.tripId;
+
   // 2. Re-check consent at the moment of sending — people unsubscribe between scheduling and sending
   const address = msg.toAddress.toLowerCase();
   const [suppressed] = await db
-    .select({ id: suppressions.id })
+    .select({ id: suppressions.id, reason: suppressions.reason })
     .from(suppressions)
     .where(
       and(
@@ -131,14 +137,24 @@ export async function processSendJob(
       ),
     )
     .limit(1);
-  if (suppressed || (msg.contact && msg.contact.emailStatus !== 'SUBSCRIBED')) {
+  if (service) {
+    // Opting out of offers doesn't stop booking messages; a bounce or a spam report does
+    if ((suppressed && suppressed.reason !== 'UNSUBSCRIBE') || msg.contact?.emailStatus === 'BOUNCED' || msg.contact?.emailStatus === 'COMPLAINED') {
+      await finalizeMessage(msg, 'SUPPRESSED', suppressed ? 'on_suppression_list' : `contact_${msg.contact!.emailStatus.toLowerCase()}`);
+      return 'suppressed';
+    }
+  } else if (suppressed || (msg.contact && msg.contact.emailStatus !== 'SUBSCRIBED')) {
     await finalizeMessage(msg, 'SUPPRESSED', suppressed ? 'on_suppression_list' : `contact_${msg.contact!.emailStatus.toLowerCase()}`);
     return 'suppressed';
   }
 
   // 3. Content and sender come from the campaign snapshot, or the automation's template
-  const sender = msg.campaign?.sender ?? msg.automation?.sender;
-  const content = msg.campaign
+  const sender = msg.campaign?.sender ?? msg.automation?.sender ?? (service ? msg.sender : null);
+  const content = service
+    ? msg.subject && msg.body
+      ? { subject: msg.subject, html: '', text: msg.body, previewText: null }
+      : null
+    : msg.campaign
     ? { subject: msg.campaign.subject, html: msg.campaign.html, text: msg.campaign.text, previewText: msg.campaign.previewText }
     : msg.automation?.template
       ? {
@@ -153,7 +169,7 @@ export async function processSendJob(
     await finalizeMessage(msg, 'FAILED', 'no_sender');
     return 'failed';
   }
-  if (!content?.subject || !content.html) {
+  if (!content?.subject || (!content.html && !service)) {
     await finalizeMessage(msg, 'FAILED', 'no_content');
     return 'failed';
   }
@@ -174,14 +190,19 @@ export async function processSendJob(
     sendVia = mailboxProvider(conn);
   }
 
-  // 4. Render
+  // 4. Render. Service messages were written in full when they were created.
   const unsubUrl = unsubscribeUrl(msg.id);
-  const vars = buildMergeVars(msg.contact, msg.tenant, { unsubscribe_url: unsubUrl });
-  const rendered = renderEmail(
-    { subject: content.subject, html: content.html, text: content.text, previewText: content.previewText },
-    vars,
-    msg.tenant,
-  );
+  const rendered = service
+    ? {
+        subject: content.subject,
+        text: content.text!,
+        html: serviceEmailHtml({ text: content.text!, tenant: msg.tenant, buttonUrl: msg.trip ? payPageUrl(msg.trip.publicToken) : undefined, buttonLabel: 'See what’s due and pay' }),
+      }
+    : renderEmail(
+        { subject: content.subject, html: content.html!, text: content.text, previewText: content.previewText },
+        buildMergeVars(msg.contact, msg.tenant, { unsubscribe_url: unsubUrl }),
+        msg.tenant,
+      );
 
   // 5. Send
   let providerMessageId: string;
@@ -193,11 +214,8 @@ export async function processSendJob(
       subject: rendered.subject,
       html: rendered.html,
       text: rendered.text,
-      headers: {
-        // Gmail & Yahoo one-click unsubscribe (RFC 8058)
-        'List-Unsubscribe': `<${unsubUrl}>`,
-        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-      },
+      // Gmail & Yahoo one-click unsubscribe (RFC 8058). Not on booking messages: there's nothing to unsubscribe from.
+      headers: service ? {} : { 'List-Unsubscribe': `<${unsubUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
       tags: {
         message_id: msg.id,
         tenant_id: msg.tenantId,

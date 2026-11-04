@@ -224,12 +224,14 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
     .from(suppressions)
     .where(and(eq(suppressions.tenantId, msg.tenantId), eq(suppressions.channel, 'WHATSAPP'), eq(suppressions.address, msg.toAddress)))
     .limit(1);
-  if (suppressed || (msg.contact && msg.contact.whatsappStatus !== 'SUBSCRIBED')) {
+  // Booking messages (payment reminders) go to the customer unless they replied STOP; offers need their opt-in
+  const service = !msg.campaignId && !msg.automationId && !!msg.tripId;
+  if (suppressed || (!service && msg.contact && msg.contact.whatsappStatus !== 'SUBSCRIBED')) {
     await finalizeMessage(msg, 'SUPPRESSED', suppressed ? 'on_suppression_list' : `contact_whatsapp_${msg.contact!.whatsappStatus.toLowerCase()}`);
     return 'suppressed';
   }
 
-  const body = msg.campaign?.text;
+  const body = service ? msg.body : msg.campaign?.text;
   if (!body?.trim()) {
     await finalizeMessage(msg, 'FAILED', 'no_content');
     return 'failed';

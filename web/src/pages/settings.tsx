@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, CheckCircle2, Circle, Globe, Mail, MessageCircle, MoreHorizontal, Plus, RefreshCw, Send, Star, Trash2, TriangleAlert } from 'lucide-react';
+import { Building2, Wallet, CheckCircle2, Circle, Globe, Mail, MessageCircle, MoreHorizontal, Plus, RefreshCw, Send, Star, Trash2, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -14,11 +14,13 @@ import { ago, n } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import type { DnsRecord, Domain, Mailbox, Sender } from '@/lib/types';
 import { WhatsAppSettings } from '@/components/whatsapp/settings';
+import { PaymentSettingsPanel } from '@/components/trips/payment-settings';
 
 const SECTIONS = [
   { id: 'senders', label: 'Sending addresses', icon: Send },
   { id: 'domains', label: 'Domains', icon: Globe },
   { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
+  { id: 'payments', label: 'Payments', icon: Wallet },
   { id: 'company', label: 'Company', icon: Building2 },
 ] as const;
 type Section = (typeof SECTIONS)[number]['id'];
@@ -630,7 +632,7 @@ export function SettingsPage() {
   const sections = SECTIONS.filter((x) => x.id !== 'whatsapp' || tenant.features?.whatsapp);
   if (section === 'account') return <Navigate to="/settings/company" replace />;
   if (!sections.some((s) => s.id === section)) return <Navigate to="/settings/senders" replace />;
-  const content: Record<Section, ReactNode> = { senders: <Senders />, domains: <Domains />, whatsapp: <WhatsAppSettings />, company: <Company /> };
+  const content: Record<Section, ReactNode> = { senders: <Senders />, domains: <Domains />, whatsapp: <WhatsAppSettings />, payments: <PaymentSettingsPanel />, company: <Company /> };
   return (
     <>
       <PageHeader title="Settings" />

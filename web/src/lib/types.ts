@@ -301,7 +301,7 @@ export interface TripPayment {
   recordedBy: string | null;
   voidedAt: string | null;
   voidReason: string | null;
-  receiptToken: string;
+  receiptUrl: string;
 }
 
 export interface TripDetail extends Omit<TripSummary, 'money'> {
@@ -311,6 +311,8 @@ export interface TripDetail extends Omit<TripSummary, 'money'> {
   money: TripSummary['money'] & { price: number; scheduled: number; unscheduled: number; dues: TripDue[] };
   payments: TripPayment[];
   suggestedSchedule: { label: string; amount: number; dueDate: string }[] | null;
+  payPageUrl: string;
+  reminders: { id: string; dueId: string; dueLabel: string | null; kind: 'BEFORE' | 'OVERDUE'; channel: Channel | null; skipReason: string | null; createdAt: string; status: string | null }[];
   activity: { id: string; action: string; meta: Record<string, unknown> | null; by: string | null; createdAt: string }[];
 }
 
