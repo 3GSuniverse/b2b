@@ -1,6 +1,6 @@
 # Putting Drona live
 
-The end result: **https://drona.kurukshetra-travels.in** runs on its own small Google Cloud VM, reachable only through a Cloudflare tunnel. One command (`drona`) installs, updates, backs up and manages it.
+The end result: **https://dhrona.kurukshetra-travels.in** runs on its own small Google Cloud VM, reachable only through a Cloudflare tunnel. One command (`drona`) installs, updates, backs up and manages it.
 
 About 45 minutes the first time. Steps 1 to 4 happen once; after that, updating is `drona deploy`.
 
@@ -59,7 +59,7 @@ git clone git@github.com:3GSuniverse/b2b.git ~/drona
 
 The first run installs Docker and asks you to log out and back in. Do that, then run the same command again. It asks for:
 
-- **Public address**: press Enter for `https://drona.kurukshetra-travels.in`
+- **Public address**: press Enter for `https://dhrona.kurukshetra-travels.in`
 - **Port**: press Enter for `4100`
 - **AWS access key and secret** for SES. Press Enter to skip; emails are then only printed to the logs, which is fine for a first look
 - **SNS topic ARN** for bounces, if you have it
@@ -78,12 +78,12 @@ Then **Public hostname → Add**:
 
 | Field | Value |
 |---|---|
-| Subdomain | `drona` |
+| Subdomain | `dhrona` |
 | Domain | `kurukshetra-travels.in` |
 | Type | `HTTP` |
 | URL | `localhost:4100` |
 
-Open https://drona.kurukshetra-travels.in. The sign-in page should load.
+Open https://dhrona.kurukshetra-travels.in. The sign-in page should load.
 
 Recommended in Cloudflare → SSL/TLS → Edge Certificates: **Always Use HTTPS** on.
 
@@ -91,7 +91,7 @@ Recommended in Cloudflare → SSL/TLS → Edge Certificates: **Always Use HTTPS*
 
 In the AWS console, region **ap-south-1**:
 
-1. **SNS → Topics**, open the topic your SES configuration set sends events to → Create subscription → Protocol **HTTPS** → Endpoint `https://drona.kurukshetra-travels.in/webhooks/ses`. Drona confirms it by itself within a few seconds; refresh and the status shows *Confirmed*.
+1. **SNS → Topics**, open the topic your SES configuration set sends events to → Create subscription → Protocol **HTTPS** → Endpoint `https://dhrona.kurukshetra-travels.in/webhooks/ses`. Drona confirms it by itself within a few seconds; refresh and the status shows *Confirmed*.
 2. Copy the topic ARN into `SES_SNS_TOPIC_ARN` in `~/drona/deploy/.env`, so notifications from any other topic are refused.
 3. Make sure the SES configuration set named in `SES_CONFIGURATION_SET` (`drona-events` for a new setup) sends Bounce, Complaint, Delivery, Open and Click events to that topic.
 4. Once SES production access is approved, raise `SEND_RATE_PER_SECOND` to your account's rate (SES → Account dashboard → Sending rate).
@@ -103,7 +103,7 @@ After editing `.env`: `drona restart`.
 Google Cloud → Google Auth Platform → Clients → your web client → **Authorized redirect URIs**, add:
 
 ```
-https://drona.kurukshetra-travels.in/api/integrations/gmail/callback
+https://dhrona.kurukshetra-travels.in/api/integrations/gmail/callback
 ```
 
 Download the client JSON and copy it to the VM as `~/drona/deploy/secrets/google-oauth.json` (the SSH window's **Upload file** button, then `mv`). That folder is never committed. Then `drona restart`.
