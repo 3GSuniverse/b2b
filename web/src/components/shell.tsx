@@ -25,15 +25,28 @@ const NAV = [
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
+/** The Dhrona mark: a D of target rings with an arrow in the centre. On hover the arrow strikes. */
+export function LogoMark({ size = 34 }: { size?: number }) {
+  return (
+    <svg aria-hidden width={size} height={size} viewBox="0 0 64 64" className="shrink-0">
+      <rect width="64" height="64" rx="15" fill="#4A3FD1" />
+      <path d="M20 13H29.5C41.5 13 51 21.5 51 32.5S41.5 52 29.5 52H20Z" fill="none" stroke="#fff" strokeWidth="5.2" strokeLinejoin="round" />
+      <path d="M27.5 21.8H30C36 21.8 41 26.5 41 32.5S36 43.2 30 43.2H27.5Z" fill="none" stroke="#fff" strokeOpacity=".45" strokeWidth="3" strokeLinejoin="round" />
+      <g className="transition-transform duration-300 ease-[cubic-bezier(0.22,1.4,0.36,1)] group-hover/logo:translate-x-[2px] group-hover/logo:translate-y-[2px]">
+        <path d="M8.5 8.5L30.5 30.5" stroke="#4A3FD1" strokeWidth="8" strokeLinecap="round" />
+        <path d="M8.5 8.5L30.5 30.5" stroke="#FF8A1F" strokeWidth="3.3" strokeLinecap="round" />
+        <path d="M14.6 9.6L15.3 15.3L9.6 14.6M10.9 5.9L11.6 11.6L5.9 10.9" fill="none" stroke="#FF8A1F" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" />
+      </g>
+      <circle cx="33" cy="32.5" r="4.4" fill="#FF8A1F" />
+    </svg>
+  );
+}
+
 export function Logo({ className }: { className?: string }) {
   return (
     <span className={cn('group/logo flex items-center gap-2.5', className)}>
-      <span aria-hidden className="grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-logo">
-        <svg className="stroke-logo-mark transition-transform duration-300 ease-[cubic-bezier(0.2,0.9,0.3,1.4)] group-hover/logo:-translate-y-[2px] group-hover/logo:translate-x-[2px]" width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 12l16-8-6 16-3-7-7-1z" />
-        </svg>
-      </span>
-      <span className="text-[17px] font-bold tracking-[-0.02em]">{BRAND.name}</span>
+      <LogoMark />
+      <span className="text-[18px] font-extrabold tracking-[-0.03em]">{BRAND.name}</span>
     </span>
   );
 }
