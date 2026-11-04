@@ -191,7 +191,7 @@ export function GroupPage() {
             )}
           </div>
           {tab === 'families' ? (
-            <ul className="border-t border-line-soft">
+            <ul className="stagger border-t border-line-soft">
               {g.bookings.map((b) => (
                 <li key={b.id} className={cn('relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-1.5 border-t border-line-soft px-5 py-3.5 first:border-0 sm:px-6 lg:grid-cols-[minmax(0,1fr)_70px_110px_190px_240px]', (b.status === 'LOST' || b.status === 'CANCELLED') && 'opacity-55')}>
                   <span className="flex min-w-0 flex-col">

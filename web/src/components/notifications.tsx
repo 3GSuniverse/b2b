@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Bell, CheckCircle2, Info, XCircle } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { play } from '@/lib/motion';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { ago } from '@/lib/format';
@@ -27,15 +29,25 @@ export function NotificationsButton() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
   const unread = q.data?.unread ?? 0;
+  // A new alert rings the bell once
+  const bell = useRef<SVGSVGElement>(null);
+  const seen = useRef<number | null>(null);
+  useEffect(() => {
+    if (!q.data) return;
+    if (seen.current !== null && unread > seen.current) {
+      play(bell.current, [{ transform: 'rotate(0)' }, { transform: 'rotate(16deg)' }, { transform: 'rotate(-13deg)' }, { transform: 'rotate(9deg)' }, { transform: 'rotate(-5deg)' }, { transform: 'rotate(0)' }], { duration: 700, easing: 'ease-in-out' });
+    }
+    seen.current = unread;
+  }, [q.data, unread]);
 
   return (
     <Popover
       className="w-[min(380px,calc(100vw-24px))]"
       trigger={
-        <button type="button" className="relative grid h-11 w-11 place-items-center rounded-[var(--radius-control)] border border-line bg-surface text-ink-2 hover:bg-sunken" aria-label={unread ? `Alerts, ${unread} unread` : 'Alerts'}>
-          <Bell className="h-[18px] w-[18px]" />
+        <button type="button" className="relative grid h-11 w-11 place-items-center rounded-[var(--radius-control)] border border-line bg-surface text-ink-2 transition-transform duration-200 hover:bg-sunken active:scale-95" aria-label={unread ? `Alerts, ${unread} unread` : 'Alerts'}>
+          <Bell ref={bell} className="h-[18px] w-[18px] origin-top" />
           {unread > 0 && (
-            <span className="tnum absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-warm px-1 text-[11px] font-bold text-white ring-2 ring-ground">
+            <span key={unread} className="tnum absolute -right-1 -top-1 grid h-5 min-w-5 animate-check place-items-center rounded-full bg-warm px-1 text-[11px] font-bold text-white ring-2 ring-ground">
               {unread > 9 ? '9+' : unread}
             </span>
           )}

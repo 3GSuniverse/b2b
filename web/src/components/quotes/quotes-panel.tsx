@@ -42,7 +42,7 @@ export function QuotesPanel({ trip }: { trip: TripDetail }) {
         />
       </div>
       {quotes.length > 0 && (
-        <ul className="border-t border-line-soft">
+        <ul className="stagger border-t border-line-soft">
           {quotes.map((x) => {
             const st = QUOTE_STATUS[x.status];
             return (

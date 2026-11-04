@@ -20,6 +20,7 @@ import { CampaignStatusBadge } from '@/lib/status';
 import { PrettyTags } from '@/lib/tags';
 import type { Audience, Campaign, CampaignPreview } from '@/lib/types';
 import { ChecksPanel, nextAt, Step, toIso, toLocalInput } from './composer';
+import { takeoff } from '@/lib/celebrate';
 
 const MAX = 4096;
 interface Draft {
@@ -114,7 +115,10 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
       await save();
       return api.post<{ campaign: Campaign }>(`/api/campaigns/${id}/schedule`, { scheduledAt: toIso(when, tz) });
     },
-    onSuccess: (r) => after(r, `Scheduled for ${dateTime(r.campaign.scheduledAt)}`, '/campaigns?tab=SCHEDULED'),
+    onSuccess: (r) => {
+      takeoff();
+      after(r, `Scheduled for ${dateTime(r.campaign.scheduledAt)}`, '/campaigns?tab=SCHEDULED');
+    },
   });
   const unschedule = useMutation({ mutationFn: () => api.post<{ campaign: Campaign }>(`/api/campaigns/${id}/unschedule`), onSuccess: (r) => after(r, 'Unscheduled. It’s a draft again.') });
   const send = useMutation({
@@ -122,7 +126,10 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
       await save();
       return api.post<{ campaign: Campaign }>(`/api/campaigns/${id}/send`);
     },
-    onSuccess: (r) => after(r, 'Sending started', `/campaigns/${id}`),
+    onSuccess: (r) => {
+      takeoff();
+      after(r, 'Sending started', `/campaigns/${id}`);
+    },
     onError: (e: Error) => {
       setConfirmSend(false);
       toast.error(e.message);

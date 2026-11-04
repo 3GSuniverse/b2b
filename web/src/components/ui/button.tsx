@@ -5,7 +5,7 @@ import { Link, type LinkProps } from 'react-router-dom';
 import { cn } from '@/lib/cn';
 
 export const buttonStyles = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] font-semibold transition-[background,box-shadow,color,transform] duration-150 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 select-none',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] font-semibold transition-[background,box-shadow,color,transform,border-color] duration-200 ease-[cubic-bezier(0.22,1.2,0.36,1)] active:scale-[0.97] active:duration-75 disabled:pointer-events-none disabled:opacity-50 select-none',
   {
     variants: {
       variant: {

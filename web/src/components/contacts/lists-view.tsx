@@ -54,9 +54,9 @@ export function ListsView({ lists, onOpen }: { lists?: ContactList[]; onOpen: (i
           </EmptyState>
         </Panel>
       ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="stagger grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {lists.map((l) => (
-            <Panel key={l.id} className="group relative flex flex-col gap-4 p-5 transition-shadow hover:shadow-[var(--shadow-lift)]">
+            <Panel key={l.id} className="group relative flex flex-col gap-4 p-5 lift">
               <div className="flex items-start justify-between gap-3">
                 <button type="button" onClick={() => onOpen(l.id)} className="flex min-w-0 flex-col gap-1 text-left after:absolute after:inset-0 after:content-['']">
                   <span className="truncate text-[15px] font-semibold">{l.name}</span>

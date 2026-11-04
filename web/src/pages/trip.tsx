@@ -279,7 +279,7 @@ function ActivityPanel({ trip }: { trip: TripDetail }) {
   return (
     <Panel className="flex flex-col gap-4 p-5 sm:p-6">
       <PanelHeader title="History" />
-      <ol className="relative flex flex-col gap-4 before:absolute before:bottom-2 before:left-[5px] before:top-2 before:w-px before:bg-line">
+      <ol className="stagger relative flex flex-col gap-4 before:absolute before:bottom-2 before:left-[5px] before:top-2 before:w-px before:bg-line">
         {trip.activity.map((a) => (
           <li key={a.id} className="relative flex gap-3 pl-6">
             <span aria-hidden className={cn('absolute left-0 top-1.5 h-[11px] w-[11px] rounded-full border-2 border-surface', a.action === 'trip.payment' ? 'bg-accent' : a.action === 'trip.payment_void' ? 'bg-danger' : 'bg-faint')} />

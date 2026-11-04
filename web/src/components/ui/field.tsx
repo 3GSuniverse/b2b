@@ -3,7 +3,7 @@ import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type Selec
 import { cn } from '@/lib/cn';
 
 const control =
-  'w-full rounded-[var(--radius-control)] border border-[#d5dad6] bg-surface text-[14px] text-ink placeholder:text-faint transition-[border,box-shadow] duration-150 hover:border-[#c2c8c4] focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)] focus:outline-none disabled:bg-sunken disabled:text-muted aria-[invalid=true]:border-danger aria-[invalid=true]:shadow-[0_0_0_3px_var(--color-danger-soft)]';
+  'w-full rounded-[var(--radius-control)] border border-[#d5dad6] bg-surface text-[14px] text-ink placeholder:text-faint transition-[border,box-shadow] duration-200 hover:border-[#c2c8c4] focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)] focus:outline-none disabled:bg-sunken disabled:text-muted aria-[invalid=true]:border-danger aria-[invalid=true]:shadow-[0_0_0_3px_var(--color-danger-soft)] aria-[invalid=true]:animate-[nudge_360ms_ease-in-out]';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { leading?: ReactNode }>(function Input(
   { className, leading, ...props },
@@ -61,7 +61,7 @@ export function Field({ label, hint, error, aside, children, className }: FieldP
       </div>
       {children({ id, 'aria-invalid': error ? true : undefined, 'aria-describedby': desc })}
       {error ? (
-        <p id={desc} className="flex items-center gap-1.5 text-[13px] text-danger">
+        <p id={desc} className="flex animate-pop items-center gap-1.5 text-[13px] text-danger">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />
           {error}
         </p>

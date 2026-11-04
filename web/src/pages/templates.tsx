@@ -79,9 +79,9 @@ export function TemplatesPage() {
           </EmptyState>
         </Panel>
       ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="stagger grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((t) => (
-            <Panel key={t.id} className="group relative flex flex-col overflow-hidden transition-shadow hover:shadow-[var(--shadow-lift)]">
+            <Panel key={t.id} className="group relative flex flex-col overflow-hidden lift">
               <EmailThumbnail html={t.html} height={210} />
               <div className="flex items-start gap-3 border-t border-line-soft px-4 py-3.5">
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">

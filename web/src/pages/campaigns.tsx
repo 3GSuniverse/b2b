@@ -132,7 +132,7 @@ export function CampaignsPage() {
               ]}
             />
           </div>
-          <ul className={cn('flex flex-col', q.isPlaceholderData && 'opacity-60')}>
+          <ul className={cn('stagger flex flex-col transition-opacity', q.isPlaceholderData && 'opacity-60')}>
             {q.isPending &&
               Array.from({ length: 5 }, (_, i) => (
                 <li key={i} className="border-t border-line-soft px-6 py-4 first:border-0">

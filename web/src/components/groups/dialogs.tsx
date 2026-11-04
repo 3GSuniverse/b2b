@@ -11,6 +11,7 @@ import { PackageSelect } from '@/components/packages/package-sheet';
 import { api, ApiError } from '@/lib/api';
 import { inr, rupeesInput } from '@/lib/format';
 import type { GroupDetail } from '@/lib/types';
+import { takeoff } from '@/lib/celebrate';
 
 const errOf = (e: unknown, k: string) => (e instanceof ApiError ? e.field(k) : undefined);
 
@@ -178,6 +179,7 @@ export function BroadcastDialog({ group, open, onClose }: { group: GroupDetail; 
     mutationFn: () => api.post<{ whatsapp: number; email: number; skipped: string[] }>(`/api/groups/${group.id}/broadcast`, { text, channel }),
     onSuccess: (r) => {
       const n = r.whatsapp + r.email;
+      if (n > 0) takeoff();
       toast.success(`Sent to ${n} famil${n === 1 ? 'y' : 'ies'}`, { description: r.skipped.length ? `Couldn’t reach ${r.skipped.join(', ')}. Call them.` : undefined, duration: r.skipped.length ? 12_000 : 4000 });
       onClose();
     },

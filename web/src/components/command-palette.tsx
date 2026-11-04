@@ -13,7 +13,7 @@ function Item({ onSelect, icon, children, hint, value }: { onSelect: () => void;
     <Command.Item
       value={value}
       onSelect={onSelect}
-      className="flex cursor-pointer items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm text-ink outline-none data-[selected=true]:bg-hover"
+      className="flex cursor-pointer items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm text-ink outline-none transition-colors duration-150 data-[selected=true]:bg-hover"
     >
       <span className="text-muted [&>svg]:h-4 [&>svg]:w-4">{icon}</span>
       <span className="min-w-0 flex-1 truncate">{children}</span>
@@ -59,8 +59,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(17_24_22/0.32)] backdrop-blur-[2px] animate-in" />
-        <DialogPrimitive.Content className="fixed left-1/2 top-[12vh] z-50 w-[calc(100vw-32px)] max-w-xl -translate-x-1/2 overflow-hidden rounded-[18px] border border-line bg-surface shadow-[var(--shadow-pop)] animate-pop focus:outline-none">
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(17_24_22/0.32)] backdrop-blur-[2px] animate-in data-[state=closed]:animate-out" />
+        <DialogPrimitive.Content className="fixed left-1/2 top-[12vh] z-50 w-[calc(100vw-32px)] max-w-xl -translate-x-1/2 overflow-hidden rounded-[18px] border border-line bg-surface shadow-[var(--shadow-pop)] animate-pop data-[state=closed]:animate-pop-out focus:outline-none">
           <DialogPrimitive.Title className="sr-only">Search and commands</DialogPrimitive.Title>
           <DialogPrimitive.Description className="sr-only">Type to find pages, contacts and campaigns</DialogPrimitive.Description>
           <Command label="Search and commands" shouldFilter={true} loop>
@@ -74,7 +74,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               />
               <Kbd>Esc</Kbd>
             </div>
-            <Command.List className="max-h-[min(60vh,440px)] overflow-y-auto p-2">
+            <Command.List className="h-[calc(var(--cmdk-list-height)+16px)] max-h-[min(60vh,440px)] overflow-y-auto p-2 transition-[height] duration-200 ease-out">
               <Command.Empty className="px-3 py-8 text-center text-sm text-muted">No matches. Try a name, an email or a page.</Command.Empty>
 
               <Command.Group heading="Actions" className={groupClass}>

@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { date, dateTime, n, pct, until } from '@/lib/format';
 import { campaignHref, CampaignStatusBadge } from '@/lib/status';
+import { CountPercent, CountUp, useReducedMotion } from '@/lib/motion';
 import type { Overview } from '@/lib/types';
 
 // ---------------------------------------------------------------- KPIs
@@ -37,18 +38,18 @@ function Change({ value, suffix, invert }: { value: number | null; suffix: strin
 function Kpis({ o }: { o: Overview }) {
   const m = o.thisMonth;
   const items = [
-    { label: 'Emails sent', value: n(m.sent), note: <Change value={m.sentChange} suffix="%" /> },
-    { label: 'Delivered', value: pct(m.deliveryRate), note: <span className="tnum text-[13px] text-muted">{n(m.delivered)} reached the inbox</span> },
-    { label: 'Click rate', value: pct(m.clickRate), note: <Change value={m.clickRateChange} suffix=" pts" /> },
-    { label: 'Unsubscribed', value: n(m.unsubscribed), note: <span className="tnum text-[13px] text-muted">{pct(m.unsubscribeRate)} of delivered</span> },
+    { label: 'Emails sent', value: <CountUp value={m.sent} />, note: <Change value={m.sentChange} suffix="%" /> },
+    { label: 'Delivered', value: <CountPercent value={m.deliveryRate} />, note: <span className="tnum text-[13px] text-muted">{n(m.delivered)} reached the inbox</span> },
+    { label: 'Click rate', value: <CountPercent value={m.clickRate} />, note: <Change value={m.clickRateChange} suffix=" pts" /> },
+    { label: 'Unsubscribed', value: <CountUp value={m.unsubscribed} />, note: <span className="tnum text-[13px] text-muted">{pct(m.unsubscribeRate)} of delivered</span> },
   ];
   return (
-    <Panel className="grid grid-cols-2 lg:grid-cols-4">
+    <Panel className="stagger grid grid-cols-2 overflow-hidden lg:grid-cols-4">
       {items.map((k, i) => (
         <div
           key={k.label}
           className={cn(
-            'flex flex-col gap-2.5 p-5 sm:p-6',
+            'group/kpi flex flex-col gap-2.5 p-5 transition-colors duration-200 hover:bg-sunken sm:p-6',
             i % 2 === 1 && 'border-l border-line-soft',
             i >= 2 && 'border-t border-line-soft lg:border-t-0',
             i === 2 && 'lg:border-l',
@@ -106,6 +107,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { paylo
 function ActivityChart({ o }: { o: Overview }) {
   const [metric, setMetric] = useState<Metric>('delivered');
   const [active, setActive] = useState<number | null>(null);
+  const reduced = useReducedMotion();
   const data = o.last30Days;
   const total = data.reduce((a, d) => a + d[metric], 0);
   const peakIdx = data.reduce((best, d, i) => (d[metric] > (data[best]?.[metric] ?? 0) ? i : best), 0);
@@ -170,7 +172,9 @@ function ActivityChart({ o }: { o: Overview }) {
             <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--color-ink)', fillOpacity: 0.04, radius: 6 }} isAnimationActive={false} />
             <Bar
               dataKey={metric}
-              animationDuration={500}
+              isAnimationActive={!reduced}
+              animationDuration={900}
+              animationEasing="ease-out"
               shape={(props: unknown) => {
                 const { x, y, width, height, index } = props as { x: number; y: number; width: number; height: number; index: number };
                 const isPeak = index === peakIdx && !!peak && peak[metric] > 0;
@@ -186,10 +190,11 @@ function ActivityChart({ o }: { o: Overview }) {
                         d={`M${x},${y + height} V${y + r} Q${x},${y} ${x + r},${y} H${x + width - r} Q${x + width},${y} ${x + width},${y + r} V${y + height} Z`}
                         fill={color}
                         fillOpacity={active === null || active === index ? 1 : 0.35}
+                        style={{ transition: 'fill-opacity 200ms ease, fill 300ms ease' }}
                       />
                     )}
                     {isPeak && (
-                      <text x={lx} y={y - 10} textAnchor={anchor} fontSize={12} fontWeight={600} fill="var(--color-ink)" pointerEvents="none">
+                      <text x={lx} y={y - 10} textAnchor={anchor} fontSize={12} fontWeight={600} fill="var(--color-ink)" pointerEvents="none" className="animate-in">
                         {name ? (name.length > 26 ? name.slice(0, 25) + '…' : name) : n(peak[metric])}
                       </text>
                     )}
@@ -237,17 +242,19 @@ function ActivityChart({ o }: { o: Overview }) {
 function Countdown({ at }: { at: string }) {
   const [, tick] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => tick((x) => x + 1), 30_000);
+    const t = setInterval(() => tick((x) => x + 1), 1000);
     return () => clearInterval(t);
   }, []);
   const u = until(at);
   if (u.past) return <span className="text-sm font-semibold text-accent-strong">Starting now</span>;
-  const parts = u.d > 0 ? [[u.d, 'days'], [u.h, 'hours']] : [[u.h, 'hours'], [u.m, 'min']];
+  const parts = u.d > 0 ? [[u.d, 'days'], [u.h, 'hours'], [u.m, 'min']] : [[u.h, 'hours'], [u.m, 'min'], [u.s, 'sec']];
   return (
     <div className="flex items-end gap-4" aria-label={`Sends in ${parts.map(([v, l]) => `${v} ${l}`).join(' ')}`}>
       {parts.map(([v, l]) => (
         <div key={l} className="flex items-baseline gap-1.5">
-          <span className="tnum text-[34px] font-semibold leading-none tracking-[-0.03em]">{v}</span>
+          <span className="tnum inline-flex overflow-hidden text-[34px] font-semibold leading-none tracking-[-0.03em]">
+            <span key={v} className="animate-[tick-in_420ms_cubic-bezier(0.22,1.2,0.36,1)]">{v}</span>
+          </span>
           <span className="text-[13px] text-muted">{l}</span>
         </div>
       ))}
@@ -263,7 +270,7 @@ function UpNext({ o }: { o: Overview }) {
       {u ? (
         <>
           <Countdown at={u.scheduledAt} />
-          <Link to={`/campaigns/${u.id}/edit`} className="group flex items-center gap-3 rounded-[12px] border border-line-soft bg-sunken px-3.5 py-3 hover:border-line">
+          <Link to={`/campaigns/${u.id}/edit`} className="lift group flex items-center gap-3 rounded-[12px] border border-line-soft bg-sunken px-3.5 py-3 hover:border-line">
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="truncate text-sm font-semibold">{u.name}</span>
               <span className="tnum text-xs text-muted">
@@ -329,7 +336,7 @@ function Audience({ o }: { o: Overview }) {
     <Panel className="flex flex-col gap-5 p-5 sm:p-6">
       <PanelHeader title="Audience" action={<Link to="/contacts" className="text-[13px] font-semibold text-accent hover:text-accent-strong">View contacts</Link>} />
       <div className="flex items-baseline gap-2">
-        <span className="tnum text-[34px] font-semibold leading-none tracking-[-0.03em]">{n(a.subscribed)}</span>
+        <span className="tnum text-[34px] font-semibold leading-none tracking-[-0.03em]"><CountUp value={a.subscribed} /></span>
         <span className="text-[13px] text-muted">can receive email</span>
       </div>
       <ProgressBar value={a.subscribed} max={Math.max(a.total, 1)} label="Subscribed share of contacts" />
@@ -360,12 +367,12 @@ function RecentCampaigns({ o }: { o: Overview }) {
       {o.recentCampaigns.length === 0 ? (
         <p className="px-6 pb-8 pt-2 text-sm text-muted">Your campaigns will be listed here.</p>
       ) : (
-        <ul className="flex flex-col px-2 pb-2 sm:px-3 sm:pb-3">
+        <ul className="stagger flex flex-col px-2 pb-2 sm:px-3 sm:pb-3">
           {o.recentCampaigns.map((c) => {
             const finished = c.status === 'SENT' || c.status === 'SENDING';
             return (
               <li key={c.id}>
-                <Link to={campaignHref(c)} className="grid grid-cols-[minmax(0,1fr)] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 rounded-[12px] px-3 py-3 hover:bg-hover sm:grid-cols-[minmax(0,1fr)_120px_88px_88px]">
+                <Link to={campaignHref(c)} className="grid grid-cols-[minmax(0,1fr)] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 rounded-[12px] px-3 py-3 transition-colors duration-200 hover:bg-hover sm:grid-cols-[minmax(0,1fr)_120px_88px_88px]">
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <span className="truncate text-sm font-semibold">{c.name}</span>
                     <span className="text-xs text-muted">
@@ -440,7 +447,7 @@ function Setup({ o }: { o: Overview }) {
           <ProgressBar value={doneCount} max={steps.length} label="Setup progress" />
         </div>
       </div>
-      <ol className="grid md:grid-cols-3">
+      <ol className="stagger grid md:grid-cols-3">
         {steps.map((s, i) => (
           <li key={s.title} className={cn('flex flex-col gap-3 p-5 sm:p-6', i > 0 && 'border-t border-line-soft md:border-l md:border-t-0', i === nextIdx && 'bg-accent-soft/40')}>
             <span
@@ -450,7 +457,7 @@ function Setup({ o }: { o: Overview }) {
               )}
               aria-hidden
             >
-              {s.done ? <Check className="h-4 w-4" strokeWidth={3} /> : i + 1}
+              {s.done ? <Check className="animate-check h-4 w-4" strokeWidth={3} /> : i + 1}
             </span>
             <div className="flex flex-col gap-1">
               <h3 className={cn('text-sm font-semibold', s.done && 'text-muted line-through decoration-line')}>
@@ -493,7 +500,7 @@ export function OverviewPage() {
   const domainsPending = o.sending.domains.filter((d) => !d.readyToSend);
 
   return (
-    <>
+    <div className="stagger flex flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.025em]">{o.greeting}</h1>
@@ -527,13 +534,13 @@ export function OverviewPage() {
           <ActivityChart o={o} />
           <RecentCampaigns o={o} />
         </div>
-        <div className="flex flex-col gap-6">
+        <div className="stagger flex flex-col gap-6">
           <UpNext o={o} />
           <Health o={o} />
           <Audience o={o} />
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

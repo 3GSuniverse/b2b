@@ -74,7 +74,7 @@ function AutomationCard({ a }: { a: Automation }) {
   });
   const on = a.status === 'ACTIVE';
   return (
-    <Panel className={cn('relative flex flex-col gap-5 p-5 transition-shadow hover:shadow-[var(--shadow-lift)]', !on && 'bg-sunken')}>
+    <Panel className={cn('relative flex flex-col gap-5 p-5 lift', !on && 'bg-sunken')}>
       <div className="flex items-start gap-4">
         <span className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-[12px]', on ? 'bg-accent-soft text-accent' : 'bg-line-soft text-muted')}>
           {ICONS[a.dateField.key] ?? <CalendarClock className="h-5 w-5" />}
@@ -153,7 +153,7 @@ export function AutomationsPage() {
       ) : (
         <>
           {list.length > 0 && (
-            <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
+            <div className="stagger grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
               {list.map((a) => (
                 <AutomationCard key={a.id} a={a} />
               ))}

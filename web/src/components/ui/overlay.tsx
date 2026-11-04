@@ -28,10 +28,10 @@ export function Dialog({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(17_24_22/0.32)] backdrop-blur-[2px] animate-in" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(17_24_22/0.32)] backdrop-blur-[2px] animate-in data-[state=closed]:animate-out" />
         <DialogPrimitive.Content
           className={cn(
-            'fixed left-1/2 top-1/2 z-50 flex max-h-[min(88vh,760px)] w-[calc(100vw-32px)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-[var(--radius-panel)] bg-surface shadow-[var(--shadow-pop)] animate-pop focus:outline-none',
+            'fixed left-1/2 top-1/2 z-50 flex max-h-[min(88vh,760px)] w-[calc(100vw-32px)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-[var(--radius-panel)] bg-surface shadow-[var(--shadow-pop)] animate-pop data-[state=closed]:animate-pop-out focus:outline-none',
             className,
           )}
         >
@@ -80,10 +80,10 @@ export function Sheet({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(17_24_22/0.24)] animate-in" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(17_24_22/0.24)] animate-in data-[state=closed]:animate-out" />
         <DialogPrimitive.Content
           className={cn(
-            'fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-line bg-surface shadow-[var(--shadow-pop)] animate-sheet focus:outline-none',
+            'fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-line bg-surface shadow-[var(--shadow-pop)] animate-sheet data-[state=closed]:animate-sheet-out focus:outline-none',
             width,
           )}
         >
@@ -120,7 +120,7 @@ export function Popover({ trigger, children, align = 'end', className }: { trigg
         <PopoverPrimitive.Content
           align={align}
           sideOffset={8}
-          className={cn('z-50 rounded-[14px] border border-line bg-surface shadow-[var(--shadow-pop)] animate-pop focus:outline-none', className)}
+          className={cn('z-50 origin-[var(--radix-popover-content-transform-origin)] rounded-[14px] border border-line bg-surface shadow-[var(--shadow-pop)] animate-pop data-[state=closed]:animate-pop-out focus:outline-none', className)}
         >
           {children}
         </PopoverPrimitive.Content>
@@ -136,7 +136,7 @@ export function Tooltip({ content, children, side = 'top' }: { content: ReactNod
     <TooltipPrimitive.Root delayDuration={250}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content side={side} sideOffset={6} className="z-[60] max-w-64 rounded-lg bg-ink px-2.5 py-1.5 text-xs leading-snug text-white shadow-[var(--shadow-lift)] animate-in">
+        <TooltipPrimitive.Content side={side} sideOffset={6} className="z-[60] max-w-64 rounded-lg bg-ink px-2.5 py-1.5 text-xs leading-snug text-white shadow-[var(--shadow-lift)] animate-pop data-[state=closed]:animate-out">
           {content}
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
@@ -152,7 +152,7 @@ export function Menu({ trigger, children, align = 'end' }: { trigger: ReactNode;
     <Dropdown.Root>
       <Dropdown.Trigger asChild>{trigger}</Dropdown.Trigger>
       <Dropdown.Portal>
-        <Dropdown.Content align={align} sideOffset={6} className="z-50 min-w-48 rounded-xl border border-line bg-surface p-1.5 shadow-[var(--shadow-pop)] animate-pop">
+        <Dropdown.Content align={align} sideOffset={6} className="z-50 min-w-48 origin-[var(--radix-dropdown-menu-content-transform-origin)] rounded-xl border border-line bg-surface p-1.5 shadow-[var(--shadow-pop)] animate-pop data-[state=closed]:animate-pop-out">
           {children}
         </Dropdown.Content>
       </Dropdown.Portal>
@@ -165,7 +165,7 @@ export function MenuItem({ children, onSelect, danger, icon }: { children: React
     <Dropdown.Item
       onSelect={onSelect}
       className={cn(
-        'flex cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-hover',
+        'flex cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm outline-none transition-colors duration-150 data-[highlighted]:bg-hover',
         danger ? 'text-danger data-[highlighted]:bg-danger-soft' : 'text-ink',
       )}
     >

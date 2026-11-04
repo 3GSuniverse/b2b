@@ -44,7 +44,8 @@ export function until(iso: string | Date) {
   const d = Math.max(0, Math.floor(ms / 86_400_000));
   const h = Math.max(0, Math.floor((ms % 86_400_000) / 3_600_000));
   const m = Math.max(0, Math.floor((ms % 3_600_000) / 60_000));
-  return { d, h, m, past: ms <= 0 };
+  const s = Math.max(0, Math.floor((ms % 60_000) / 1000));
+  return { d, h, m, s, past: ms <= 0 };
 }
 
 export const initials = (name?: string | null, email?: string | null) => {

@@ -15,6 +15,7 @@ import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { ago, dateRange, inr, rupeesInput, shortDate } from '@/lib/format';
 import type { Quote, QuoteLine, RateItem, RateKind, RateUnit, TripDetail } from '@/lib/types';
+import { takeoff } from '@/lib/celebrate';
 
 type Draft = Pick<Quote, 'intro' | 'days' | 'lines' | 'inclusions' | 'exclusions' | 'terms' | 'validUntil'> & { discount: number };
 const toDraft = (q: Quote): Draft => ({ intro: q.intro, days: q.days, lines: q.lines.map(({ total: _t, needsPrice: _n, ...l }) => l), inclusions: q.inclusions, exclusions: q.exclusions, terms: q.terms, validUntil: q.validUntil, discount: q.totals.discount });
@@ -174,6 +175,7 @@ export function QuoteEditorPage() {
   const send = useMutation({
     mutationFn: (via: 'EMAIL' | 'MANUAL') => api.post<{ quote: Quote }>(`/api/quotes/${quoteId}/send`, { via }),
     onSuccess: ({ quote: q }, via) => {
+      if (via === 'EMAIL') takeoff();
       qc.setQueryData(['quote', quoteId], q);
       qc.invalidateQueries({ queryKey: ['trip', tripId] });
       qc.invalidateQueries({ queryKey: ['quotes', tripId] });

@@ -2,6 +2,7 @@ import { Check, Copy } from 'lucide-react';
 import { useState, type HTMLAttributes, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { avatarTone, initials } from '@/lib/format';
+import { useMounted } from '@/lib/motion';
 
 export function Panel({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div className={cn('rounded-[var(--radius-panel)] border border-line bg-surface', className)} {...props} />;
@@ -74,7 +75,7 @@ export function Kbd({ children }: { children: ReactNode }) {
 export function EmptyState({ icon, title, children, action }: { icon?: ReactNode; title: ReactNode; children?: ReactNode; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
-      {icon && <div className="grid h-12 w-12 place-items-center rounded-2xl bg-accent-soft text-accent [&>svg]:h-6 [&>svg]:w-6">{icon}</div>}
+      {icon && <div className="empty-icon grid h-12 w-12 place-items-center rounded-2xl bg-accent-soft text-accent [&>svg]:h-6 [&>svg]:w-6">{icon}</div>}
       <h3 className="text-base font-semibold">{title}</h3>
       {children && <p className="max-w-sm text-sm leading-relaxed text-muted">{children}</p>}
       {action && <div className="mt-2">{action}</div>}
@@ -83,11 +84,12 @@ export function EmptyState({ icon, title, children, action }: { icon?: ReactNode
 }
 
 export function ProgressBar({ value, max = 100, tone = 'accent', label }: { value: number; max?: number; tone?: 'accent' | 'warm' | 'danger'; label: string }) {
-  const p = Math.max(0, Math.min(100, max ? (value / max) * 100 : 0));
+  const mounted = useMounted();
+  const p = mounted ? Math.max(0, Math.min(100, max ? (value / max) * 100 : 0)) : 0;
   const color = tone === 'warm' ? 'bg-warm' : tone === 'danger' ? 'bg-danger' : 'bg-accent';
   return (
     <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value} className="h-2 overflow-hidden rounded-full bg-line-soft">
-      <div className={cn('h-full rounded-full transition-[width] duration-700 ease-out', color)} style={{ width: `${Math.max(p, value > 0 ? 2 : 0)}%` }} />
+      <div className={cn('h-full rounded-full transition-[width] duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)]', color)} style={{ width: `${mounted ? Math.max(p, value > 0 ? 2 : 0) : 0}%` }} />
     </div>
   );
 }
@@ -96,14 +98,16 @@ export function ProgressBar({ value, max = 100, tone = 'accent', label }: { valu
 export function RingGauge({ value, limit, label, display, sub }: { value: number; limit: number; label: string; display: string; sub: string }) {
   const r = 44;
   const c = 2 * Math.PI * r;
-  const frac = Math.min(1, limit ? value / limit : 0);
-  const tone = frac >= 0.8 ? 'var(--color-danger)' : frac >= 0.5 ? 'var(--color-warm)' : 'var(--color-accent)';
+  const mounted = useMounted();
+  const real = Math.min(1, limit ? value / limit : 0);
+  const frac = mounted ? real : 0;
+  const tone = real >= 0.8 ? 'var(--color-danger)' : real >= 0.5 ? 'var(--color-warm)' : 'var(--color-accent)';
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="relative h-[108px] w-[108px]">
         <svg viewBox="0 0 108 108" className="h-full w-full -rotate-90" role="img" aria-label={`${label}: ${display} of ${sub}`}>
           <circle cx="54" cy="54" r={r} fill="none" stroke="var(--color-line-soft)" strokeWidth="10" />
-          {frac > 0 && <circle
+          {real > 0 && <circle
             cx="54"
             cy="54"
             r={r}
@@ -112,7 +116,7 @@ export function RingGauge({ value, limit, label, display, sub }: { value: number
             strokeWidth="10"
             strokeLinecap="round"
             strokeDasharray={`${Math.max(frac * c, 0.001)} ${c}`}
-            className="transition-[stroke-dasharray] duration-1000 ease-out"
+            className="transition-[stroke-dasharray] duration-[1400ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
           />}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -141,7 +145,7 @@ export function CopyButton({ value, label = 'Copy' }: { value: string; label?: s
       )}
       aria-label={done ? 'Copied' : `${label}: ${value}`}
     >
-      {done ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {done ? <Check className="animate-check h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
       {done ? 'Copied' : label}
     </button>
   );

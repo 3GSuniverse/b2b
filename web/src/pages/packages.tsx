@@ -52,9 +52,9 @@ export function PackagesPage() {
           </EmptyState>
         </Panel>
       ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="stagger grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 xl:grid-cols-3">
           {q.data.map((p) => (
-            <Link key={p.id} to={`/trips/packages/${p.id}`} className="flex flex-col gap-4 rounded-[var(--radius-panel)] border border-line bg-surface p-5 transition-shadow hover:shadow-[var(--shadow-lift)]">
+            <Link key={p.id} to={`/trips/packages/${p.id}`} className="flex flex-col gap-4 rounded-[var(--radius-panel)] border border-line bg-surface p-5 lift">
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-muted">
                   {[p.destination, length(p.nights)].filter(Boolean).join(' · ')}
@@ -166,7 +166,7 @@ export function PackagePage() {
         {!p.trips.length ? (
           <p className="border-t border-line-soft px-6 py-10 text-center text-sm text-muted">Nobody yet. Choose this package on an enquiry and it shows up here.</p>
         ) : (
-          <ul className="border-t border-line-soft">
+          <ul className="stagger border-t border-line-soft">
             {p.trips.map((t) => (
               <li key={t.id} className={cn('relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-1 border-t border-line-soft px-5 py-3.5 first:border-0 hover:bg-sunken sm:px-6 lg:grid-cols-[minmax(0,1fr)_190px_110px_200px]', (t.status === 'LOST' || t.status === 'CANCELLED') && 'opacity-55')}>
                 <span className="flex min-w-0 flex-col">
@@ -203,7 +203,7 @@ export function PackagePage() {
           <Panel className="flex flex-col gap-3 p-5 sm:p-6">
             <h2 className="text-[15px] font-semibold tracking-tight">Day by day</h2>
             {p.days.length ? (
-              <ol className="flex flex-col gap-3">
+              <ol className="stagger flex flex-col gap-3">
                 {p.days.map((d, i) => (
                   <li key={i} className="grid grid-cols-[40px_minmax(0,1fr)] gap-3">
                     <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-accent-soft text-center text-[11px] font-bold leading-tight text-accent-strong">

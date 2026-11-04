@@ -15,6 +15,7 @@ import { dateTime, n, pct } from '@/lib/format';
 import { CampaignStatusBadge } from '@/lib/status';
 import { PrettyTags } from '@/lib/tags';
 import type { Campaign, CampaignPreview, CampaignReport } from '@/lib/types';
+import { CountPercent, CountUp } from '@/lib/motion';
 
 const share = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : 0);
 
@@ -46,7 +47,7 @@ function Funnel({ c, tracked }: { c: Campaign; tracked: boolean }) {
         title="How far it got"
         description={wa ? 'Read counts only people who have read receipts (blue ticks) switched on.' : tracked ? 'Opens are a rough guide: some apps hide them, others open every email automatically.' : 'Opens and clicks aren’t tracked when sending from Gmail.'}
       />
-      <ol className="flex flex-col gap-3.5">
+      <ol className="stagger flex flex-col gap-3.5">
         {steps.map((st, i) => (
           <li key={st.label} className="grid grid-cols-[minmax(0,1fr)] grid-cols-[110px_minmax(0,1fr)] items-center gap-4 sm:grid-cols-[140px_minmax(0,1fr)_150px]">
             <span className="text-[13px] font-semibold">{st.label}</span>
@@ -144,22 +145,22 @@ export function ReportPage() {
 
   const kpis = wa
     ? [
-        { label: 'Delivered', value: pct(c.rates.delivery), sub: `${n(s.delivered)} of ${n(s.sent)}` },
-        { label: 'Read', value: pct(c.rates.open), sub: `${n(s.opened)} people` },
-        { label: 'Replied STOP', value: n(s.unsubscribed), sub: pct(c.rates.unsubscribe) },
-        { label: 'Not on WhatsApp', value: n(s.failed - cancelled), sub: 'or couldn’t be sent', warn: false },
-        { label: 'Skipped', value: n(s.suppressed), sub: 'unsubscribed earlier' },
+        { label: 'Delivered', value: <CountPercent value={c.rates.delivery} />, sub: `${n(s.delivered)} of ${n(s.sent)}` },
+        { label: 'Read', value: <CountPercent value={c.rates.open} />, sub: `${n(s.opened)} people` },
+        { label: 'Replied STOP', value: <CountUp value={s.unsubscribed} />, sub: pct(c.rates.unsubscribe) },
+        { label: 'Not on WhatsApp', value: <CountUp value={s.failed - cancelled} />, sub: 'or couldn’t be sent', warn: false },
+        { label: 'Skipped', value: <CountUp value={s.suppressed} />, sub: 'unsubscribed earlier' },
       ]
     : [
-    { label: 'Delivered', value: pct(c.rates.delivery), sub: `${n(s.delivered)} of ${n(s.sent)}` },
+    { label: 'Delivered', value: <CountPercent value={c.rates.delivery} />, sub: `${n(s.delivered)} of ${n(s.sent)}` },
     ...(tracked
       ? [
-          { label: 'Opened', value: pct(c.rates.open), sub: `${n(s.opened)} people` },
-          { label: 'Clicked', value: pct(c.rates.click), sub: `${n(s.clicked)} people` },
+          { label: 'Opened', value: <CountPercent value={c.rates.open} />, sub: `${n(s.opened)} people` },
+          { label: 'Clicked', value: <CountPercent value={c.rates.click} />, sub: `${n(s.clicked)} people` },
         ]
       : []),
-    { label: 'Unsubscribed', value: n(s.unsubscribed), sub: pct(c.rates.unsubscribe) },
-    { label: 'Bounced', value: n(s.bounced), sub: pct(c.rates.bounce), warn: c.rates.bounce >= 3 },
+    { label: 'Unsubscribed', value: <CountUp value={s.unsubscribed} />, sub: pct(c.rates.unsubscribe) },
+    { label: 'Bounced', value: <CountUp value={s.bounced} />, sub: pct(c.rates.bounce), warn: c.rates.bounce >= 3 },
   ];
 
   return (
@@ -208,7 +209,7 @@ export function ReportPage() {
         </div>
       )}
 
-      <Panel className={cn('grid grid-cols-2', kpis.length === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-3')}>
+      <Panel className={cn('stagger grid grid-cols-2', kpis.length === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-3')}>
         {kpis.map((k, i) => (
           <div key={k.label} className={cn('flex flex-col gap-2 p-5', i % 2 === 1 && 'border-l border-line-soft', i >= 2 && 'border-t border-line-soft lg:border-t-0', i >= 1 && 'lg:border-l')}>
             <span className="text-[13px] font-medium text-muted">{k.label}</span>
@@ -226,7 +227,7 @@ export function ReportPage() {
             <Panel className="flex flex-col">
               <PanelHeader className="px-5 pt-5 sm:px-6 sm:pt-6" title="Links people clicked" description="Each person counts once per link." />
               {topLinks.length ? (
-                <ul className="flex flex-col p-2 sm:p-3">
+                <ul className="stagger flex flex-col p-2 sm:p-3">
                   {topLinks.map((l) => (
                     <li key={l.url} className="flex flex-col gap-1.5 rounded-[10px] px-3 py-2.5 hover:bg-sunken">
                       <div className="flex items-center justify-between gap-4">

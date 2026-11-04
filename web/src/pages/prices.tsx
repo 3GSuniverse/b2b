@@ -183,7 +183,7 @@ export function PricesPage() {
           {groups.map(([dest, rows]) => (
             <Panel key={dest} className="overflow-hidden">
               <h2 className="border-b border-line-soft px-5 py-3 text-[13px] font-semibold sm:px-6">{dest}</h2>
-              <ul>
+              <ul className="stagger">
                 {rows.map((r) => (
                   <li key={r.id} className="grid grid-cols-[32px_minmax(0,1fr)_auto_32px] items-center gap-x-3 border-t border-line-soft px-5 py-3 first:border-0 sm:grid-cols-[32px_minmax(0,1fr)_170px_110px_110px_32px] sm:px-6">
                     <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-sunken text-muted" title={KINDS[r.kind]}>

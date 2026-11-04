@@ -14,6 +14,7 @@ import { api, qs } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { dateRange, inr, inrShort, n } from '@/lib/format';
 import type { Contact, GroupSummary, TripStats, TripStatus, TripSummary } from '@/lib/types';
+import { CountUp } from '@/lib/motion';
 
 type View = 'board' | 'list';
 type ListTab = 'OPEN' | 'overdue' | 'due' | 'COMPLETED' | 'CLOSED' | 'ALL';
@@ -44,17 +45,17 @@ function StatsStrip({ onShowOverdue }: { onShowOverdue: () => void }) {
   const s = q.data;
   const tiles = s
     ? [
-        { label: 'New enquiries', value: n(s.counts.ENQUIRY), note: 'Waiting for a quote' },
-        { label: 'Quoted', value: n(s.counts.QUOTED), note: s.pipelineValue ? `${inr(s.pipelineValue)} waiting on a yes` : 'Nothing waiting' },
-        { label: 'Leaving this week', value: n(s.departingThisWeek), note: `${n(s.counts.BOOKED)} booked in total` },
+        { label: 'New enquiries', value: <CountUp value={s.counts.ENQUIRY} />, note: 'Waiting for a quote' },
+        { label: 'Quoted', value: <CountUp value={s.counts.QUOTED} />, note: s.pipelineValue ? `${inr(s.pipelineValue)} waiting on a yes` : 'Nothing waiting' },
+        { label: 'Leaving this week', value: <CountUp value={s.departingThisWeek} />, note: `${n(s.counts.BOOKED)} booked in total` },
         {
           label: 'Overdue payments',
-          value: inr(s.overdue),
+          value: <CountUp value={s.overdue} format={inr} step={100} />,
           note: s.overdueTrips ? `On ${s.overdueTrips} trip${s.overdueTrips > 1 ? 's' : ''} · see them` : s.dueThisWeek ? `${inr(s.dueThisWeek)} due this week` : 'Nobody is late',
           tone: s.overdue > 0 ? 'danger' : undefined,
           onClick: s.overdueTrips ? onShowOverdue : undefined,
         },
-        { label: 'Collected this month', value: inr(s.collectedThisMonth), note: 'Payments recorded' },
+        { label: 'Collected this month', value: <CountUp value={s.collectedThisMonth} format={inr} step={100} />, note: 'Payments recorded' },
       ]
     : [];
   return (
@@ -99,11 +100,11 @@ function GroupStrip() {
   return (
     <section className="flex flex-col gap-3" aria-label="Group departures">
       <h2 className="text-[15px] font-semibold tracking-tight">Group departures</h2>
-      <div className="-mx-4 flex snap-x gap-4 overflow-x-auto scroll-px-4 px-4 pb-1 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0">
+      <div className="stagger -mx-4 flex snap-x gap-4 overflow-x-auto scroll-px-4 px-4 pb-1 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0">
         {groups.map((g) => {
           const pct = g.capacity ? Math.min(100, (g.seatsTaken / g.capacity) * 100) : null;
           return (
-            <Link key={g.id} to={`/groups/${g.id}`} className="flex w-[80vw] max-w-[360px] shrink-0 snap-start flex-col gap-3 rounded-[var(--radius-panel)] border border-line bg-surface p-4 transition-shadow hover:shadow-[var(--shadow-lift)] lg:w-auto lg:max-w-none">
+            <Link key={g.id} to={`/groups/${g.id}`} className="flex w-[80vw] max-w-[360px] shrink-0 snap-start flex-col gap-3 rounded-[var(--radius-panel)] border border-line bg-surface p-4 lift lg:w-auto lg:max-w-none">
               <div className="flex items-start justify-between gap-2">
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate text-sm font-semibold">{g.title}</span>
@@ -152,7 +153,7 @@ function TripCard({ t, onDragStart, dragging }: { t: TripSummary; onDragStart: (
       draggable
       onDragStart={(e) => onDragStart(e, t)}
       className={cn(
-        'group relative flex cursor-grab flex-col gap-2.5 rounded-[14px] border border-line bg-surface p-3.5 shadow-[0_1px_0_rgb(17_24_22/0.03)] transition-shadow hover:shadow-[var(--shadow-lift)] active:cursor-grabbing',
+        'group relative flex cursor-grab flex-col gap-2.5 rounded-[14px] border border-line bg-surface p-3.5 shadow-[0_1px_0_rgb(17_24_22/0.03)] lift active:cursor-grabbing',
         dragging && 'opacity-40',
       )}
     >
@@ -279,7 +280,7 @@ function Board({ onNew }: { onNew: () => void }) {
               </div>
               {value > 0 && <span className="tnum text-xs text-muted">{inrShort(value)}</span>}
             </header>
-            <ul className="flex min-h-24 flex-col gap-2.5">
+            <ul className="stagger flex min-h-24 flex-col gap-2.5">
               {items.map((t) => (
                 <TripCard key={t.id} t={t} onDragStart={onDragStart} dragging={dragId === t.id} />
               ))}
@@ -338,7 +339,7 @@ function TripList({ tab, setTab }: { tab: ListTab; setTab: (t: ListTab) => void 
           <Input aria-label="Search trips" leading={<Search className="h-4 w-4" />} value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Name, place, phone or #" />
         </div>
       </div>
-      <ul className={cn('flex flex-col border-t border-line-soft', q.isPlaceholderData && 'opacity-60')}>
+      <ul className={cn('stagger flex flex-col border-t border-line-soft transition-opacity', q.isPlaceholderData && 'opacity-60')}>
         {q.isPending &&
           Array.from({ length: 6 }, (_, i) => (
             <li key={i} className="border-t border-line-soft px-6 py-4 first:border-0">

@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Clock3, FileText, LayoutDashboard, LogOut, Menu as MenuIcon, MessageCircle, Plane, Plus, Search, Send, Settings, Users } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { BRAND } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { date, n } from '@/lib/format';
+import { CountUp, play, SMOOTH, SPRING, useSlidingIndicator } from '@/lib/motion';
 import { useSession } from '@/lib/session';
 import type { Overview } from '@/lib/types';
 import { CommandPalette } from './command-palette';
@@ -40,37 +41,39 @@ export function Logo({ className }: { className?: string }) {
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   const whatsapp = !!useSession().tenant.features?.whatsapp;
   const { pathname } = useLocation();
+  const onWhatsapp = whatsapp && pathname.startsWith('/settings/whatsapp');
+  // The green highlight slides from item to item instead of jumping
+  const { ref, box, animate } = useSlidingIndicator<HTMLElement>('[data-lit=true]', 'y', [pathname, whatsapp]);
+  const item = (lit: boolean) =>
+    cn(
+      'group/nav relative z-[1] flex h-10 items-center gap-3 rounded-[10px] px-3 text-sm font-medium transition-colors duration-200',
+      lit ? 'text-accent-strong' : 'text-ink-2 hover:bg-hover hover:text-ink',
+      lit && !box && 'bg-accent-soft',
+    );
+  const icon = 'h-[18px] w-[18px] transition-transform duration-300 ease-[cubic-bezier(0.22,1.4,0.36,1)] group-hover/nav:scale-110 group-active/nav:scale-95';
   return (
-    <nav aria-label="Main" className="flex flex-col gap-0.5">
-      {NAV.map(({ to, label, icon: Icon, end }) => (
-        <NavLink
-          key={to}
-          to={to}
-          end={end}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            cn(
-              'flex h-10 items-center gap-3 rounded-[10px] px-3 text-sm font-medium transition-colors',
-              // WhatsApp has its own item, so Settings stays unlit there
-              isActive && !(to === '/settings' && whatsapp && pathname.startsWith('/settings/whatsapp'))
-                ? 'bg-accent-soft text-accent-strong'
-                : 'text-ink-2 hover:bg-hover hover:text-ink',
-            )
-          }
-        >
-          <Icon className="h-[18px] w-[18px]" aria-hidden />
-          {label}
-        </NavLink>
-      ))}
+    <nav ref={ref} aria-label="Main" className="relative flex flex-col gap-0.5">
+      {box && (
+        <span
+          aria-hidden
+          className="absolute inset-x-0 rounded-[10px] bg-accent-soft"
+          style={{ top: box.offset, height: box.size, transition: animate ? `top 420ms ${SPRING}, height 420ms ${SPRING}` : 'none' }}
+        />
+      )}
+      {NAV.map(({ to, label, icon: Icon, end }) => {
+        const active = end ? pathname === to : pathname === to || pathname.startsWith(`${to}/`);
+        // WhatsApp has its own item, so Settings stays unlit there
+        const lit = active && !(to === '/settings' && onWhatsapp);
+        return (
+          <NavLink key={to} to={to} end={end} onClick={onNavigate} data-lit={lit} className={item(lit)}>
+            <Icon className={icon} aria-hidden />
+            {label}
+          </NavLink>
+        );
+      })}
       {whatsapp ? (
-        <NavLink
-          to="/settings/whatsapp"
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            cn('flex h-10 items-center gap-3 rounded-[10px] px-3 text-sm font-medium transition-colors', isActive ? 'bg-accent-soft text-accent-strong' : 'text-ink-2 hover:bg-hover hover:text-ink')
-          }
-        >
-          <MessageCircle className="h-[18px] w-[18px]" aria-hidden />
+        <NavLink to="/settings/whatsapp" onClick={onNavigate} data-lit={onWhatsapp} className={item(onWhatsapp)}>
+          <MessageCircle className={icon} aria-hidden />
           WhatsApp
         </NavLink>
       ) : (
@@ -97,7 +100,7 @@ function QuotaCard() {
       <div className="flex items-baseline justify-between text-[13px]">
         <span className="font-semibold">{trial ? 'Trial emails' : 'Monthly emails'}</span>
         <span className="tnum text-muted">
-          {n(used)} / {n(limit)}
+          <CountUp value={used} /> / {n(limit)}
         </span>
       </div>
       <ProgressBar value={used} max={limit} label="Monthly emails used" tone={used / limit > 0.9 ? 'warm' : 'accent'} />
@@ -242,6 +245,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const [palette, setPalette] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const loc = useLocation();
+  const main = useRef<HTMLElement>(null);
+  const firstPath = useRef(loc.pathname);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -254,6 +259,12 @@ export function AppShell({ children }: { children?: ReactNode }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   useEffect(() => setMobileNav(false), [loc.pathname]);
+  // Each new page eases in. The page isn't remounted, so nothing typed is lost.
+  useEffect(() => {
+    if (loc.pathname === firstPath.current) return;
+    firstPath.current = '';
+    play(main.current, [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: SMOOTH });
+  }, [loc.pathname]);
 
   return (
     <div className="flex min-h-screen">
@@ -266,7 +277,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
           <TopBar onSearch={() => setPalette(true)} onMenu={() => setMobileNav(true)} />
           <TrialBanner />
           <PausedBanner />
-          <main id="main" className="flex flex-col gap-6">
+          <main ref={main} id="main" className="flex flex-col gap-6">
             {children ?? <Outlet />}
           </main>
         </div>

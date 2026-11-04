@@ -47,22 +47,39 @@
   --shadow-pop: 0 1px 2px rgb(17 24 22 / 0.06), 0 12px 32px -8px rgb(17 24 22 / 0.18);
   --shadow-lift: 0 1px 2px rgb(17 24 22 / 0.05), 0 4px 12px -4px rgb(17 24 22 / 0.08);
 
-  --animate-in: fade-in 160ms ease-out;
-  --animate-sheet: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  --animate-pop: pop-in 140ms ease-out;
+  --animate-in: fade-in 180ms ease-out;
+  --animate-out: fade-out 140ms ease-in forwards;
+  --animate-sheet: sheet-in 340ms cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-sheet-out: sheet-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  --animate-pop: pop-in 220ms cubic-bezier(0.22, 1.2, 0.36, 1);
+  --animate-pop-out: pop-out 130ms ease-in forwards;
+  --animate-check: check-in 260ms cubic-bezier(0.22, 1.4, 0.36, 1);
 }
 
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+@keyframes fade-out {
+  to { opacity: 0; }
+}
 @keyframes sheet-in {
-  from { transform: translateX(24px); opacity: 0; }
+  from { transform: translateX(48px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
+@keyframes sheet-out {
+  to { transform: translateX(40px); opacity: 0; }
+}
 @keyframes pop-in {
-  from { transform: translateY(4px) scale(0.98); opacity: 0; }
+  from { transform: translateY(6px) scale(0.96); opacity: 0; }
   to { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes pop-out {
+  to { transform: translateY(4px) scale(0.97); opacity: 0; }
+}
+@keyframes check-in {
+  from { transform: scale(0.3) rotate(-12deg); opacity: 0; }
+  to { transform: none; opacity: 1; }
 }
 @keyframes shimmer {
   from { background-position: -200% 0; }
@@ -95,6 +112,59 @@
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
 }
+
+/* ---- Motion across the app ------------------------------------------------------------
+   Lists and table rows arrive in a quick cascade the first time they appear (and again
+   when a filter swaps them out). Rows that only update in place don't move. */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.stagger > *,
+tbody > tr {
+  animation: rise-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.stagger > :nth-child(2), tbody > tr:nth-child(2) { animation-delay: 30ms; }
+.stagger > :nth-child(3), tbody > tr:nth-child(3) { animation-delay: 60ms; }
+.stagger > :nth-child(4), tbody > tr:nth-child(4) { animation-delay: 90ms; }
+.stagger > :nth-child(5), tbody > tr:nth-child(5) { animation-delay: 120ms; }
+.stagger > :nth-child(6), tbody > tr:nth-child(6) { animation-delay: 150ms; }
+.stagger > :nth-child(7), tbody > tr:nth-child(7) { animation-delay: 180ms; }
+.stagger > :nth-child(8), tbody > tr:nth-child(8) { animation-delay: 210ms; }
+.stagger > :nth-child(9), tbody > tr:nth-child(9) { animation-delay: 240ms; }
+.stagger > :nth-child(n + 10), tbody > tr:nth-child(n + 10) { animation-delay: 270ms; }
+
+/* A countdown digit rolls up when it changes */
+@keyframes tick-in {
+  from { transform: translateY(60%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* A field that needs fixing nudges once, side to side */
+@keyframes nudge {
+  0%, 100% { transform: none; }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+/* Cards that open something: lift toward the pointer */
+.lift {
+  transition: transform 260ms cubic-bezier(0.22, 1.2, 0.36, 1), box-shadow 260ms ease, border-color 200ms ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+.lift:active { transform: translateY(0) scale(0.995); }
+
+/* Empty states: the icon arrives, then breathes */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.empty-icon { animation: check-in 500ms cubic-bezier(0.22, 1.4, 0.36, 1) both, float 3.6s ease-in-out 600ms infinite; }
 
 /* ---- Sign-in and sign-up: the one orchestrated entrance, and the live dispatch map ---- */
 @keyframes rise {

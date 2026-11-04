@@ -12,6 +12,8 @@ import { ago, dateTime, inr, rupeesInput, shortDate, todayIso } from '@/lib/form
 import { useSession } from '@/lib/session';
 import type { PaymentMethod, TripDetail } from '@/lib/types';
 import { DUE_STATE, METHODS, sanitizeRupees } from './shared';
+import { burst } from '@/lib/celebrate';
+import { CountUp, useMounted } from '@/lib/motion';
 
 /** Opens WhatsApp (app or web) with a message ready to send from the agent's own number. */
 export function waShare(phone: string | null, text: string) {
@@ -179,6 +181,7 @@ export function RecordPaymentDialog({ trip, open, onClose, onSaved }: { trip: Tr
         paidAt: f.date === todayIso() ? undefined : new Date(`${f.date}T12:00:00`).toISOString(),
       }),
     onSuccess: ({ trip: t, receiptNumber }) => {
+      burst();
       toast.success(`Payment recorded · receipt #${receiptNumber}`, { description: trip.status === 'BOOKED' || trip.status === 'COMPLETED' ? undefined : 'The trip is now marked as booked.' });
       onSaved(t, receiptNumber);
     },
@@ -300,6 +303,7 @@ export function PaymentsPanel({ trip, onChange, onSetPrice }: { trip: TripDetail
   const { money } = trip;
   const pct = money.price > 0 ? Math.min(100, (money.paid / money.price) * 100) : 0;
   const closed = trip.status === 'LOST';
+  const mounted = useMounted();
 
   return (
     <Panel className="flex flex-col">
@@ -323,9 +327,9 @@ export function PaymentsPanel({ trip, onChange, onSetPrice }: { trip: TripDetail
         />
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Agreed price', value: money.price ? inr(money.price) : null },
-            { label: 'Received', value: inr(money.paid), tone: money.paid > 0 ? 'text-accent-strong' : undefined },
-            { label: money.balance < 0 ? 'Overpaid' : 'Balance', value: inr(Math.abs(money.balance)), tone: money.overdue > 0 ? 'text-danger' : undefined },
+            { label: 'Agreed price', value: money.price ? <CountUp value={money.price} format={inr} step={100} /> : null },
+            { label: 'Received', value: <CountUp value={money.paid} format={inr} step={100} />, tone: money.paid > 0 ? 'text-accent-strong' : undefined },
+            { label: money.balance < 0 ? 'Overpaid' : 'Balance', value: <CountUp value={Math.abs(money.balance)} format={inr} step={100} />, tone: money.overdue > 0 ? 'text-danger' : undefined },
           ].map((s) => (
             <div key={s.label} className="flex min-w-0 flex-col gap-1.5">
               <span className="text-[13px] text-muted">{s.label}</span>
@@ -342,10 +346,10 @@ export function PaymentsPanel({ trip, onChange, onSetPrice }: { trip: TripDetail
         {money.price > 0 && (
           <div className="flex flex-col gap-1.5">
             <div className="h-2 overflow-hidden rounded-full bg-line-soft" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Share of the price received">
-              <div className={cn('h-full rounded-full transition-[width] duration-500', money.overdue > 0 ? 'bg-warm' : 'bg-accent')} style={{ width: `${pct}%` }} />
+              <div className={cn('h-full rounded-full transition-[width,background-color] duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)]', money.overdue > 0 ? 'bg-warm' : 'bg-accent')} style={{ width: `${mounted ? pct : 0}%` }} />
             </div>
             <span className="text-xs text-muted">
-              {Math.round(pct)}% received
+              <CountUp value={Math.round(pct)} />% received
               {money.overdue > 0 && <span className="font-medium text-danger"> · {inr(money.overdue)} overdue</span>}
             </span>
           </div>
@@ -384,7 +388,7 @@ export function PaymentsPanel({ trip, onChange, onSetPrice }: { trip: TripDetail
       {money.dues.length > 0 && (
         <div className="border-t border-line-soft">
           <h3 className="px-5 pb-1 pt-4 text-[13px] font-semibold sm:px-6">Schedule</h3>
-          <ol className="flex flex-col">
+          <ol className="stagger flex flex-col">
             {money.dues.map((d) => {
               const st = DUE_STATE[d.state];
               const last = trip.reminders.find((r) => r.dueId === d.id);
@@ -407,7 +411,7 @@ export function PaymentsPanel({ trip, onChange, onSetPrice }: { trip: TripDetail
                   <span className="tnum hidden text-[13px] text-ink-2 sm:block">{shortDate(d.dueDate)}</span>
                   <span className="tnum hidden text-right text-[13px] font-medium sm:block">{inr(d.amount)}</span>
                   <span className="flex flex-col items-end gap-0.5">
-                    <Badge tone={st.tone}>{st.label}</Badge>
+                    <Badge key={d.state} tone={st.tone} className="animate-check">{st.label}</Badge>
                     {d.state !== 'PAID' && d.paid > 0 && <span className="tnum text-[11px] text-muted">{inr(d.remaining)} left</span>}
                   </span>
                 </li>
