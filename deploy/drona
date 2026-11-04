@@ -92,8 +92,8 @@ cmd_install() {
     sed -i "s|^TOKEN_ENCRYPTION_KEY=.*|TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)|" "$ENV_FILE"
     sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" "$ENV_FILE"
 
-    read -r -p "Public address [https://dhrona.kurukshetra-travels.in]: " url
-    url="${url:-https://dhrona.kurukshetra-travels.in}"
+    read -r -p "Public address [https://drona.kurukshetra-travels.in]: " url
+    url="${url:-https://drona.kurukshetra-travels.in}"
     url="${url%/}"
     sed -i "s|^PUBLIC_URL=.*|PUBLIC_URL=$url|; s|^APP_URL=.*|APP_URL=$url|; s|^GOOGLE_REDIRECT_URI=.*|GOOGLE_REDIRECT_URI=$url/api/integrations/gmail/callback|" "$ENV_FILE"
 
