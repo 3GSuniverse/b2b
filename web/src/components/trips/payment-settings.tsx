@@ -31,7 +31,11 @@ export function usePaymentSettings() {
   return useQuery({ queryKey: ['payment-settings'], queryFn: () => api.get<{ settings: PaymentSettings }>('/api/payments/settings').then((r) => r.settings) });
 }
 
-const TAG_LABEL: Record<string, string> = {
+export const TAG_LABEL: Record<string, string> = {
+  destination: 'Destination',
+  start_date: 'Start date',
+  return_date: 'Return date',
+  review_link: 'Review link',
   first_name: 'First name',
   full_name: 'Full name',
   amount: 'Amount due',
@@ -64,7 +68,7 @@ function fill(text: string, vars: Record<string, string>) {
 }
 
 /** A reminder's wording, with tags you can click in and a preview as the customer sees it. */
-function ReminderText({ label, value, onChange, fallback, tags, error, company }: { label: string; value: string; onChange: (v: string) => void; fallback: string; tags: string[]; error?: string; company: string }) {
+export function ReminderText({ label, value, onChange, fallback, tags, error, company, vars }: { label: string; value: string; onChange: (v: string) => void; fallback: string; tags: string[]; error?: string; company: string; vars?: Record<string, string> }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const insert = (tag: string) => {
     const el = ref.current;
@@ -115,7 +119,7 @@ function ReminderText({ label, value, onChange, fallback, tags, error, company }
         <span className="text-[13px] font-semibold">What they’ll see</span>
         <div className="rounded-[14px] bg-[#e9e3d8] p-3">
           <div className="ml-auto max-w-full whitespace-pre-wrap break-words rounded-[10px] rounded-tr-sm bg-[#d9fdd3] px-3 py-2 text-[13px] leading-relaxed text-[#111b21] shadow-[0_1px_0_rgb(0_0_0/0.08)]">
-            {fill(value, sample(company))}
+            {fill(value, { ...sample(company), ...vars })}
           </div>
         </div>
       </div>
@@ -315,7 +319,7 @@ export function PaymentSettingsPanel() {
             <Field label="Send by" error={err('channel')}>
               {(p) => (
                 <NativeSelect {...p} disabled={!canEdit} value={d.channel} onChange={(e) => setD({ ...d, channel: e.target.value as Draft['channel'] })}>
-                  <option value="AUTO">WhatsApp when linked, otherwise email</option>
+                  <option value="AUTO">WhatsApp if linked, else email</option>
                   <option value="WHATSAPP">WhatsApp only</option>
                   <option value="EMAIL">Email only</option>
                 </NativeSelect>

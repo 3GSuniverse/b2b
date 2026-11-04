@@ -131,11 +131,19 @@ export const tenants = pgTable('tenants', {
   whatsappWebEnabled: boolean().notNull().default(false),
   // How customers pay and get reminded (UPI ID, reminder timing and wording, Razorpay keys)
   paymentSettings: jsonb().$type<PaymentSettings>().notNull().default({}),
+  // Messages around a trip: before it starts, a review request, "where next?"
+  tripMessageSettings: jsonb().$type<TripMessageSettings>().notNull().default({}),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
 
 export type ReminderChannel = 'AUTO' | 'WHATSAPP' | 'EMAIL';
+export interface TripMessageSettings {
+  channel?: ReminderChannel;
+  preTrip?: { enabled?: boolean; days?: number; text?: string };
+  review?: { enabled?: boolean; days?: number; text?: string; url?: string };
+  whereNext?: { enabled?: boolean; days?: number; text?: string };
+}
 export interface PaymentSettings {
   upiId?: string; // where customers pay: name@bank
   upiName?: string; // the name UPI apps show
@@ -488,6 +496,8 @@ export const messages = pgTable(
     tripId: text().references((): AnyPgColumn => trips.id, { onDelete: 'set null' }),
     subject: text(),
     body: text(),
+    // About the customer's own booking (payment reminder, trip starting): sent even if they opted out of offers
+    service: boolean().notNull().default(false),
     contactId: text().references(() => contacts.id, { onDelete: 'set null' }),
     senderId: text().references(() => senders.id, { onDelete: 'set null' }), // which mailbox/domain sent it
     channel: channel().notNull().default('EMAIL'),
@@ -777,6 +787,26 @@ export const tripReminders = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex().on(t.dueId, t.kind), index().on(t.tripId)],
+);
+
+export const followupKind = pgEnum('followup_kind', ['PRE_TRIP', 'REVIEW', 'WHERE_NEXT']);
+
+// One row per trip message sent: each trip gets each kind at most once
+export const tripFollowups = pgTable(
+  'trip_followups',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    tripId: text()
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    kind: followupKind().notNull(),
+    channel: channel(),
+    messageId: text().references(() => messages.id, { onDelete: 'set null' }),
+    skipReason: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex().on(t.tripId, t.kind)],
 );
 
 // ---------------------------------------------------------------------

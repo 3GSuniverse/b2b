@@ -10,12 +10,14 @@ import { runAutomationsTick } from '../automations/engine.js';
 import { runTrialLifecycle } from '../plans/trial-lifecycle.js';
 import { completeFinishedTrips } from '../trips/service.js';
 import { runPaymentReminders } from '../payments/reminders.js';
+import { runTripFollowups } from '../trips/followups.js';
 
 export interface TickResult {
   started: string[];
   failed: { campaignId: string; reason: string }[];
   automations?: { queued: number; skipped: number };
   reminders?: { sent: number; skipped: number };
+  tripMessages?: { sent: number; skipped: number };
 }
 
 /** Housekeeping that doesn't need to run every minute: domain checks, expired sessions. */
@@ -71,5 +73,6 @@ export async function runSchedulerTick(opts: { now?: Date; enqueue?: EnqueueFn }
   const auto = await runAutomationsTick({ now, enqueue: opts.enqueue });
   result.automations = { queued: auto.queued, skipped: auto.skipped };
   result.reminders = await runPaymentReminders({ now, enqueueEmail: opts.enqueue });
+  result.tripMessages = await runTripFollowups({ now, enqueueEmail: opts.enqueue });
   return result;
 }

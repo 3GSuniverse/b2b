@@ -135,6 +135,16 @@ export function AutomationsPage() {
           </LinkButton>
         }
       />
+      <Link to="/settings/trip-messages" className="group flex items-center gap-4 rounded-[var(--radius-panel)] border border-line bg-surface px-5 py-4 hover:bg-sunken">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-accent-soft text-accent-strong">
+          <Plane className="h-5 w-5" aria-hidden />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-sm font-semibold">Trip messages</span>
+          <span className="text-[13px] text-muted">Built in for every booked trip: “your trip starts soon”, a Google review request when they’re back, and “where next?” months later.</span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
+      </Link>
       {q.isPending ? (
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
           <Skeleton className="h-56 rounded-[var(--radius-panel)]" />

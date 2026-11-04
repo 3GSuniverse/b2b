@@ -121,8 +121,10 @@ export async function processSendJob(
     return 'failed';
   }
 
-  // A service message about the customer's own booking (a payment reminder), not marketing
-  const service = !msg.campaignId && !msg.automationId && !!msg.tripId;
+  // Messages written in full when they were created (trip messages), rather than from a campaign or template
+  const own = !msg.campaignId && !msg.automationId && msg.body !== null;
+  // About the customer's own booking (payment reminder, trip starting soon): not marketing
+  const service = own && msg.service;
 
   // 2. Re-check consent at the moment of sending — people unsubscribe between scheduling and sending
   const address = msg.toAddress.toLowerCase();
@@ -149,8 +151,8 @@ export async function processSendJob(
   }
 
   // 3. Content and sender come from the campaign snapshot, or the automation's template
-  const sender = msg.campaign?.sender ?? msg.automation?.sender ?? (service ? msg.sender : null);
-  const content = service
+  const sender = msg.campaign?.sender ?? msg.automation?.sender ?? (own ? msg.sender : null);
+  const content = own
     ? msg.subject && msg.body
       ? { subject: msg.subject, html: '', text: msg.body, previewText: null }
       : null
@@ -169,7 +171,7 @@ export async function processSendJob(
     await finalizeMessage(msg, 'FAILED', 'no_sender');
     return 'failed';
   }
-  if (!content?.subject || (!content.html && !service)) {
+  if (!content?.subject || (!content.html && !own)) {
     await finalizeMessage(msg, 'FAILED', 'no_content');
     return 'failed';
   }
@@ -192,11 +194,17 @@ export async function processSendJob(
 
   // 4. Render. Service messages were written in full when they were created.
   const unsubUrl = unsubscribeUrl(msg.id);
-  const rendered = service
+  const rendered = own
     ? {
         subject: content.subject,
-        text: content.text!,
-        html: serviceEmailHtml({ text: content.text!, tenant: msg.tenant, buttonUrl: msg.trip ? payPageUrl(msg.trip.publicToken) : undefined, buttonLabel: 'See what’s due and pay' }),
+        text: service ? content.text! : `${content.text}\n\nUnsubscribe: ${unsubUrl}`,
+        html: serviceEmailHtml({
+          text: content.text!,
+          tenant: msg.tenant,
+          // Payment reminders get a button to the customer's page
+          ...(service && msg.trip && msg.subject?.startsWith('Payment') ? { buttonUrl: payPageUrl(msg.trip.publicToken), buttonLabel: 'See what’s due and pay' } : {}),
+          unsubscribeUrl: service ? undefined : unsubUrl,
+        }),
       }
     : renderEmail(
         { subject: content.subject, html: content.html!, text: content.text, previewText: content.previewText },

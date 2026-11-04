@@ -225,13 +225,14 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
     .where(and(eq(suppressions.tenantId, msg.tenantId), eq(suppressions.channel, 'WHATSAPP'), eq(suppressions.address, msg.toAddress)))
     .limit(1);
   // Booking messages (payment reminders) go to the customer unless they replied STOP; offers need their opt-in
-  const service = !msg.campaignId && !msg.automationId && !!msg.tripId;
+  const own = !msg.campaignId && !msg.automationId && msg.body !== null;
+  const service = own && msg.service;
   if (suppressed || (!service && msg.contact && msg.contact.whatsappStatus !== 'SUBSCRIBED')) {
     await finalizeMessage(msg, 'SUPPRESSED', suppressed ? 'on_suppression_list' : `contact_whatsapp_${msg.contact!.whatsappStatus.toLowerCase()}`);
     return 'suppressed';
   }
 
-  const body = service ? msg.body : msg.campaign?.text;
+  const body = own ? msg.body : msg.campaign?.text;
   if (!body?.trim()) {
     await finalizeMessage(msg, 'FAILED', 'no_content');
     return 'failed';

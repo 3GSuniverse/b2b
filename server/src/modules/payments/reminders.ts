@@ -32,7 +32,7 @@ function humanDate(iso: string) {
 }
 
 /** A short, plain email for a service message: the text, a button to the pay page, the company's details. */
-export function serviceEmailHtml(input: { text: string; tenant: Pick<Tenant, 'name' | 'postalAddress'>; buttonUrl?: string; buttonLabel?: string }) {
+export function serviceEmailHtml(input: { text: string; tenant: Pick<Tenant, 'name' | 'postalAddress'>; buttonUrl?: string; buttonLabel?: string; unsubscribeUrl?: string }) {
   const paragraphs = input.text
     .split(/\n{2,}/)
     .map((p) =>
@@ -46,7 +46,9 @@ export function serviceEmailHtml(input: { text: string; tenant: Pick<Tenant, 'na
   const button = input.buttonUrl
     ? `<p style="margin:8px 0 24px"><a href="${escapeHtml(input.buttonUrl)}" style="display:inline-block;background:#111816;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 20px;border-radius:10px">${escapeHtml(input.buttonLabel ?? 'Open')}</a></p>`
     : '';
-  const footer = [input.tenant.name, input.tenant.postalAddress].filter(Boolean).map((l) => escapeHtml(l!)).join('<br>');
+  const footer =
+    [input.tenant.name, input.tenant.postalAddress].filter(Boolean).map((l) => escapeHtml(l!)).join('<br>') +
+    (input.unsubscribeUrl ? `<br><br><a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#59625e">Unsubscribe</a> from messages like this` : '');
   return `<!doctype html><html><body style="margin:0;background:#f5f6f4;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e3e6e3;border-radius:16px">
@@ -195,6 +197,7 @@ export async function runPaymentReminders(
               toAddress: channel === 'EMAIL' ? c!.email!.toLowerCase() : c!.phone!,
               subject: channel === 'EMAIL' ? `${kind === 'BEFORE' ? 'Payment reminder' : 'Payment overdue'}: ${trip.title}` : null,
               body: text,
+              service: true,
             })
             .returning({ id: messages.id });
           await db.update(tripReminders).set({ messageId: msg!.id }).where(eq(tripReminders.id, claim.id));

@@ -252,6 +252,8 @@ function describe(a: TripDetail['activity'][number]) {
       return `${m.amount} received by ${METHODS[m.method as PaymentMethod] ?? m.method} · receipt #${m.receipt}`;
     case 'trip.payment_void':
       return `Receipt #${m.receipt} (${m.amount}) cancelled · ${m.reason}`;
+    case 'trip.followup':
+      return `${{ PRE_TRIP: '“Trip starts soon” message', REVIEW: 'Review request', WHERE_NEXT: '“Where next?” message' }[m.kind as string] ?? 'Message'} sent by ${m.channel === 'WHATSAPP' ? 'WhatsApp' : 'email'}`;
     case 'trip.reminder':
       return `Payment reminder sent for ${m.label} by ${m.channel === 'WHATSAPP' ? 'WhatsApp' : 'email'}`;
     default:
