@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/shell';
 import { RequireSession } from './lib/session';
-import { SignInPage, SignUpPage } from './pages/auth';
+import { AuthShell, SignInPage, SignUpPage } from './pages/auth';
 import { NotFoundPage } from './pages/not-found';
 
 const OverviewPage = lazy(() => import('./pages/overview').then((m) => ({ default: m.OverviewPage })));
@@ -36,8 +36,10 @@ function PageFallback() {
 export function App() {
   return (
     <Routes>
-      <Route path="/signin" element={<SignInPage />} />
-      <Route path="/signup" element={<SignUpPage />} />
+      <Route element={<AuthShell />}>
+        <Route path="/signin" element={<SignInPage />} />
+        <Route path="/signup" element={<SignUpPage />} />
+      </Route>
       <Route path="groups/:id/manifest" element={<RequireSession><Suspense fallback={<PageFallback />}><ManifestPage /></Suspense></RequireSession>} />
       <Route
         element={

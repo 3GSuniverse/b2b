@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Eye, EyeOff } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { DispatchPanel } from '@/components/auth/dispatch-panel';
 import { Logo } from '@/components/shell';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/field';
@@ -26,59 +27,42 @@ function PasswordInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
-/** A quiet preview of what the product does — the right half of the auth screens on wide displays. */
-function SidePanel() {
-  const rows = [
-    { who: 'Priya Nair', what: 'Your Goa trip starts in 3 days', when: '9:00 AM', tone: 'bg-accent' },
-    { who: 'Arjun Mehta', what: 'Happy birthday, Arjun!', when: '8:30 AM', tone: 'bg-warm-chart' },
-    { who: 'Sneha Rao', what: 'Kerala backwaters, 5 nights', when: 'Delivered', tone: 'bg-accent' },
-  ];
+/** Sign-in and sign-up share this frame, so the map keeps flying when you switch between them. */
+export function AuthShell() {
+  const { pathname } = useLocation();
   return (
-    <div className="relative hidden flex-col justify-between overflow-hidden rounded-[24px] bg-ink p-10 text-white lg:flex">
-      <svg aria-hidden className="absolute -right-24 -top-24 h-[420px] w-[420px] opacity-[0.08]" viewBox="0 0 24 24" fill="none" stroke="#7FE0C3" strokeWidth="0.6">
-        <path d="M4 12l16-8-6 16-3-7-7-1z" />
-      </svg>
-      <div className="relative flex flex-col gap-4">
-        <p className="max-w-sm text-[28px] font-semibold leading-tight tracking-[-0.025em]">Email your customers from your own address. Every reminder on time.</p>
-        <p className="max-w-sm text-[15px] leading-relaxed text-white/65">Campaigns, trip reminders and birthday wishes, sent from your company domain or Gmail, with every bounce and unsubscribe handled for you.</p>
+    <div className="grid min-h-screen grid-cols-[minmax(0,1fr)] gap-6 p-4 sm:p-6 lg:h-screen lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <div className="flex flex-col px-2 py-4 sm:px-8 lg:overflow-y-auto lg:px-14">
+        <div className="auth-rise">
+          <Logo />
+        </div>
+        <main key={pathname} className="flex flex-1 flex-col justify-center py-12">
+          <Outlet />
+        </main>
+        <p className="auth-rise text-xs text-faint" style={{ '--d': '420ms' } as React.CSSProperties}>
+          Need help? <a className="font-medium text-muted hover:text-ink" href={`mailto:${BRAND.supportEmail}`}>{BRAND.supportEmail}</a>
+        </p>
       </div>
-      <div className="relative flex flex-col gap-2.5 rounded-[18px] bg-white/[0.06] p-4 ring-1 ring-white/10">
-        <span className="px-1 text-[13px] font-medium text-white/60">Going out today</span>
-        {rows.map((r) => (
-          <div key={r.who} className="flex items-center gap-3 rounded-[12px] bg-white/[0.05] px-3.5 py-3">
-            <span className={`h-2 w-2 shrink-0 rounded-full ${r.tone}`} aria-hidden />
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm font-medium">{r.what}</span>
-              <span className="text-xs text-white/55">To {r.who}</span>
-            </span>
-            <span className="tnum text-xs text-white/55">{r.when}</span>
-          </div>
-        ))}
-      </div>
+      <DispatchPanel />
     </div>
   );
 }
 
+/** Heading, form, and the link to the other page, arriving one after another. */
 function AuthLayout({ title, subtitle, children, footer }: { title: string; subtitle: ReactNode; children: ReactNode; footer: ReactNode }) {
+  const step = (n: number) => ({ '--d': `${60 + n * 70}ms` }) as React.CSSProperties;
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] min-h-screen gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-      <div className="flex flex-col px-2 py-4 sm:px-8 lg:px-14">
-        <Logo />
-        <main className="flex flex-1 flex-col justify-center py-12">
-          <div className="mx-auto flex w-full max-w-[400px] flex-col gap-8">
-            <div className="flex flex-col gap-2">
-              <h1 className="text-[30px] font-semibold leading-tight tracking-[-0.03em]">{title}</h1>
-              <p className="text-[15px] text-muted">{subtitle}</p>
-            </div>
-            {children}
-            <p className="text-sm text-muted">{footer}</p>
-          </div>
-        </main>
-        <p className="text-xs text-faint">
-          Need help? <a className="font-medium text-muted hover:text-ink" href={`mailto:${BRAND.supportEmail}`}>{BRAND.supportEmail}</a>
-        </p>
+    <div className="mx-auto flex w-full max-w-[400px] flex-col gap-8">
+      <div className="auth-rise flex flex-col gap-2" style={step(0)}>
+        <h1 className="text-[30px] font-semibold leading-tight tracking-[-0.03em]">{title}</h1>
+        <p className="text-[15px] text-muted">{subtitle}</p>
       </div>
-      <SidePanel />
+      <div className="auth-rise" style={step(1)}>
+        {children}
+      </div>
+      <p className="auth-rise text-sm text-muted" style={step(2)}>
+        {footer}
+      </p>
     </div>
   );
 }

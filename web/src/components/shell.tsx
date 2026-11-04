@@ -26,9 +26,9 @@ const NAV = [
 
 export function Logo({ className }: { className?: string }) {
   return (
-    <span className={cn('flex items-center gap-2.5', className)}>
+    <span className={cn('group/logo flex items-center gap-2.5', className)}>
       <span aria-hidden className="grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-ink">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7FE0C3" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <svg className="transition-transform duration-300 ease-[cubic-bezier(0.2,0.9,0.3,1.4)] group-hover/logo:-translate-y-[2px] group-hover/logo:translate-x-[2px]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7FE0C3" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M4 12l16-8-6 16-3-7-7-1z" />
         </svg>
       </span>

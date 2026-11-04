@@ -96,6 +96,63 @@
   animation: shimmer 1.4s ease-in-out infinite;
 }
 
+/* ---- Sign-in and sign-up: the one orchestrated entrance, and the live dispatch map ---- */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+.auth-rise { animation: rise 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: var(--d, 0ms); }
+
+.dispatch-lean { transition: transform 700ms cubic-bezier(0.2, 0.8, 0.2, 1); will-change: transform; }
+
+@keyframes beacon {
+  from { transform: scale(1); opacity: 0.55; }
+  to { transform: scale(3.6); opacity: 0; }
+}
+.dispatch-beacon { transform-box: fill-box; transform-origin: center; animation: beacon 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite; }
+
+@keyframes ripple {
+  from { transform: scale(0.8); opacity: 0.9; }
+  to { transform: scale(4); opacity: 0; }
+}
+.dispatch-ripple { transform-box: fill-box; transform-origin: center; animation: ripple 900ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
+.dispatch-flight { animation: fade-in 200ms ease-out; }
+
+@keyframes bubble-in {
+  from { opacity: 0; transform: translate(var(--bx), var(--by)) translateY(6px) scale(0.92); }
+  to { opacity: 1; transform: translate(var(--bx), var(--by)); }
+}
+.dispatch-bubble { transform: translate(var(--bx), var(--by)); animation: bubble-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+
+@keyframes row-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+.dispatch-row { animation: row-in 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+.dispatch-sending::after {
+  content: '';
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent-ring);
+  animation: sweep 900ms ease-in-out infinite;
+}
+
+.dispatch-pop { animation: pop-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
+
+@keyframes live {
+  0% { transform: scale(1); opacity: 0.7; }
+  70%, 100% { transform: scale(2.8); opacity: 0; }
+}
+.dispatch-live { animation: live 1.8s ease-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 1ms !important;
