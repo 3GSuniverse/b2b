@@ -6,7 +6,7 @@
  *
  * Never run this against production: it refuses unless NODE_ENV is development or test.
  */
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import {
   automations,
   campaigns,
@@ -27,12 +27,15 @@ import {
   trips,
   quotes,
   rateItems,
+  tripTravellers,
   users,
 } from '../src/db/schema.js';
 import { env } from '../src/config/env.js';
 import { closeDatabase, db } from '../src/lib/db.js';
 import { hashPassword } from '../src/modules/auth/password.js';
 import { STARTERS } from '../src/modules/templates/starters.js';
+import { addBooking, autoAssign, createGroup } from '../src/modules/groups/service.js';
+import { encryptSecret } from '../src/lib/crypto.js';
 
 if (env.NODE_ENV === 'production') {
   console.error('Refusing to seed demo data in production.');
@@ -457,6 +460,42 @@ async function main() {
       validUntil: day(4), sentAt: daysAgo(2, 12), viewedAt: daysAgo(1, 19), createdById: user!.id,
     });
     await db.update(trips).set({ price: total }).where(eq(trips.id, kerala.id));
+  }
+
+  // ---- A group yatra: four families, some details and payments in
+  {
+    const actor = { tenantId, userId: user!.id };
+    const g = await createGroup(actor, { title: 'Char Dham Yatra, May 2027', destination: 'Uttarakhand', startDate: '2027-05-10', endDate: '2027-05-21', capacity: 30, perPersonPrice: 4_200_000, notes: 'AC bus from Secunderabad. Helicopter for Kedarnath booked separately.' });
+    const fams = [
+      { name: 'Venkata Ramana', phone: '9848011111', adults: 4, people: [['Venkata Ramana', 66, 'M', 'VEG', 'Knee trouble: lower berth please'], ['Saraswathi Ramana', 61, 'F', 'VEG', null], ['Srinivas Ramana', 38, 'M', 'VEG', null], ['Padma Srinivas', 35, 'F', 'VEG', null]], paid: 1 },
+      { name: 'Lalitha Devi', phone: '9848022222', adults: 3, people: [['Lalitha Devi', 58, 'F', 'JAIN', null], ['Ramesh Babu', 62, 'M', 'VEG', 'Diabetic'], ['Anusha Babu', 29, 'F', 'VEG', null]], paid: 0.3 },
+      { name: 'Prakash Rao', phone: '9848033333', adults: 2, people: [], paid: 0.3 },
+      { name: 'Sunitha Reddy', phone: '9848044444', adults: 5, people: [], paid: 0 },
+    ];
+    let rn = (await db.select({ n: sql<number>`coalesce(max(receipt_number), 0)::int` }).from(tripPayments).where(eq(tripPayments.tenantId, tenantId)))[0]!.n;
+    for (const [fi, f] of fams.entries()) {
+      const b = await addBooking(actor, g.id, { customer: { name: f.name, phone: f.phone, whatsappOptIn: true }, adults: f.adults, children: 0, status: 'BOOKED' });
+      const price = b.price;
+      const adv = Math.round(price * 0.3);
+      await db.insert(tripDues).values([
+        { tenantId, tripId: b.id, label: 'Advance', amount: adv, dueDate: day(-20 + fi), position: 0 },
+        { tenantId, tripId: b.id, label: 'Balance', amount: price - adv, dueDate: '2027-04-20', position: 1 },
+      ]);
+      if (f.paid) {
+        rn++;
+        await db.insert(tripPayments).values({ tenantId, tripId: b.id, receiptNumber: rn, amount: f.paid === 1 ? price : adv, method: 'UPI', paidAt: daysAgo(15 - fi, 14), recordedById: user!.id });
+      }
+      if (f.people.length) {
+        await db.insert(tripTravellers).values(
+          f.people.map(([name, age, gender, food, needs], i) => ({
+            tenantId, tripId: b.id, position: i, name: name as string, age: age as number, gender: gender as string, food: food as string, needs: needs as string | null,
+            idType: 'AADHAAR', idNumberEnc: encryptSecret(`5123456789${String(fi)}${String(i)}`), idLast4: `89${fi}${i}`,
+            ...(i === 0 ? { emergencyName: 'Family at home', emergencyPhone: `+91984805555${fi}` } : {}),
+          })),
+        );
+      }
+    }
+    await autoAssign(actor, g.id);
   }
 
   await db.insert(notifications).values({

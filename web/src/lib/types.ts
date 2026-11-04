@@ -312,6 +312,8 @@ export interface TripDetail extends Omit<TripSummary, 'money'> {
   payments: TripPayment[];
   suggestedSchedule: { label: string; amount: number; dueDate: string }[] | null;
   payPageUrl: string;
+  travellersUrl: string;
+  group: { id: string; title: string; number: number } | null;
   reminders: { id: string; dueId: string; dueLabel: string | null; kind: 'BEFORE' | 'OVERDUE'; channel: Channel | null; skipReason: string | null; createdAt: string; status: string | null }[];
   activity: { id: string; action: string; meta: Record<string, unknown> | null; by: string | null; createdAt: string }[];
 }
@@ -382,4 +384,61 @@ export interface Quote {
   responseNote: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ---------------------------------------------------------------- Groups
+
+export interface Traveller {
+  id: string;
+  tripId: string;
+  position: number;
+  name: string;
+  age: number | null;
+  gender: 'F' | 'M' | 'O' | null;
+  phone: string | null;
+  idType: string | null;
+  idLast4: string | null;
+  food: string | null;
+  needs: string | null;
+  emergencyName: string | null;
+  emergencyPhone: string | null;
+  room: string | null;
+  seat: string | null;
+}
+
+export interface GroupSummary {
+  id: string;
+  number: number;
+  status: TripStatus;
+  title: string;
+  destination: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  capacity: number | null;
+  perPersonPrice: number | null;
+  seatsTaken: number;
+  families: number;
+  expected: number;
+  collected: number;
+  overdue: number;
+}
+
+export interface GroupDetail extends GroupSummary {
+  notes: string | null;
+  bookings: {
+    id: string;
+    number: number;
+    status: TripStatus;
+    customer: { name: string; phone: string | null; email: string | null };
+    seats: number;
+    adults: number;
+    children: number;
+    price: number;
+    paid: number;
+    balance: number;
+    overdue: number;
+    nextDue: { amount: number; dueDate: string; state: DueState } | null;
+    travellers: Traveller[];
+    detailsMissing: number;
+  }[];
 }

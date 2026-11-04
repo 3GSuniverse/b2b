@@ -98,6 +98,35 @@ npm run start:worker                        # sending, scheduling, automations
 The server looks for the dashboard in `../web/dist`; set `WEB_DIST` to point
 elsewhere. Restart the server after each dashboard build (asset names change).
 
+## For travel agencies: trips, payments, quotes, groups
+
+Beyond email and WhatsApp campaigns, Hayate runs a small agency's booking work:
+
+- **Trips** (`/trips`): enquiry → quoted → booked → completed on a drag-and-drop board.
+  Each trip has a payment schedule (advance, instalments, balance), numbered receipts
+  (wrong ones are cancelled with a reason, never deleted) and a full history. Recording
+  a payment books the trip; trips complete themselves after the return date; a booked
+  trip writes Trip date / Return date / Destination onto the contact for automations.
+- **Payments**: a customer page per trip (`/p/<token>`) with what's due, a UPI QR code and
+  a "pay with a UPI app" button to the agency's own UPI ID; printable receipts
+  (`/r/<token>`) with the amount in words; reminders at 10 am before each instalment and
+  once after a missed one (WhatsApp when linked, else email); optional Razorpay with the
+  agency's own keys, confirmed by a signed webhook (`/webhooks/razorpay/<company id>`).
+- **Quotes**: a price list of the agency's own rates; a day-by-day quote editor with
+  totals, per person and private margin; the customer's page (`/q/<token>`) to accept or
+  ask for changes; accepting sets up the advance and balance; a follow-up after 2 days
+  without a reply; "Draft with AI" when `ANTHROPIC_API_KEY` is set (prices always come
+  from the price list).
+- **Group departures** (`/groups/<id>`): seats and a price per person; each family is an
+  ordinary booking inside it; families fill in traveller details from their phone
+  (`/p/<token>/travellers`, ID numbers encrypted, last 4 shown); rooms and seats
+  assigned in one click; one message to everyone; a printable passenger list.
+- **Trip messages** (Settings → Trip messages): "your trip starts soon", a Google review
+  request and "where next?", each off until switched on. Review and "where next?" need
+  the customer's consent; booking messages (reminders, trip starting) don't.
+- **Leads API** for the AI call agent or a website form: Settings → API keys, then
+  `POST /api/v1/leads` with `Authorization: Bearer hy_live_…`. `externalId` makes retries safe.
+
 ## Plans, free trial and WhatsApp
 
 Every new company starts on a **free trial**: 5 days, 200 emails, and up to 100 WhatsApp

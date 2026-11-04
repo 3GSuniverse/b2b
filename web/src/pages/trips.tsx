@@ -9,10 +9,11 @@ import { Avatar, EmptyState, PageHeader, Panel, Skeleton } from '@/components/ui
 import { Input } from '@/components/ui/field';
 import { PaymentChip, STATUS, travellers, TripStatusBadge } from '@/components/trips/shared';
 import { NewTripSheet } from '@/components/trips/trip-form';
+import { GroupDialog } from '@/components/groups/dialogs';
 import { api, qs } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { dateRange, inr, inrShort, n } from '@/lib/format';
-import type { Contact, TripStats, TripStatus, TripSummary } from '@/lib/types';
+import type { Contact, GroupSummary, TripStats, TripStatus, TripSummary } from '@/lib/types';
 
 type View = 'board' | 'list';
 type ListTab = 'OPEN' | 'overdue' | 'due' | 'COMPLETED' | 'CLOSED' | 'ALL';
@@ -86,6 +87,52 @@ function StatsStrip({ onShowOverdue }: { onShowOverdue: () => void }) {
         );
       })}
     </Panel>
+  );
+}
+
+// ---------------------------------------------------------------- Group departures
+
+function GroupStrip() {
+  const q = useQuery({ queryKey: ['groups'], queryFn: () => api.get<{ groups: GroupSummary[] }>('/api/groups').then((r) => r.groups) });
+  const groups = (q.data ?? []).filter((g) => g.status === 'BOOKED');
+  if (!groups.length) return null;
+  return (
+    <section className="flex flex-col gap-3" aria-label="Group departures">
+      <h2 className="text-[15px] font-semibold tracking-tight">Group departures</h2>
+      <div className="-mx-4 flex snap-x gap-4 overflow-x-auto scroll-px-4 px-4 pb-1 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0">
+        {groups.map((g) => {
+          const pct = g.capacity ? Math.min(100, (g.seatsTaken / g.capacity) * 100) : null;
+          return (
+            <Link key={g.id} to={`/groups/${g.id}`} className="flex w-[80vw] max-w-[360px] shrink-0 snap-start flex-col gap-3 rounded-[var(--radius-panel)] border border-line bg-surface p-4 transition-shadow hover:shadow-[var(--shadow-lift)] lg:w-auto lg:max-w-none">
+              <div className="flex items-start justify-between gap-2">
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-semibold">{g.title}</span>
+                  <span className="truncate text-xs text-muted">{dateRange(g.startDate, g.endDate) ?? 'Dates not set'}</span>
+                </span>
+                <Users className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="tnum text-[13px]">
+                  <span className="font-semibold">{g.seatsTaken}</span>
+                  <span className="text-muted">{g.capacity ? ` of ${g.capacity} seats` : ' seats'} · {g.families} famil{g.families === 1 ? 'y' : 'ies'}</span>
+                </span>
+                {pct !== null && (
+                  <div className="h-1.5 overflow-hidden rounded-full bg-line-soft">
+                    <div className={cn('h-full rounded-full', pct >= 100 ? 'bg-warm' : 'bg-accent')} style={{ width: `${pct}%` }} />
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-between border-t border-line-soft pt-2.5 text-xs">
+                <span className="tnum text-muted">
+                  {inrShort(g.collected)} of {inrShort(g.expected)} in
+                </span>
+                {g.overdue > 0 && <span className="tnum font-semibold text-danger">{inrShort(g.overdue)} overdue</span>}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -348,6 +395,7 @@ export function TripsPage() {
   const [view, setViewState] = useState<View>(() => (params.get('tab') ? 'list' : savedView()));
   const tab = (params.get('tab') as ListTab | null) ?? 'OPEN';
   const [creating, setCreating] = useState(params.get('new') === '1');
+  const [newGroup, setNewGroup] = useState(false);
   const stats = useStats();
   // Arriving from a contact ("Add an enquiry for them")
   const fromContact = params.get('contact');
@@ -385,6 +433,10 @@ export function TripsPage() {
               <Tag className="h-4 w-4" />
               Price list
             </LinkButton>
+            <Button onClick={() => setNewGroup(true)}>
+              <Users className="h-4 w-4" />
+              New group
+            </Button>
             <Button variant="primary" onClick={() => setCreating(true)}>
               <Plus className="h-4 w-4" />
               New enquiry
@@ -415,6 +467,7 @@ export function TripsPage() {
               setTab('overdue');
             }}
           />
+          <GroupStrip />
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[15px] font-semibold tracking-tight">{view === 'board' ? 'Open trips' : 'All trips'}</h2>
             <Segmented<View>
@@ -448,6 +501,15 @@ export function TripsPage() {
         </>
       )}
 
+      <GroupDialog
+        open={newGroup}
+        onClose={() => setNewGroup(false)}
+        onSaved={(g) => {
+          setNewGroup(false);
+          qc.invalidateQueries({ queryKey: ['groups'] });
+          nav(`/groups/${g.id}`);
+        }}
+      />
       <NewTripSheet
         open={creating && (!fromContact || !!picked)}
         contact={picked}

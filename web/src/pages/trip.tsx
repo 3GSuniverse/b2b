@@ -9,6 +9,7 @@ import { Field, Input } from '@/components/ui/field';
 import { Dialog, Menu, MenuItem, MenuSeparator } from '@/components/ui/overlay';
 import { PaymentsPanel } from '@/components/trips/payments';
 import { QuotesPanel } from '@/components/quotes/quotes-panel';
+import { TravellersPanel } from '@/components/groups/travellers';
 import { METHODS, SOURCES, STATUS, travellers, TripStatusBadge } from '@/components/trips/shared';
 import { EditTripSheet } from '@/components/trips/trip-form';
 import { api } from '@/lib/api';
@@ -399,8 +400,17 @@ export function TripPage() {
           <ActivityPanel trip={trip} />
         </div>
         <aside className="order-first flex flex-col gap-6 lg:sticky lg:top-6 lg:order-none">
+          {trip.group && (
+            <Link to={`/groups/${trip.group.id}`} className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-line bg-surface px-4 py-3 text-[13px] hover:bg-sunken">
+              <Users className="h-4 w-4 shrink-0 text-accent" aria-hidden />
+              <span className="min-w-0">
+                Part of <span className="font-semibold">{trip.group.title}</span>
+              </span>
+            </Link>
+          )}
           <CustomerPanel trip={trip} />
           <DetailsPanel trip={trip} onEdit={() => setEditing(true)} />
+          {trip.status !== 'LOST' && <TravellersPanel trip={trip} />}
         </aside>
       </div>
 

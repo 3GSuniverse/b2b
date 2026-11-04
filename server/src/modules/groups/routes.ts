@@ -87,9 +87,9 @@ export async function groupRoutes(app: FastifyInstance) {
 <label>ID type${sel(`t${i}_idType`, t?.idType ?? null, ID_TYPES.map((x) => [x, ID_LABEL[x]!]))}</label>
 <label>ID number${t?.idLast4 ? ` <small>on file: ending ${e(t.idLast4)}. Leave empty to keep it.</small>` : ''}<input name="t${i}_idNumber" autocomplete="off" spellcheck="false"></label>
 <label>Food${sel(`t${i}_food`, t?.food ?? null, [['VEG', 'Vegetarian'], ['NON_VEG', 'Non-vegetarian'], ['JAIN', 'Jain'], ['OTHER', 'Other']])}</label>
-<label>Phone <small>optional</small><input name="t${i}_phone" type="tel" inputmode="tel" value="${v(t?.phone)}"></label>
+<label>Phone (optional)<input name="t${i}_phone" type="tel" inputmode="tel" value="${v(t?.phone)}"></label>
 <label class="full">Anything we should know? <small>Medical needs, wheelchair, a lower berth…</small><input name="t${i}_needs" value="${v(t?.needs)}"></label>
-${i === 0 ? `<label>Emergency contact name<input name="t${i}_emergencyName" value="${v(t?.emergencyName)}"></label><label>Their phone<input name="t${i}_emergencyPhone" type="tel" inputmode="tel" value="${v(t?.emergencyPhone)}"></label>` : ''}
+${i === 0 ? `<label>Emergency contact<input name="t${i}_emergencyName" value="${v(t?.emergencyName)}"></label><label>Their phone<input name="t${i}_emergencyPhone" type="tel" inputmode="tel" value="${v(t?.emergencyPhone)}"></label>` : ''}
 </fieldset>`;
     }).join('');
     const body = `<div class="brand"><span>${e(tenant.name)}</span><small>Trip #${trip.number}</small></div>
