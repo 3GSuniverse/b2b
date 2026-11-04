@@ -31,7 +31,7 @@ async function web(app: FastifyInstance, opts: { root?: string }) {
   }
 
   app.setNotFoundHandler((req, reply) => {
-    const wantsPage = req.method === 'GET' && !SERVER_PREFIXES.some((p) => req.url.startsWith(p)) && String(req.headers.accept ?? '').includes('text/html');
+    const wantsPage = (req.method === 'GET' || req.method === 'HEAD') && !SERVER_PREFIXES.some((p) => req.url.startsWith(p)) && String(req.headers.accept ?? '').includes('text/html');
     if (enabled && wantsPage) {
       return reply.header('cache-control', 'no-cache').type('text/html').sendFile('index.html', { cacheControl: false });
     }

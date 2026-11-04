@@ -1,0 +1,95 @@
+# Production: everything runs on one always-on VM, reachable only through the Cloudflare tunnel.
+# Used by deploy/hayate (install, deploy, backup). Settings come from deploy/.env.
+name: hayate
+
+x-app: &app
+  image: hayate:latest
+  build:
+    context: ..
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    NODE_ENV: production
+    DATABASE_URL: postgresql://hayate:${POSTGRES_PASSWORD}@postgres:5432/hayate
+    REDIS_URL: redis://redis:6379
+  volumes:
+    # Google OAuth client file for "Connect Gmail" (optional), kept outside git
+    - ./secrets:/etc/hayate:ro
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  logging:
+    driver: json-file
+    options: { max-size: 20m, max-file: '5' }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hayate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: hayate
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U hayate']
+      interval: 5s
+      retries: 20
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Queued sends and schedules must survive restarts, and must never be evicted
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      retries: 20
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+
+  # Applies database changes, then exits. The API and worker wait for it.
+  migrate:
+    <<: *app
+    restart: 'no'
+    command: ['node', 'dist/cli/migrate.js']
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    command: ['node', 'dist/server.js']
+    # Only this VM can reach it; the public gets in through the Cloudflare tunnel
+    ports:
+      - '127.0.0.1:${HAYATE_PORT:-4000}:4000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    <<: *app
+    command: ['node', 'dist/worker.js']
+    healthcheck:
+      disable: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:

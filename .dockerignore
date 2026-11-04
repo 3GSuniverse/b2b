@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+.git
+server/test
+**/dump.rdb
+**/*.pem
+**/*.key
+**/client_secret*.json
+**/*-oauth.json
+deploy/backups

@@ -82,6 +82,8 @@ Check it is alive: `curl http://localhost:4000/health`
 
 ## Production
 
+**To put it live on a server, follow [deploy/README.md](deploy/README.md)** (one always-on VM, Docker, a Cloudflare tunnel, and the `hayate` command for deploys, backups and plans). What it does underneath:
+
 The API server also serves the built dashboard, so the whole product is one
 origin (simple cookies, strict CSP, no CORS):
 

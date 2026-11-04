@@ -19,8 +19,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed:demo": "tsx scripts/seed-demo.ts",
-    "feature": "tsx scripts/feature.ts",
-    "plan": "tsx scripts/plan.ts"
+    "feature": "tsx src/cli/feature.ts",
+    "plan": "tsx src/cli/plan.ts",
+    "db:migrate:prod": "node dist/cli/migrate.js"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1161.0",

@@ -14,3 +14,7 @@ client_secret*.json
 *-oauth.json
 *.pem
 *.key
+
+# Production server files (deploy/hayate creates these on the VM)
+deploy/secrets/
+deploy/backups/

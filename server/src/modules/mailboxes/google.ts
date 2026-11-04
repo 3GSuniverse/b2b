@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { env } from '../../config/env.js';
 import { AppError } from '../../lib/http.js';
 
@@ -47,7 +47,8 @@ export function parseGoogleOAuthFile(contents: string): GoogleOAuthFile {
 let fromFile: GoogleOAuthFile | null | undefined;
 function oauthFile(): GoogleOAuthFile | null {
   if (fromFile === undefined) {
-    fromFile = env.GOOGLE_OAUTH_JSON ? parseGoogleOAuthFile(readFileSync(env.GOOGLE_OAUTH_JSON, 'utf8')) : null;
+    // A configured path with no file there yet just means "not set up", not a crash
+    fromFile = env.GOOGLE_OAUTH_JSON && existsSync(env.GOOGLE_OAUTH_JSON) ? parseGoogleOAuthFile(readFileSync(env.GOOGLE_OAUTH_JSON, 'utf8')) : null;
   }
   return fromFile;
 }

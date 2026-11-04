@@ -1,18 +1,18 @@
 /**
  * Operator command for plans, until online payments exist.
  *
- *   npm run plan -- <company slug or owner email> paid [monthly email limit]
- *   npm run plan -- <company slug or owner email> trial <days>       (extend or restart a trial)
- *   npm run plan -- <company slug or owner email>                   (show)
+ *   hayate plan <company slug or owner email> paid [monthly email limit]
+ *   hayate plan <company slug or owner email> trial <days>       (extend or restart a trial)
+ *   hayate plan <company slug or owner email>                   (show)
  */
 import { eq } from 'drizzle-orm';
-import { auditLogs, tenants, users } from '../src/db/schema.js';
-import { closeDatabase, db } from '../src/lib/db.js';
+import { auditLogs, tenants, users } from '../db/schema.js';
+import { closeDatabase, db } from '../lib/db.js';
 
 async function main() {
   const [who, action, arg] = process.argv.slice(2);
   if (!who) {
-    console.error('Usage: npm run plan -- <company slug or owner email> [paid [emails] | trial <days>]');
+    console.error('Usage: hayate plan <company slug or owner email> [paid [emails] | trial <days>]');
     process.exitCode = 1;
     return;
   }

@@ -31,6 +31,12 @@ describe('serving the dashboard', () => {
     expect(r.body).toContain('id="root"');
   });
 
+  it('answers HEAD for pages too (uptime checks)', async () => {
+    const r = await app.inject({ method: 'HEAD', url: '/', headers: { accept: 'text/html' } });
+    expect(r.statusCode).toBe(200);
+    expect(r.headers['content-type']).toContain('text/html');
+  });
+
   it('hashed assets are cached for a year', async () => {
     const r = await app.inject({ method: 'GET', url: '/assets/app-abc123.js' });
     expect(r.statusCode).toBe(200);
