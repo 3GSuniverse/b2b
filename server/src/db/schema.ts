@@ -701,6 +701,8 @@ export const trips = pgTable(
     createdById: text().references(() => users.id, { onDelete: 'set null' }),
     statusChangedAt: ts(),
     bookedAt: ts(),
+    // Set by outside systems (the AI call agent's call id), so a retried request doesn't add the enquiry twice
+    externalRef: text(),
     // The customer's page for this trip (what's due, pay by UPI, receipts). Unguessable.
     publicToken: text()
       .notNull()
@@ -711,6 +713,7 @@ export const trips = pgTable(
   },
   (t) => [
     uniqueIndex().on(t.tenantId, t.number),
+    uniqueIndex().on(t.tenantId, t.externalRef),
     index().on(t.tenantId, t.status),
     index().on(t.contactId),
     index().on(t.tenantId, t.startDate),
@@ -787,6 +790,23 @@ export const tripReminders = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex().on(t.dueId, t.kind), index().on(t.tripId)],
+);
+
+// Keys other systems (the AI call agent, a website form) use to add enquiries. Only a hash is stored.
+export const apiKeys = pgTable(
+  'api_keys',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    name: text().notNull(),
+    prefix: text().notNull(), // first characters, so people can tell keys apart
+    keyHash: text().notNull().unique(), // sha256 of the full key
+    createdById: text().references(() => users.id, { onDelete: 'set null' }),
+    lastUsedAt: ts(),
+    revokedAt: ts(),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.tenantId)],
 );
 
 export const followupKind = pgEnum('followup_kind', ['PRE_TRIP', 'REVIEW', 'WHERE_NEXT']);

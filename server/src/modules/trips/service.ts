@@ -448,7 +448,7 @@ async function assertAssignee(tenantId: string, userId: string | null | undefine
   if (!u) throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { assignedToId: 'Choose someone from your team' } });
 }
 
-export async function createTrip(actor: Actor, input: z.infer<typeof createTripBody>, opts: { consentSource?: string } = {}) {
+export async function createTrip(actor: Actor, input: z.infer<typeof createTripBody>, opts: { consentSource?: string; externalRef?: string } = {}) {
   await assertAssignee(actor.tenantId, input.assignedToId);
   const contact = await resolveCustomer(actor.tenantId, input.customer, opts.consentSource);
   const title = input.title || (input.destination ? `${input.destination} trip` : `Trip for ${fullName(contact)}`);
@@ -476,6 +476,7 @@ export async function createTrip(actor: Actor, input: z.infer<typeof createTripB
         createdById: actor.userId,
         statusChangedAt: now,
         bookedAt: input.status === 'BOOKED' ? now : null,
+        externalRef: opts.externalRef ?? null,
       })
       .returning();
     return row!;

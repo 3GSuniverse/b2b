@@ -15,6 +15,7 @@ import { campaignRoutes } from './modules/campaigns/routes.js';
 import { templateRoutes } from './modules/templates/routes.js';
 import { tripRoutes } from './modules/trips/routes.js';
 import { tripMessageRoutes } from './modules/trips/followups.js';
+import { apiKeyRoutes } from './modules/api-keys/routes.js';
 import { paymentSettingsRoutes } from './modules/payments/settings.js';
 import { publicPaymentRoutes } from './modules/payments/public.js';
 import { razorpayRoutes } from './modules/payments/razorpay.js';
@@ -105,6 +106,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(campaignRoutes);
   await app.register(templateRoutes);
   await app.register(automationRoutes);
+  await app.register(apiKeyRoutes);
   await app.register(tripMessageRoutes);
   await app.register(tripRoutes);
   await app.register(paymentSettingsRoutes);

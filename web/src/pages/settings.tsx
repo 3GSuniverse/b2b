@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, Wallet, Plane, CheckCircle2, Circle, Globe, Mail, MessageCircle, MoreHorizontal, Plus, RefreshCw, Send, Star, Trash2, TriangleAlert } from 'lucide-react';
+import { Building2, Wallet, Plane, KeyRound, CheckCircle2, Circle, Globe, Mail, MessageCircle, MoreHorizontal, Plus, RefreshCw, Send, Star, Trash2, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -16,6 +16,7 @@ import type { DnsRecord, Domain, Mailbox, Sender } from '@/lib/types';
 import { WhatsAppSettings } from '@/components/whatsapp/settings';
 import { PaymentSettingsPanel } from '@/components/trips/payment-settings';
 import { TripMessagesSettings } from '@/components/trips/trip-messages-settings';
+import { ApiKeysSettings } from '@/components/api-keys';
 
 const SECTIONS = [
   { id: 'senders', label: 'Sending addresses', icon: Send },
@@ -24,6 +25,7 @@ const SECTIONS = [
   { id: 'payments', label: 'Payments', icon: Wallet },
   { id: 'trip-messages', label: 'Trip messages', icon: Plane },
   { id: 'company', label: 'Company', icon: Building2 },
+  { id: 'api-keys', label: 'API keys', icon: KeyRound },
 ] as const;
 type Section = (typeof SECTIONS)[number]['id'];
 
@@ -631,10 +633,11 @@ function Company() {
 export function SettingsPage() {
   const { section } = useParams();
   const { tenant } = useSession();
-  const sections = SECTIONS.filter((x) => x.id !== 'whatsapp' || tenant.features?.whatsapp);
+  const { user } = useSession();
+  const sections = SECTIONS.filter((x) => (x.id !== 'whatsapp' || tenant.features?.whatsapp) && (x.id !== 'api-keys' || user.role !== 'MEMBER'));
   if (section === 'account') return <Navigate to="/settings/company" replace />;
   if (!sections.some((s) => s.id === section)) return <Navigate to="/settings/senders" replace />;
-  const content: Record<Section, ReactNode> = { senders: <Senders />, domains: <Domains />, whatsapp: <WhatsAppSettings />, payments: <PaymentSettingsPanel />, 'trip-messages': <TripMessagesSettings />, company: <Company /> };
+  const content: Record<Section, ReactNode> = { senders: <Senders />, domains: <Domains />, whatsapp: <WhatsAppSettings />, payments: <PaymentSettingsPanel />, 'trip-messages': <TripMessagesSettings />, company: <Company />, 'api-keys': <ApiKeysSettings /> };
   return (
     <>
       <PageHeader title="Settings" />
