@@ -40,6 +40,11 @@ const schema = z.object({
   GOOGLE_REDIRECT_URI: z.string().url().optional(),
   // Or: path to the client_secret JSON downloaded from Google (kept on the server, never in git)
   GOOGLE_OAUTH_JSON: z.string().optional(),
+
+  // "Draft with AI" in quotes (Anthropic's Claude). Without a key the button is hidden.
+  ANTHROPIC_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().default('claude-sonnet-5-5'),
+  AI_DRAFTS_PER_DAY: z.coerce.number().int().min(0).default(40), // per company
 });
 
 const parsed = schema.safeParse(process.env);

@@ -143,6 +143,7 @@ export interface TripMessageSettings {
   preTrip?: { enabled?: boolean; days?: number; text?: string };
   review?: { enabled?: boolean; days?: number; text?: string; url?: string };
   whereNext?: { enabled?: boolean; days?: number; text?: string };
+  quoteFollowup?: { enabled?: boolean; days?: number; text?: string };
 }
 export interface PaymentSettings {
   upiId?: string; // where customers pay: name@bank
@@ -792,6 +793,83 @@ export const tripReminders = pgTable(
   (t) => [uniqueIndex().on(t.dueId, t.kind), index().on(t.tripId)],
 );
 
+// ---------------------------------------------------------------------
+//  Quotes: the agency's price list, and day-by-day quotes built from it
+// ---------------------------------------------------------------------
+
+export const rateKind = pgEnum('rate_kind', ['HOTEL', 'TRANSPORT', 'ACTIVITY', 'TRAVEL', 'OTHER']);
+export const rateUnit = pgEnum('rate_unit', ['PER_NIGHT', 'PER_DAY', 'PER_PERSON', 'PER_GROUP']);
+
+export const rateItems = pgTable(
+  'rate_items',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    kind: rateKind().notNull(),
+    name: text().notNull(), // "Houseboat, deluxe room", "Innova Crysta with driver"
+    destination: text(), // where it applies, for finding it while quoting
+    unit: rateUnit().notNull(),
+    price: integer().notNull(), // paise, what the customer pays per unit
+    cost: integer(), // paise, what the agency pays (private, for margin)
+    notes: text(),
+    archivedAt: ts(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.tenantId, t.destination)],
+);
+
+export interface QuoteDay {
+  title: string;
+  description: string;
+}
+export interface QuoteLine {
+  label: string;
+  kind: 'HOTEL' | 'TRANSPORT' | 'ACTIVITY' | 'TRAVEL' | 'OTHER';
+  unit: 'PER_NIGHT' | 'PER_DAY' | 'PER_PERSON' | 'PER_GROUP';
+  quantity: number; // rooms, vehicles, people…
+  times: number; // nights or days (1 for per person / per group)
+  unitPrice: number; // paise
+  unitCost?: number | null; // paise, private
+  rateItemId?: string | null;
+}
+
+export const quoteStatus = pgEnum('quote_status', ['DRAFT', 'SENT', 'ACCEPTED', 'DECLINED']);
+
+export const quotes = pgTable(
+  'quotes',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    tripId: text()
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    version: integer().notNull(), // 1, 2… per trip
+    status: quoteStatus().notNull().default('DRAFT'),
+    intro: text(),
+    days: jsonb().$type<QuoteDay[]>().notNull().default([]),
+    lines: jsonb().$type<QuoteLine[]>().notNull().default([]),
+    inclusions: jsonb().$type<string[]>().notNull().default([]),
+    exclusions: jsonb().$type<string[]>().notNull().default([]),
+    terms: text(),
+    discount: integer().notNull().default(0), // paise
+    total: integer().notNull().default(0), // paise, kept in step with the lines
+    validUntil: date({ mode: 'string' }),
+    publicToken: text()
+      .notNull()
+      .unique()
+      .$defaultFn(() => createId() + createId()),
+    sentAt: ts(),
+    viewedAt: ts(), // first time the customer opened it
+    respondedAt: ts(),
+    responseNote: text(), // what the customer wrote when declining or asking for changes
+    createdById: text().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex().on(t.tripId, t.version), index().on(t.tenantId, t.status)],
+);
+
 // Keys other systems (the AI call agent, a website form) use to add enquiries. Only a hash is stored.
 export const apiKeys = pgTable(
   'api_keys',
@@ -809,7 +887,7 @@ export const apiKeys = pgTable(
   (t) => [index().on(t.tenantId)],
 );
 
-export const followupKind = pgEnum('followup_kind', ['PRE_TRIP', 'REVIEW', 'WHERE_NEXT']);
+export const followupKind = pgEnum('followup_kind', ['PRE_TRIP', 'REVIEW', 'WHERE_NEXT', 'QUOTE_FOLLOWUP']);
 
 // One row per trip message sent: each trip gets each kind at most once
 export const tripFollowups = pgTable(
@@ -910,6 +988,7 @@ export const tripsRelations = relations(trips, ({ one, many }) => ({
   assignedTo: one(users, { fields: [trips.assignedToId], references: [users.id] }),
   dues: many(tripDues),
   payments: many(tripPayments),
+  quotes: many(quotes),
 }));
 
 export const tripDuesRelations = relations(tripDues, ({ one }) => ({
@@ -921,6 +1000,13 @@ export const tripPaymentsRelations = relations(tripPayments, ({ one }) => ({
   tenant: one(tenants, { fields: [tripPayments.tenantId], references: [tenants.id] }),
 }));
 
+export const quotesRelations = relations(quotes, ({ one }) => ({
+  trip: one(trips, { fields: [quotes.tripId], references: [trips.id] }),
+  tenant: one(tenants, { fields: [quotes.tenantId], references: [tenants.id] }),
+}));
+
+export type Quote = typeof quotes.$inferSelect;
+export type RateItem = typeof rateItems.$inferSelect;
 export type Trip = typeof trips.$inferSelect;
 export type TripDue = typeof tripDues.$inferSelect;
 export type TripPayment = typeof tripPayments.$inferSelect;

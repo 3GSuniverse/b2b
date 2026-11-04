@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 /** Paths the API owns. Anything else that asks for HTML is a dashboard page. */
-const SERVER_PREFIXES = ['/api/', '/u/', '/p/', '/r/', '/webhooks/', '/health'];
+const SERVER_PREFIXES = ['/api/', '/u/', '/p/', '/q/', '/r/', '/webhooks/', '/health'];
 
 /**
  * Serves the built dashboard (web/dist) from the same origin as the API, so

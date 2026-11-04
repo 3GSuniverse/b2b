@@ -17,18 +17,18 @@ import { rupeesInWords, upiLink } from './upi.js';
 
 const METHOD: Record<string, string> = { UPI: 'UPI', CASH: 'Cash', BANK: 'Bank transfer', CARD: 'Card', ONLINE: 'Online payment', OTHER: 'Other' };
 
-function d(iso: string | null | undefined, withYear = true) {
+export function d(iso: string | null | undefined, withYear = true) {
   if (!iso) return '';
   const date = new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso);
   return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', ...(withYear ? { year: 'numeric' } : {}), timeZone: iso.length === 10 ? 'UTC' : 'Asia/Kolkata' });
 }
 
-function range(start: string | null, end: string | null) {
+export function range(start: string | null, end: string | null) {
   if (!start) return '';
   return end && end !== start ? `${d(start, false)} – ${d(end)}` : d(start);
 }
 
-const CSS = `
+export const PUBLIC_CSS = `
 :root{--ground:#f5f6f4;--surface:#fff;--ink:#111816;--ink2:#3a433f;--muted:#59625e;--faint:#8a928e;--line:#e3e6e3;--soft:#eef0ee;--accent:#0b7a62;--accent-soft:#e4f2ed;--accent-strong:#075c49;--warm-soft:#fceee3;--warm-strong:#8a3d07;--danger:#b42318;--danger-soft:#fdecea}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--ground);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-variant-numeric:tabular-nums}
@@ -74,11 +74,11 @@ dl{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;margin:0;font-size:1
 @media print{body{background:#fff}main{padding:0}.card{border:0}.noprint{display:none!important}}
 `;
 
-function layout(title: string, body: string) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${e(title)}</title><style>${CSS}</style></head><body><main>${body}</main><script src="/p/page.js" defer></script></body></html>`;
+export function layout(title: string, body: string, extraCss = '') {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${e(title)}</title><style>${PUBLIC_CSS}${extraCss}</style></head><body><main>${body}</main><script src="/p/page.js" defer></script></body></html>`;
 }
 
-function send(reply: FastifyReply, html: string, status = 200) {
+export function send(reply: FastifyReply, html: string, status = 200) {
   return reply
     .code(status)
     .header('content-type', 'text/html; charset=utf-8')
@@ -88,16 +88,16 @@ function send(reply: FastifyReply, html: string, status = 200) {
     .send(html);
 }
 
-const notFound = (reply: FastifyReply) =>
+export const notFound = (reply: FastifyReply) =>
   send(reply, layout('Link not found', `<div class="card"><h1>This link doesn’t work</h1><p class="meta">It may have been mistyped. Ask the travel agent to send it again.</p></div>`), 404);
 
 /** +919848022338 → +91 98480 22338 */
-function prettyPhone(p: string | null) {
+export function prettyPhone(p: string | null) {
   const m = p ? /^\+91(\d{5})(\d{5})$/.exec(p) : null;
   return m ? `+91 ${m[1]} ${m[2]}` : p;
 }
 
-function waLink(phone: string | null, text: string) {
+export function waLink(phone: string | null, text: string) {
   return phone ? `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(text)}` : null;
 }
 

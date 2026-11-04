@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { auditLogs, messages, senders, suppressions, tenants, tripFollowups, trips, type Contact, type Tenant, type TripMessageSettings } from '../../db/schema.js';
+import { auditLogs, messages, quotes, senders, suppressions, tenants, tripFollowups, trips, type Contact, type Tenant, type TripMessageSettings } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError, parseBody } from '../../lib/http.js';
 import { logger } from '../../lib/logger.js';
@@ -12,6 +12,7 @@ import { trialEnded, whatsappWebAllowed } from '../plans/entitlements.js';
 import { REMINDER_HOUR } from '../payments/reminders.js';
 import { getSession } from '../whatsapp/service.js';
 import { addDays, localDate } from './money.js';
+import { quoteUrl } from '../quotes/service.js';
 
 /**
  * Messages around a trip, each optional:
@@ -21,7 +22,7 @@ import { addDays, localDate } from './money.js';
  * Each trip gets each kind at most once (unique row in trip_followups).
  */
 
-export type FollowupKind = 'PRE_TRIP' | 'REVIEW' | 'WHERE_NEXT';
+export type FollowupKind = 'PRE_TRIP' | 'REVIEW' | 'WHERE_NEXT' | 'QUOTE_FOLLOWUP';
 
 export const FOLLOWUP_DEFAULTS = {
   PRE_TRIP: {
@@ -32,34 +33,41 @@ export const FOLLOWUP_DEFAULTS = {
     days: 1,
     text: 'Hi {first_name}, welcome back from {destination}! We hope you had a wonderful time.\n\nCould you spare a minute to tell others about your trip? It helps a small agency like ours a lot: {review_link}\n\nThank you for travelling with {company_name}!',
   },
+  QUOTE_FOLLOWUP: {
+    days: 2,
+    text: 'Hi {first_name}, just checking you got the quote for your {trip}. You can see the full plan and accept it here: {quote_link}\n\nHappy to change anything; just reply to this message.\n{company_name}',
+  },
   WHERE_NEXT: {
     days: 90,
     text: 'Hi {first_name}, it’s been a few months since your {destination} trip. Thinking about the next one? Reply to this message and we’ll put together a few ideas for you.\n\n{company_name}',
   },
 } as const;
 
-export const FOLLOWUP_TAGS = ['first_name', 'full_name', 'trip', 'destination', 'start_date', 'return_date', 'company_name', 'review_link'] as const;
+export const FOLLOWUP_TAGS = ['first_name', 'full_name', 'trip', 'destination', 'start_date', 'return_date', 'company_name', 'review_link', 'quote_link'] as const;
 /** A message missed by more than this (server down, switched on late) isn't sent: a "welcome back" a month later is worse than none. */
 const WINDOW_DAYS = 3;
 
-const KEY: Record<FollowupKind, 'preTrip' | 'review' | 'whereNext'> = { PRE_TRIP: 'preTrip', REVIEW: 'review', WHERE_NEXT: 'whereNext' };
+const KEY: Record<FollowupKind, 'preTrip' | 'review' | 'whereNext' | 'quoteFollowup'> = { PRE_TRIP: 'preTrip', REVIEW: 'review', WHERE_NEXT: 'whereNext', QUOTE_FOLLOWUP: 'quoteFollowup' };
 const SUBJECT: Record<FollowupKind, (t: { title: string; destination: string | null }) => string> = {
   PRE_TRIP: (t) => `Your ${t.title} starts soon`,
   REVIEW: (t) => `Welcome back from ${t.destination ?? 'your trip'}`,
   WHERE_NEXT: () => 'Where to next?',
+  QUOTE_FOLLOWUP: (t) => `Your quote for ${t.title}`,
 };
 
 export function resolvedTripMessages(t: Pick<Tenant, 'tripMessageSettings'>) {
   const s = (t.tripMessageSettings ?? {}) as TripMessageSettings;
   const one = (k: FollowupKind) => {
     const v = s[KEY[k]] ?? {};
-    return { enabled: v.enabled ?? false, days: v.days ?? FOLLOWUP_DEFAULTS[k].days, text: v.text ?? FOLLOWUP_DEFAULTS[k].text };
+    // Following up a quote the agency chose to send is on unless switched off; the rest are off unless switched on
+    return { enabled: v.enabled ?? k === 'QUOTE_FOLLOWUP', days: v.days ?? FOLLOWUP_DEFAULTS[k].days, text: v.text ?? FOLLOWUP_DEFAULTS[k].text };
   };
   return {
     channel: s.channel ?? 'AUTO',
     preTrip: one('PRE_TRIP'),
     review: { ...one('REVIEW'), url: s.review?.url ?? null },
     whereNext: one('WHERE_NEXT'),
+    quoteFollowup: one('QUOTE_FOLLOWUP'),
   };
 }
 
@@ -73,6 +81,8 @@ const text = (k: FollowupKind) =>
       const unknown = findUnknownTags(v, FOLLOWUP_TAGS);
       if (unknown.length) ctx.addIssue({ code: 'custom', message: `Unknown tag${unknown.length > 1 ? 's' : ''}: ${unknown.map((u) => `{${u}}`).join(', ')}` });
       if (k === 'REVIEW' && !v.includes('{review_link}')) ctx.addIssue({ code: 'custom', message: 'Include {review_link}, so they can leave the review' });
+      if (k === 'QUOTE_FOLLOWUP' && !v.includes('{quote_link}')) ctx.addIssue({ code: 'custom', message: 'Include {quote_link}, so they can open the quote' });
+      if (k !== 'QUOTE_FOLLOWUP' && v.includes('{quote_link}')) ctx.addIssue({ code: 'custom', message: '{quote_link} only works in the quote follow-up' });
     });
 
 export const tripMessagesBody = z.object({
@@ -87,13 +97,14 @@ export const tripMessagesBody = z.object({
     })
     .optional(),
   whereNext: z.object({ enabled: z.boolean().optional(), days: z.coerce.number().int().min(14).max(730).optional(), text: text('WHERE_NEXT').optional() }).optional(),
+  quoteFollowup: z.object({ enabled: z.boolean().optional(), days: z.coerce.number().int().min(1).max(14).optional(), text: text('QUOTE_FOLLOWUP').optional() }).optional(),
 });
 
 export async function updateTripMessages(tenantId: string, userId: string, input: z.infer<typeof tripMessagesBody>) {
   const t = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }))!;
   const next = structuredClone((t.tripMessageSettings ?? {}) as TripMessageSettings);
   if (input.channel) next.channel = input.channel;
-  for (const k of ['PRE_TRIP', 'REVIEW', 'WHERE_NEXT'] as const) {
+  for (const k of ['PRE_TRIP', 'REVIEW', 'WHERE_NEXT', 'QUOTE_FOLLOWUP'] as const) {
     const part = input[KEY[k]];
     if (!part) continue;
     const cur = { ...(next[KEY[k]] ?? {}) } as Record<string, unknown>;
@@ -129,6 +140,11 @@ export async function tripMessageRoutes(app: FastifyInstance) {
 }
 
 // ---------------------------------------------------------------------
+
+async function latestQuoteLink(tripId: string) {
+  const [q] = await db.select({ token: quotes.publicToken }).from(quotes).where(and(eq(quotes.tripId, tripId), eq(quotes.status, 'SENT'))).orderBy(desc(quotes.version)).limit(1);
+  return q ? quoteUrl(q.token) : '';
+}
 
 function humanDate(iso: string | null) {
   return iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '';
@@ -170,6 +186,7 @@ export async function runTripFollowups(
           sql`(${tenants.tripMessageSettings} -> 'preTrip' ->> 'enabled')::boolean`,
           sql`(${tenants.tripMessageSettings} -> 'review' ->> 'enabled')::boolean`,
           sql`(${tenants.tripMessageSettings} -> 'whereNext' ->> 'enabled')::boolean`,
+          sql`exists (select 1 from quotes q where q.tenant_id = ${tenants.id} and q.status = 'SENT')`,
         ),
       ),
     );
@@ -189,6 +206,13 @@ export async function runTripFollowups(
         wanted.push({ kind: 'REVIEW', where: sql`${trips.status} in ('BOOKED','COMPLETED') and ${last} + ${s.review.days}::int <= ${today}::date and ${last} + ${s.review.days + WINDOW_DAYS}::int >= ${today}::date` });
       if (s.whereNext.enabled)
         wanted.push({ kind: 'WHERE_NEXT', where: sql`${trips.status} = 'COMPLETED' and ${last} + ${s.whereNext.days}::int <= ${today}::date and ${last} + ${s.whereNext.days + WINDOW_DAYS}::int >= ${today}::date` });
+      if (s.quoteFollowup.enabled)
+        wanted.push({
+          kind: 'QUOTE_FOLLOWUP',
+          where: sql`${trips.status} = 'QUOTED' and exists (select 1 from quotes q where q.trip_id = "trips"."id" and q.status = 'SENT'
+            and (q.sent_at at time zone ${tenant.timezone})::date + ${s.quoteFollowup.days}::int <= ${today}::date
+            and (q.sent_at at time zone ${tenant.timezone})::date + ${s.quoteFollowup.days + WINDOW_DAYS}::int >= ${today}::date)`,
+        });
       if (!wanted.length) continue;
 
       const whatsappUp = whatsappWebAllowed(tenant, now) && (await getSession(tenant.id)).status === 'CONNECTED';
@@ -202,8 +226,9 @@ export async function runTripFollowups(
           with: { contact: true },
           limit: 500,
         });
-        const setting = kind === 'PRE_TRIP' ? s.preTrip : kind === 'REVIEW' ? s.review : s.whereNext;
-        const marketing = kind !== 'PRE_TRIP';
+        const setting = kind === 'PRE_TRIP' ? s.preTrip : kind === 'REVIEW' ? s.review : kind === 'QUOTE_FOLLOWUP' ? s.quoteFollowup : s.whereNext;
+        // About their own booking or the quote they asked for: service messages. The rest need consent.
+        const marketing = kind === 'REVIEW' || kind === 'WHERE_NEXT';
         for (const trip of rows) {
           const c = trip.contact;
           const blocked = c
@@ -234,6 +259,7 @@ export async function runTripFollowups(
               return_date: humanDate(trip.endDate ?? trip.startDate),
               company_name: tenant.name,
               review_link: s.review.url ?? '',
+              quote_link: kind === 'QUOTE_FOLLOWUP' ? await latestQuoteLink(trip.id) : '',
             },
             { html: false },
           );
