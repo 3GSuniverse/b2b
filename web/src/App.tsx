@@ -5,6 +5,10 @@ import { RequireSession } from './lib/session';
 import { AuthShell, SignInPage, SignUpPage } from './pages/auth';
 import { NotFoundPage } from './pages/not-found';
 
+const HomePage = lazy(() => import('./pages/public/home').then((m) => ({ default: m.HomePage })));
+const PrivacyPage = lazy(() => import('./pages/public/privacy').then((m) => ({ default: m.PrivacyPage })));
+const TermsPage = lazy(() => import('./pages/public/terms').then((m) => ({ default: m.TermsPage })));
+
 const OverviewPage = lazy(() => import('./pages/overview').then((m) => ({ default: m.OverviewPage })));
 const ContactsPage = lazy(() => import('./pages/contacts').then((m) => ({ default: m.ContactsPage })));
 const CampaignsPage = lazy(() => import('./pages/campaigns').then((m) => ({ default: m.CampaignsPage })));
@@ -36,6 +40,8 @@ function PageFallback() {
 export function App() {
   return (
     <Routes>
+      <Route path="/privacy" element={<Suspense fallback={null}><PrivacyPage /></Suspense>} />
+      <Route path="/terms" element={<Suspense fallback={null}><TermsPage /></Suspense>} />
       <Route element={<AuthShell />}>
         <Route path="/signin" element={<SignInPage />} />
         <Route path="/signup" element={<SignUpPage />} />
@@ -43,7 +49,8 @@ export function App() {
       <Route path="groups/:id/manifest" element={<RequireSession><Suspense fallback={<PageFallback />}><ManifestPage /></Suspense></RequireSession>} />
       <Route
         element={
-          <RequireSession>
+          // Signed out at the site's address: the public home page instead of the sign-in screen
+          <RequireSession signedOut={{ '/': <Suspense fallback={null}><HomePage /></Suspense> }}>
             <AppShell />
           </RequireSession>
         }

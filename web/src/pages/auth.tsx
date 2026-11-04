@@ -33,14 +33,18 @@ export function AuthShell() {
   return (
     <div className="grid min-h-screen grid-cols-[minmax(0,1fr)] gap-6 p-4 sm:p-6 lg:h-screen lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
       <div className="flex flex-col px-2 py-4 sm:px-8 lg:overflow-y-auto lg:px-14">
-        <div className="auth-rise">
+        <Link to="/" className="auth-rise self-start" aria-label={`${BRAND.name} home`}>
           <Logo />
-        </div>
+        </Link>
         <main key={pathname} className="flex flex-1 flex-col justify-center py-12">
           <Outlet />
         </main>
-        <p className="auth-rise text-xs text-faint" style={{ '--d': '420ms' } as React.CSSProperties}>
-          Need help? <a className="font-medium text-muted hover:text-ink" href={`mailto:${BRAND.supportEmail}`}>{BRAND.supportEmail}</a>
+        <p className="auth-rise flex flex-wrap gap-x-4 gap-y-1 text-xs text-faint" style={{ '--d': '420ms' } as React.CSSProperties}>
+          <span>
+            Need help? <a className="font-medium text-muted hover:text-ink" href={`mailto:${BRAND.supportEmail}`}>{BRAND.supportEmail}</a>
+          </span>
+          <Link className="font-medium text-muted hover:text-ink" to="/privacy">Privacy</Link>
+          <Link className="font-medium text-muted hover:text-ink" to="/terms">Terms</Link>
         </p>
       </div>
       <DispatchPanel />
@@ -159,6 +163,10 @@ export function SignUpPage() {
         <Button type="submit" variant="primary" size="lg" loading={m.isPending} className="mt-1 w-full">
           Start free trial
         </Button>
+        <p className="-mt-1 text-center text-xs leading-relaxed text-muted">
+          By starting a trial you agree to the <Link to="/terms" className="font-medium text-ink-2 underline underline-offset-2 hover:text-ink">Terms</Link> and{' '}
+          <Link to="/privacy" className="font-medium text-ink-2 underline underline-offset-2 hover:text-ink">Privacy Policy</Link>.
+        </p>
       </form>
     </AuthLayout>
   );

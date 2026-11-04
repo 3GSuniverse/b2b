@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, Wallet, Plane, KeyRound, CheckCircle2, Circle, Globe, Mail, MessageCircle, MoreHorizontal, Plus, RefreshCw, Send, Star, Trash2, TriangleAlert } from 'lucide-react';
+import { Building2, Wallet, Plane, KeyRound, CheckCircle2, Circle, Globe, Lock, Mail, MessageCircle, MoreHorizontal, Plus, RefreshCw, Send, Star, Trash2, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
-import { NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { BRAND } from '@/lib/brand';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/controls';
@@ -468,6 +469,13 @@ function Senders() {
             <li>About 400 a day on Gmail, 1,500 on Workspace</li>
             <li>No open or click tracking</li>
           </ul>
+          <p className="flex gap-2 rounded-[10px] bg-sunken px-3 py-2.5 text-xs leading-relaxed text-ink-2">
+            <Lock className="mt-px h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
+            <span>
+              {BRAND.name} only asks Google for permission to send. It can’t read your inbox, and removing the address cancels its access.{' '}
+              <Link to="/privacy" className="font-semibold text-accent hover:text-accent-strong">Privacy Policy</Link>
+            </span>
+          </p>
           <a href="/api/integrations/gmail/connect" className="mt-auto inline-flex h-11 items-center gap-2.5 self-start rounded-[var(--radius-control)] border border-line bg-surface px-4 text-sm font-semibold hover:bg-sunken">
             <GoogleMark />
             Connect with Google

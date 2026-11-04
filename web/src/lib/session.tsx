@@ -20,8 +20,11 @@ export const meQuery = {
   refetchInterval: 60_000, // trial days and WhatsApp allowance stay current
 };
 
-/** Wraps signed-in pages: loads the session, or sends the user to sign in. */
-export function RequireSession({ children }: { children: ReactNode }) {
+/**
+ * Wraps signed-in pages: loads the session, or sends the user to sign in.
+ * `signedOut` gives some addresses a public page instead (the site's home page).
+ */
+export function RequireSession({ children, signedOut }: { children: ReactNode; signedOut?: Record<string, ReactNode> }) {
   const q = useQuery(meQuery);
   const nav = useNavigate();
   const loc = useLocation();
@@ -36,11 +39,13 @@ export function RequireSession({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('session-ended', onEnded);
   }, [nav, loc, qc]);
 
+  const signedOutPage = q.error instanceof ApiError && q.error.status === 401 ? signedOut?.[loc.pathname] : undefined;
+
   useEffect(() => {
-    if (q.error instanceof ApiError && q.error.status === 401) {
+    if (q.error instanceof ApiError && q.error.status === 401 && !signedOutPage) {
       nav(`/signin?next=${encodeURIComponent(loc.pathname + loc.search)}`, { replace: true });
     }
-  }, [q.error, nav, loc]);
+  }, [q.error, nav, loc, signedOutPage]);
 
   if (q.isPending) {
     return (
@@ -49,6 +54,7 @@ export function RequireSession({ children }: { children: ReactNode }) {
       </div>
     );
   }
+  if (signedOutPage) return <>{signedOutPage}</>;
   if (!q.data) return null;
   return <SessionContext.Provider value={q.data}>{children}</SessionContext.Provider>;
 }

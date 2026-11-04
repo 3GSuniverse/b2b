@@ -211,7 +211,8 @@ const seed = (): FeedItem[] => [
   { id: -3, msg: MESSAGES[5]!, status: 'opened' },
 ];
 
-export function DispatchPanel() {
+/** `headline={false}` leaves out the heading, for pages that already have one (the home page). */
+export function DispatchPanel({ headline = true, className }: { headline?: boolean; className?: string } = {}) {
   const reduced = useReducedMotion();
   const panel = useRef<HTMLDivElement>(null);
   const [feed, setFeed] = useState<FeedItem[]>(seed);
@@ -290,7 +291,7 @@ export function DispatchPanel() {
       ref={panel}
       onPointerMove={lean}
       onPointerLeave={settle}
-      className="relative hidden flex-col gap-6 overflow-hidden rounded-[24px] bg-ink p-9 text-white lg:flex xl:p-10"
+      className={`relative hidden flex-col gap-6 overflow-hidden rounded-[24px] bg-ink p-9 text-white lg:flex xl:p-10 ${className ?? ''}`}
       style={{ '--px': 0, '--py': 0 } as CSSProperties}
     >
       {/* Background: the logo's plane, large and faint, drifting the other way */}
@@ -298,7 +299,7 @@ export function DispatchPanel() {
         <path d="M4 12l16-8-6 16-3-7-7-1z" />
       </svg>
 
-      <div className="relative flex flex-col gap-4">
+      {headline && <div className="relative flex flex-col gap-4">
         <h2 className="max-w-xl text-[28px] font-semibold leading-tight tracking-[-0.025em]">
           <span className="block text-balance">Message every traveller from your own name.</span>
           <RotatingLine reduced={reduced} />
@@ -306,7 +307,7 @@ export function DispatchPanel() {
         <p className="max-w-md text-[15px] leading-relaxed text-white/65 [@media(max-height:800px)]:hidden">
           Trip reminders, payment follow-ups, quotes and birthday wishes, by email and WhatsApp, with every bounce and unsubscribe handled for you.
         </p>
-      </div>
+      </div>}
 
       {/* The map */}
       <div ref={mapBox} className="relative min-h-[150px] flex-1 [@media(max-height:620px)]:hidden" aria-hidden>
@@ -416,7 +417,7 @@ export function DispatchPanel() {
             sent
           </span>
         </div>
-        <div className="relative" style={{ height: ROWS * ROW_STEP - 8 }}>
+        <div className="relative overflow-hidden" style={{ height: ROWS * ROW_STEP - 8 }}>
           {feed.map((item, i) => (
             <div
               key={item.id}
