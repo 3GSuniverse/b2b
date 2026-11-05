@@ -116,3 +116,31 @@ export function CountPercent({ value, duration = 1100 }: { value: number | null 
   const v = value ?? 0;
   return <CountUp value={v} decimals={v % 1 !== 0 ? 1 : 0} format={(x) => pct(x)} duration={duration} />;
 }
+
+/** Adds "revealed" to every ".reveal" element inside the returned ref once it scrolls into view. */
+export function useReveal<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const els = Array.from(root.querySelectorAll<HTMLElement>('.reveal'));
+    if (prefersReducedMotion() || typeof IntersectionObserver === 'undefined') {
+      els.forEach((e) => e.classList.add('revealed'));
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const en of entries) {
+          if (en.isIntersecting) {
+            en.target.classList.add('revealed');
+            io.unobserve(en.target);
+          }
+        }
+      },
+      { rootMargin: '0px 0px -12% 0px' },
+    );
+    els.forEach((e) => io.observe(e));
+    return () => io.disconnect();
+  }, []);
+  return ref;
+}

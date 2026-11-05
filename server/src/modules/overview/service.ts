@@ -10,6 +10,7 @@ import { isDomainReady } from '../domains/service.js';
 import { unreadCount } from '../notifications/service.js';
 import { monthStartSql } from '../sending/start-campaign.js';
 import { HEALTH, tenantHealth } from '../webhooks/tenant-health.js';
+import { getCommunication } from './communication.js';
 
 const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : 0);
 
@@ -39,7 +40,7 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
       .where(and(eq(messages.tenantId, tenantId), gte(messages.queuedAt, from), to ? lt(messages.queuedAt, to) : undefined))
       .then((r) => r[0]!);
 
-  const [user, cur, prev, unsubs, daily, health, recent, upcoming, audienceRows, domains, readySenders, unread] = await Promise.all([
+  const [user, cur, prev, unsubs, daily, health, recent, upcoming, audienceRows, domains, readySenders, unread, communication] = await Promise.all([
     db.query.users.findFirst({ where: eq(users.id, userId), columns: { name: true } }),
     monthStats(thisMonth),
     monthStats(lastMonth, thisMonth),
@@ -86,6 +87,7 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
     db.select().from(sendingDomains).where(eq(sendingDomains.tenantId, tenantId)),
     db.query.senders.findMany({ where: eq(senders.tenantId, tenantId), with: { domain: true, connection: true } }),
     unreadCount(tenantId),
+    getCommunication(tenantId, thisMonth, tz, now),
   ]);
 
   // Campaigns that started in the chart window, so the chart can name its peaks
@@ -96,6 +98,11 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
       and ${campaigns.startedAt} >= ${new Date(now.getTime() - 31 * 86_400_000).toISOString()}::timestamptz
     order by ${campaigns.startedAt}`);
 
+  const byWhatsapp = await db
+    .select({ n: count() })
+    .from(contacts)
+    .where(and(eq(contacts.tenantId, tenantId), eq(contacts.whatsappStatus, 'SUBSCRIBED'), isNotNull(contacts.phone)))
+    .then((r) => r[0]?.n ?? 0);
   const byStatus = Object.fromEntries(audienceRows.map((r) => [r.status, r.n]));
   const totalContacts = audienceRows.reduce((a, r) => a + r.n, 0);
   const subscribed = byStatus.SUBSCRIBED ?? 0;
@@ -156,6 +163,9 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
       suppressed: (byStatus.UNSUBSCRIBED ?? 0) + (byStatus.BOUNCED ?? 0) + (byStatus.COMPLAINED ?? 0),
     },
     unreadNotifications: unread,
+    // Everything Dhrona sent, by channel and by what sent it: the Overview leads with this
+    communication,
+    whatsappReachable: byWhatsapp,
   };
 }
 

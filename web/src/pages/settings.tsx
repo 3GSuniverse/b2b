@@ -367,7 +367,7 @@ function Senders() {
     const g = params.get('gmail');
     if (!g) return;
     if (g === 'connected') {
-      toast.success(`${params.get('email') ?? 'Gmail'} is connected`, { description: 'You can send campaigns from it now.' });
+      toast.success(`${params.get('email') ?? 'Gmail'} is connected`, { description: 'You can send from it now.' });
       qc.invalidateQueries({ queryKey: ['senders'] });
       qc.invalidateQueries({ queryKey: ['mailboxes'] });
     } else if (g === 'cancelled') toast('Gmail wasn’t connected', { description: 'You cancelled on Google’s screen.' });
@@ -436,7 +436,7 @@ function Senders() {
             </span>
             <div className="flex flex-col">
               <span className="text-[15px] font-semibold">Your company domain</span>
-              <span className="text-xs text-muted">Recommended for campaigns</span>
+              <span className="text-xs text-muted">Recommended for broadcasts</span>
             </div>
           </div>
           <ul className="flex flex-col gap-1.5 text-[13px] text-muted">
@@ -530,7 +530,7 @@ function Senders() {
             </Field>
             {!form.id && (
               <label className="flex items-center justify-between gap-4 text-sm">
-                <span>Use for new campaigns by default</span>
+                <span>Use for new messages by default</span>
                 <Switch label="Default address" checked={form.isDefault} onCheckedChange={(v) => setForm({ ...form, isDefault: v })} />
               </label>
             )}
@@ -542,7 +542,7 @@ function Senders() {
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
         title={`Remove ${removing?.fromEmail}?`}
-        description={removing?.kind === 'GMAIL' ? 'We delete our access to this Gmail account. Campaigns and automations using it stop until you choose another address.' : 'Campaigns and automations using it stop until you choose another address.'}
+        description={removing?.kind === 'GMAIL' ? 'We delete our access to this Gmail account. Broadcasts and automations using it stop until you choose another address.' : 'Broadcasts and automations using it stop until you choose another address.'}
         footer={
           <>
             <Button onClick={() => setRemoving(null)}>Keep it</Button>

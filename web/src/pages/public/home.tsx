@@ -6,6 +6,7 @@ import { BoardGraphic, JourneyHero, PaymentsGraphic, QuoteGraphic, SeatsGraphic 
 import { LinkButton } from '@/components/ui/button';
 import { BRAND } from '@/lib/brand';
 import { cn } from '@/lib/cn';
+import { useReveal } from '@/lib/motion';
 import { PublicFooter, PublicHeader } from './layout';
 
 /**
@@ -43,7 +44,7 @@ const FEATURES: Feature[] = [
     id: 'messages',
     title: 'Messages that go out on their own',
     body: 'Pre-trip details, birthday wishes, festival offers and a thank-you after the trip reach your customers at the right time, by email or WhatsApp, from your agency’s own name.',
-    points: ['Campaigns to the right list, from your domain or Gmail', 'Unsubscribes and bounced addresses are respected automatically', 'Delivery, opens and clicks reported for every campaign'],
+    points: ['Broadcasts to the right list, from your domain or Gmail', 'Unsubscribes and bounced addresses are respected automatically', 'Delivery, opens and clicks reported for every broadcast'],
     graphic: <DispatchPanel headline={false} className="!flex h-[500px] sm:h-[540px]" />,
   },
   {
@@ -69,6 +70,7 @@ const INDIA: { icon: ReactNode; text: string }[] = [
 ];
 
 export function HomePage() {
+  const page = useReveal<HTMLDivElement>();
   useEffect(() => {
     document.title = `${BRAND.name}: everyday software for small travel agencies`;
     return () => {
@@ -77,7 +79,7 @@ export function HomePage() {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col overflow-x-clip bg-ground">
+    <div ref={page} className="flex min-h-screen flex-col overflow-x-clip bg-ground">
       <PublicHeader
         sections={[
           { href: '#features', label: 'Features' },
@@ -90,7 +92,7 @@ export function HomePage() {
         {/* ------------------------------------------------ Who it's for, and one trip's journey */}
         <section className="relative">
           {/* A soft saffron glow behind the journey, the page's one decorative flourish */}
-          <div aria-hidden className="pointer-events-none absolute right-[-10%] top-[-12%] h-[620px] w-[620px] rounded-full bg-highlight/15 blur-[90px]" />
+          <div aria-hidden className="glow-drift pointer-events-none absolute right-[-10%] top-[-12%] h-[620px] w-[620px] rounded-full bg-highlight/15 blur-[90px]" />
           <div className="relative mx-auto grid w-full max-w-[1200px] grid-cols-[minmax(0,1fr)] items-center gap-10 px-4 pb-16 pt-6 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-14 lg:px-8 lg:pb-24 lg:pt-10">
             <div className="flex flex-col gap-6">
               <p className="auth-rise inline-flex items-center gap-2 self-start rounded-full bg-surface px-3.5 py-1.5 text-[13px] font-semibold text-ink-2 shadow-[0_1px_2px_rgb(23_21_59/0.06)]">
@@ -153,7 +155,7 @@ export function HomePage() {
           <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-20 px-4 pb-24 pt-14 sm:px-6 lg:gap-28 lg:px-8 lg:pb-32">
             {FEATURES.map((f, i) => (
               <article key={f.id} id={f.id} className="grid grid-cols-[minmax(0,1fr)] items-center gap-10 lg:grid-cols-2 lg:gap-16">
-                <div className={cn('flex flex-col gap-4', i % 2 === 1 && 'lg:order-2')}>
+                <div className={cn('reveal flex flex-col gap-4', i % 2 === 1 && 'lg:order-2')}>
                   <h3 className="text-balance text-[26px] font-extrabold leading-tight tracking-[-0.025em] sm:text-[30px]">{f.title}</h3>
                   <p className="max-w-[56ch] text-[16px] leading-[1.7] text-ink-2">{f.body}</p>
                   <ul className="mt-1 flex flex-col gap-2.5">
@@ -167,7 +169,9 @@ export function HomePage() {
                     ))}
                   </ul>
                 </div>
-                <div className={cn('min-w-0', i % 2 === 1 && 'lg:order-1')}>{f.graphic}</div>
+                <div className={cn('reveal min-w-0', i % 2 === 1 && 'lg:order-1')} style={{ transitionDelay: '120ms' }}>
+                  {f.graphic}
+                </div>
               </article>
             ))}
           </div>
@@ -184,7 +188,7 @@ export function HomePage() {
             </div>
             <ol className="grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-3">
               {HOW.map((h, i) => (
-                <li key={h.title} className="relative flex flex-col gap-3 rounded-[20px] border border-nav-line bg-nav-card p-6">
+                <li key={h.title} className="reveal relative flex flex-col gap-3 rounded-[20px] border border-nav-line bg-nav-card p-6" style={{ transitionDelay: `${i * 120}ms` }}>
                   <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-highlight text-[16px] font-extrabold text-nav" aria-hidden>
                     {i + 1}
                   </span>
@@ -221,7 +225,7 @@ export function HomePage() {
                 </li>
                 <li className="flex gap-2.5">
                   <Lock className="mt-1 h-4 w-4 shrink-0 text-accent" aria-hidden />
-                  It sends only the campaigns, reminders and quotes your agency creates in {BRAND.name}.
+                  It sends only the broadcasts, reminders and quotes your agency creates in {BRAND.name}.
                 </li>
                 <li className="flex gap-2.5">
                   <Lock className="mt-1 h-4 w-4 shrink-0 text-accent" aria-hidden />

@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
-import { campaigns, messages, notifications } from '../src/db/schema.js';
+import { auditLogs, automations, campaigns, customFields, messages, notifications, tripDues, tripFollowups, tripReminders, trips } from '../src/db/schema.js';
 import { closeDatabase, db } from '../src/lib/db.js';
 import { closeRedis } from '../src/lib/redis.js';
 import { MemoryEmailProvider } from '../src/modules/email/memory-provider.js';
@@ -120,4 +120,55 @@ describe('notifications', () => {
   });
 });
 
+describe('overview: all communication', () => {
+  it('counts every message by channel and by what sent it, and lists the latest automatic ones first', async () => {
+    const { json } = await signup(app, { name: 'Anil Kumar' });
+    const tenantId = json.tenant.id;
+    const now = new Date('2026-11-03T08:00:00Z');
+    const at = (iso: string) => new Date(iso);
+    const ravi = await makeContact(tenantId, { email: 'ravi@x.in', phone: '+919800000001', firstName: 'Ravi', lastName: 'Varma', whatsappStatus: 'SUBSCRIBED' });
+    await makeContact(tenantId, { email: 'meera@x.in', firstName: 'Meera' });
 
+    const [field] = await db.insert(customFields).values({ tenantId, key: 'birthday', label: 'Birthday', type: 'DATE' }).returning();
+    const [auto] = await db.insert(automations).values({ tenantId, name: 'Birthday wishes', status: 'ACTIVE', dateFieldId: field!.id }).returning();
+    const [camp] = await db.insert(campaigns).values({ tenantId, name: 'Diwali offers', status: 'SENT', startedAt: at('2026-11-01T04:00:00Z') }).returning();
+    const [trip] = await db.insert(trips).values({ tenantId, number: 1, status: 'BOOKED', customerName: 'Ravi Varma', title: 'Kerala backwaters', contactId: ravi.id }).returning();
+    const [due] = await db.insert(tripDues).values({ tenantId, tripId: trip!.id, label: 'Balance', amount: 1_800_000, dueDate: '2026-11-06' }).returning();
+
+    const msg = (v: Partial<typeof messages.$inferInsert>) => ({ tenantId, toAddress: 'ravi@x.in', status: 'DELIVERED' as const, queuedAt: at('2026-11-02T05:00:00Z'), sentAt: at('2026-11-02T05:00:00Z'), deliveredAt: at('2026-11-02T05:00:05Z'), ...v });
+    const [bday, reminder, pretrip, blast, quote] = await db
+      .insert(messages)
+      .values([
+        msg({ automationId: auto!.id, contactId: ravi.id, sentAt: at('2026-11-03T03:00:00Z'), queuedAt: at('2026-11-03T03:00:00Z') }),
+        msg({ tripId: trip!.id, service: true, channel: 'WHATSAPP', toAddress: '+919800000001', contactId: ravi.id, sentAt: at('2026-11-03T02:00:00Z'), queuedAt: at('2026-11-03T02:00:00Z'), firstOpenedAt: at('2026-11-03T02:10:00Z') }),
+        msg({ tripId: trip!.id, service: true, contactId: ravi.id, sentAt: at('2026-11-02T10:00:00Z') }),
+        msg({ campaignId: camp!.id, toAddress: 'meera@x.in' }),
+        msg({ tripId: trip!.id, subject: 'Your quote for Kerala', contactId: ravi.id, sentAt: at('2026-11-01T05:00:00Z'), queuedAt: at('2026-11-01T05:00:00Z') }),
+      ])
+      .returning();
+    await db.insert(tripReminders).values({ tenantId, tripId: trip!.id, dueId: due!.id, kind: 'BEFORE', channel: 'WHATSAPP', messageId: reminder!.id });
+    await db.insert(tripFollowups).values({ tenantId, tripId: trip!.id, kind: 'PRE_TRIP', channel: 'EMAIL', messageId: pretrip!.id });
+    // last month: one broadcast email
+    await db.insert(messages).values(msg({ campaignId: camp!.id, toAddress: 'old@x.in', queuedAt: at('2026-10-10T05:00:00Z'), sentAt: at('2026-10-10T05:00:00Z') }));
+    await db.insert(auditLogs).values({ tenantId, action: 'ai.draft', entity: 'quote', createdAt: at('2026-11-02T06:00:00Z') });
+
+    const o = await getOverview(tenantId, json.user.id, now);
+    const c = o.communication;
+    expect(c.thisMonth).toMatchObject({ sent: 5, email: 4, whatsapp: 1, automatic: 3, automaticShare: 60, delivered: 5, deliveryRate: 100, opened: 1, openRate: 20, sentChange: 400, aiDrafts: 1 });
+    expect(c.last30Days.find((d) => d.day === '2026-11-03')).toEqual({ day: '2026-11-03', automatic: 2, broadcast: 0, direct: 0 });
+    expect(c.last30Days.find((d) => d.day === '2026-11-02')).toEqual({ day: '2026-11-02', automatic: 1, broadcast: 1, direct: 0 });
+    expect(c.last30Days.find((d) => d.day === '2026-11-01')).toEqual({ day: '2026-11-01', automatic: 0, broadcast: 0, direct: 1 });
+    expect(c.activity.map((a) => [a.source, a.title, a.to, a.channel])).toEqual([
+      ['automation', 'Birthday wishes', 'Ravi Varma', 'EMAIL'],
+      ['payment_reminder', 'Payment reminder', 'Ravi Varma', 'WHATSAPP'],
+      ['trip_message', 'Pre-trip details', 'Ravi Varma', 'EMAIL'],
+      ['broadcast', 'Diwali offers', 'meera@x.in', 'EMAIL'],
+      ['direct', 'Your quote for Kerala', 'Ravi Varma', 'EMAIL'],
+      ['broadcast', 'Diwali offers', 'old@x.in', 'EMAIL'], // last month's, still in the latest eight
+    ]);
+    expect(c.activity[1]).toMatchObject({ opened: true, trip: { id: trip!.id, title: 'Kerala backwaters' } });
+    expect(c.activity.map((a) => a.id)).not.toContain(undefined);
+    expect([bday, quote].every(Boolean)).toBe(true);
+    expect(o.whatsappReachable).toBe(1);
+  });
+});

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/field';
 import { api, ApiError } from '@/lib/api';
 import { BRAND } from '@/lib/brand';
+import { takeoff } from '@/lib/celebrate';
 import type { Me } from '@/lib/types';
 
 function PasswordInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
@@ -96,7 +97,13 @@ function useAfterAuth() {
 export function SignInPage() {
   const done = useAfterAuth();
   const [form, setForm] = useState({ email: '', password: '' });
-  const m = useMutation({ mutationFn: () => api.post<Me>('/api/auth/login', form), onSuccess: done });
+  const m = useMutation({
+    mutationFn: () => api.post<Me>('/api/auth/login', form),
+    onSuccess: (me) => {
+      takeoff(); // a small send-off into the app
+      done(me);
+    },
+  });
   const submit = (e: FormEvent) => {
     e.preventDefault();
     m.mutate();
@@ -139,7 +146,7 @@ export function SignUpPage() {
   return (
     <AuthLayout
       title="Start your free trial"
-      subtitle="5 days to try email and WhatsApp campaigns. No card needed."
+      subtitle="5 days to try everything: trips, quotes, payments and messages. No card needed."
       footer={
         <>
           Already have an account? <Link to="/signin" className="font-semibold text-accent hover:text-accent-strong">Sign in</Link>

@@ -95,7 +95,7 @@ function UpcomingPanel({ id, tz }: { id?: string; tz: string }) {
         <Skeleton className="h-40" />
       ) : q.data.days.length === 0 ? (
         <EmptyState icon={<CalendarClock />} title="Nobody in the next 14 days">
-          {q.data.audience.withDate === 0 ? 'None of your contacts have this date filled in yet. Add it in Contacts or with a CSV import.' : `${n(q.data.audience.withDate)} contacts have this date. None of them fall in the next two weeks.`}
+          {q.data.audience.withDate === 0 ? 'None of your customers have this date filled in yet. Add it in Customers or with a CSV import.' : `${n(q.data.audience.withDate)} contacts have this date. None of them fall in the next two weeks.`}
         </EmptyState>
       ) : (
         <ol className="relative flex flex-col gap-4 before:absolute before:bottom-2 before:left-[5px] before:top-2 before:w-px before:bg-line">

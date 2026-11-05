@@ -31,7 +31,7 @@ export function AddContactSheet({ open, onClose, lists, onCreated }: { open: boo
         attributes: Object.fromEntries(Object.entries(f.attributes).filter(([, v]) => v !== null && v !== '')),
       }),
     onSuccess: ({ contact }) => {
-      toast.success('Contact added');
+      toast.success('Customer added');
       onCreated(contact);
     },
   });
@@ -42,7 +42,7 @@ export function AddContactSheet({ open, onClose, lists, onCreated }: { open: boo
     <Sheet
       open={open}
       onOpenChange={(o) => !o && onClose()}
-      title="Add a contact"
+      title="Add a customer"
       description="For one or two people. For more, import a CSV."
       width="max-w-[520px]"
       footer={

@@ -3,9 +3,10 @@ import { Loader2 } from 'lucide-react';
 import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 import { cn } from '@/lib/cn';
+import { prefersReducedMotion } from '@/lib/motion';
 
 export const buttonStyles = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-button)] font-semibold transition-[background,box-shadow,color,transform,border-color] duration-200 ease-[cubic-bezier(0.22,1.2,0.36,1)] active:scale-[0.97] active:duration-75 disabled:pointer-events-none disabled:opacity-50 select-none',
+  'relative isolate inline-flex items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-[var(--radius-button)] font-semibold transition-[background,box-shadow,color,transform,border-color] duration-200 ease-[cubic-bezier(0.22,1.2,0.36,1)] active:scale-[0.97] active:duration-75 disabled:pointer-events-none disabled:opacity-50 select-none',
   {
     variants: {
       variant: {
@@ -29,22 +30,55 @@ export const buttonStyles = cva(
   },
 );
 
+/** A ripple spreading from where the button was pressed */
+export function ripple(e: React.PointerEvent<HTMLElement>) {
+  if (e.button !== 0 || prefersReducedMotion()) return;
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  const size = Math.max(r.width, r.height) * 2.2;
+  const dot = document.createElement('span');
+  dot.className = 'ripple';
+  dot.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - r.left - size / 2}px;top:${e.clientY - r.top - size / 2}px;z-index:-1`;
+  el.appendChild(dot);
+  dot.addEventListener('animationend', () => dot.remove());
+}
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonStyles> {
   loading?: boolean;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant, size, loading, children, disabled, type = 'button', ...props },
+  { className, variant, size, loading, children, disabled, type = 'button', onPointerDown, ...props },
   ref,
 ) {
   return (
-    <button ref={ref} type={type} className={cn(buttonStyles({ variant, size }), className)} disabled={disabled || loading} aria-busy={loading || undefined} {...props}>
+    <button
+      ref={ref}
+      type={type}
+      className={cn(buttonStyles({ variant, size }), className)}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      onPointerDown={(e) => {
+        ripple(e);
+        onPointerDown?.(e);
+      }}
+      {...props}
+    >
       {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
       {children}
     </button>
   );
 });
 
-export function LinkButton({ className, variant, size, ...props }: LinkProps & VariantProps<typeof buttonStyles>) {
-  return <Link className={cn(buttonStyles({ variant, size }), className)} {...props} />;
+export function LinkButton({ className, variant, size, onPointerDown, ...props }: LinkProps & VariantProps<typeof buttonStyles>) {
+  return (
+    <Link
+      className={cn(buttonStyles({ variant, size }), className)}
+      onPointerDown={(e) => {
+        ripple(e);
+        onPointerDown?.(e);
+      }}
+      {...props}
+    />
+  );
 }

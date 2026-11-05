@@ -444,7 +444,7 @@ export function TripPage() {
         open={deleting}
         onOpenChange={setDeleting}
         title={`Delete #${trip.number} ${trip.title}?`}
-        description={trip.payments.length ? 'This trip has payments recorded, so it can’t be deleted. Cancel it instead.' : 'The enquiry and its schedule are removed for good. The customer stays in your contacts.'}
+        description={trip.payments.length ? 'This trip has payments recorded, so it can’t be deleted. Cancel it instead.' : 'The enquiry and its schedule are removed for good. The customer stays in your customers list.'}
         footer={
           <>
             <Button onClick={() => setDeleting(false)}>Keep it</Button>

@@ -29,7 +29,7 @@ export function ListsView({ lists, onOpen }: { lists?: ContactList[]; onOpen: (i
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lists'] });
       qc.invalidateQueries({ queryKey: ['contacts'] });
-      toast.success('List deleted. The contacts in it were kept.');
+      toast.success('List deleted. The customers in it were kept.');
       setDeleting(null);
     },
     onError: (e: Error) => toast.error(e instanceof ApiError && e.status === 403 ? 'Only admins can delete lists.' : e.message),
@@ -50,7 +50,7 @@ export function ListsView({ lists, onOpen }: { lists?: ContactList[]; onOpen: (i
               </Button>
             }
           >
-            For example “Past travellers” or “Pilgrimage interest”. A campaign can go to one list or several.
+            For example “Past travellers” or “Pilgrimage interest”. A broadcast can go to one list or several.
           </EmptyState>
         </Panel>
       ) : (
@@ -139,7 +139,7 @@ export function ListsView({ lists, onOpen }: { lists?: ContactList[]; onOpen: (i
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}
         title={`Delete “${deleting?.name}”?`}
-        description="Only the list is removed. The people in it stay in your contacts."
+        description="Only the list is removed. The people in it stay in your customers."
         footer={
           <>
             <Button onClick={() => setDeleting(null)}>Keep list</Button>

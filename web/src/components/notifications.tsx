@@ -86,7 +86,7 @@ export function NotificationsButton() {
             </button>
           ))
         ) : (
-          <p className="px-4 py-10 text-center text-sm text-muted">Nothing new. Finished campaigns and anything that needs your attention will show up here.</p>
+          <p className="px-4 py-10 text-center text-sm text-muted">Nothing new. Finished broadcasts and anything that needs your attention will show up here.</p>
         )}
       </div>
     </Popover>

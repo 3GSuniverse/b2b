@@ -78,7 +78,7 @@ export function CampaignsPage() {
     onSuccess: () => {
       refresh();
       setDeleting(null);
-      toast.success('Campaign deleted');
+      toast.success('Broadcast deleted');
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -87,7 +87,7 @@ export function CampaignsPage() {
     onSuccess: () => {
       refresh();
       setCancelling(null);
-      toast.success('Campaign cancelled. Nothing more will be sent.');
+      toast.success('Broadcast cancelled. Nothing more will be sent.');
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -99,15 +99,15 @@ export function CampaignsPage() {
   return (
     <>
       <PageHeader
-        title="Campaigns"
-        description="One email to many people, now or at a time you pick."
+        title="Broadcasts"
+        description="One message to many customers, by email or WhatsApp, now or at a time you pick."
       />
 
       {isEmptyAccount ? (
         <Panel>
           <EmptyState
             icon={<Send />}
-            title="Send your first campaign"
+            title="Send your first broadcast"
             action={
               <LinkButton to="/campaigns/new" variant="primary">
                 Start from a design
@@ -121,7 +121,7 @@ export function CampaignsPage() {
         <Panel className="overflow-hidden">
           <div className="px-5 pt-2 sm:px-6">
             <Tabs<Tab>
-              label="Filter campaigns"
+              label="Filter broadcasts"
               value={tab}
               onChange={setTab}
               tabs={[
@@ -222,7 +222,7 @@ export function CampaignsPage() {
           </ul>
           {q.data && rows.length === 0 && (
             <EmptyState title={tab === 'DRAFT' ? 'No drafts' : tab === 'SCHEDULED' ? 'Nothing scheduled' : 'Nothing sent yet'}>
-              {tab === 'SCHEDULED' ? 'Campaigns you schedule wait here until their time comes.' : undefined}
+              {tab === 'SCHEDULED' ? 'Broadcasts you schedule wait here until their time comes.' : undefined}
             </EmptyState>
           )}
           {q.data && q.data.pages > 1 && (
@@ -250,7 +250,7 @@ export function CampaignsPage() {
           <>
             <Button onClick={() => setDeleting(null)}>Keep it</Button>
             <Button variant="danger" loading={del.isPending} onClick={() => deleting && del.mutate(deleting)}>
-              Delete campaign
+              Delete broadcast
             </Button>
           </>
         }
@@ -268,7 +268,7 @@ export function CampaignsPage() {
           <>
             <Button onClick={() => setCancelling(null)}>Keep sending</Button>
             <Button variant="danger" loading={cancel.isPending} onClick={() => cancelling && cancel.mutate(cancelling)}>
-              Cancel campaign
+              Cancel broadcast
             </Button>
           </>
         }

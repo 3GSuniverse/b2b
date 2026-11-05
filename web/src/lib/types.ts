@@ -93,6 +93,38 @@ export interface Overview {
   upcoming: { id: string; name: string; scheduledAt: string; recipients: number } | null;
   audience: { total: number; subscribed: number; suppressed: number };
   unreadNotifications: number;
+  communication: Communication;
+  whatsappReachable: number;
+}
+
+export type MessageSource = 'automation' | 'payment_reminder' | 'trip_message' | 'broadcast' | 'direct';
+export interface Communication {
+  thisMonth: {
+    sent: number;
+    sentChange: number | null;
+    email: number;
+    whatsapp: number;
+    automatic: number;
+    automaticShare: number;
+    delivered: number;
+    deliveryRate: number;
+    opened: number;
+    openRate: number;
+    aiDrafts: number;
+  };
+  last30Days: { day: string; automatic: number; broadcast: number; direct: number }[];
+  activity: {
+    id: string;
+    source: MessageSource;
+    title: string;
+    to: string;
+    channel: 'EMAIL' | 'WHATSAPP';
+    status: string;
+    opened: boolean;
+    at: string;
+    trip: { id: string; title: string | null } | null;
+  }[];
+  comingUp: { departingThisWeek: number; dueThisWeek: number; overdue: number; overdueTrips: number; newEnquiries: number };
 }
 
 export interface Notification {

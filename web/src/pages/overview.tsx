@@ -1,20 +1,71 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDownRight, ArrowUpRight, Check, ChevronRight, Clock3, Inbox, Mail, MousePointerClick, Send, ShieldCheck, Upload, UserMinus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Check,
+  ChevronRight,
+  Clock3,
+  Inbox,
+  Mail,
+  Megaphone,
+  MessageCircle,
+  MessageSquarePlus,
+  PlaneTakeoff,
+  Repeat2,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Upload,
+  Users,
+  Wallet,
+  Zap,
+} from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { LinkButton } from '@/components/ui/button';
-import { Segmented } from '@/components/ui/controls';
 import { Badge, IconChip, Panel, PanelHeader, ProgressBar, RingGauge, Skeleton, type ChipTone } from '@/components/ui/display';
 import { Tooltip as Tip } from '@/components/ui/overlay';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { date, dateTime, n, pct, until } from '@/lib/format';
-import { campaignHref, CampaignStatusBadge } from '@/lib/status';
-import { CountPercent, CountUp, useReducedMotion } from '@/lib/motion';
-import type { Overview } from '@/lib/types';
+import { ago, date, dateTime, inr, n, pct, until } from '@/lib/format';
+import { CountPercent, CountUp, useMounted, useReducedMotion } from '@/lib/motion';
+import type { Communication, MessageSource, Overview } from '@/lib/types';
 
-// ---------------------------------------------------------------- KPIs
+/**
+ * The Overview: everything Dhrona said to customers this month, how much of it happened on its
+ * own, what it's doing right now, and what's coming up this week.
+ */
+
+// ---------------------------------------------------------------- Greeting
+
+/** A small sun or moon beside the greeting: rays turn slowly by day, stars twinkle at night. */
+function TimeEmblem() {
+  const hour = new Date().getHours();
+  if (hour >= 6 && hour < 18) {
+    return (
+      <svg aria-hidden viewBox="0 0 40 40" className="h-9 w-9 shrink-0">
+        <g className="emblem-rays" style={{ transformOrigin: '20px 20px' }}>
+          {Array.from({ length: 8 }, (_, i) => (
+            <line key={i} x1="20" y1="3" x2="20" y2="8" stroke="var(--color-highlight)" strokeWidth="2.6" strokeLinecap="round" transform={`rotate(${i * 45} 20 20)`} />
+          ))}
+        </g>
+        <circle cx="20" cy="20" r="8.5" fill="var(--color-highlight)" />
+        <circle cx="17" cy="17.5" r="2.4" fill="#fff" fillOpacity=".55" />
+      </svg>
+    );
+  }
+  return (
+    <svg aria-hidden viewBox="0 0 40 40" className="h-9 w-9 shrink-0">
+      <path d="M26 30.5A12 12 0 1 1 22.5 7a10 10 0 0 0 3.5 23.5Z" fill="var(--color-accent)" />
+      <path className="emblem-star" d="M31 8l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1Z" fill="var(--color-highlight)" />
+      <path className="emblem-star [animation-delay:900ms]" d="M34 19l.7 1.5 1.5.7-1.5.7-.7 1.5-.7-1.5-1.5-.7 1.5-.7Z" fill="var(--color-highlight)" />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------- This month
 
 function Change({ value, suffix, invert }: { value: number | null; suffix: string; invert?: boolean }) {
   if (value === null) return <span className="text-[13px] text-muted">No data for last month yet</span>;
@@ -35,21 +86,57 @@ function Change({ value, suffix, invert }: { value: number | null; suffix: strin
   );
 }
 
-function Kpis({ o }: { o: Overview }) {
-  const m = o.thisMonth;
-  const items = [
-    { label: 'Emails sent', icon: <Send />, tone: 'indigo', value: <CountUp value={m.sent} />, note: <Change value={m.sentChange} suffix="%" /> },
-    { label: 'Delivered', icon: <Inbox />, tone: 'green', value: <CountPercent value={m.deliveryRate} />, note: <span className="tnum text-[13px] text-muted">{n(m.delivered)} reached the inbox</span> },
-    { label: 'Click rate', icon: <MousePointerClick />, tone: 'saffron', value: <CountPercent value={m.clickRate} />, note: <Change value={m.clickRateChange} suffix=" pts" /> },
-    { label: 'Unsubscribed', icon: <UserMinus />, tone: 'plum', value: <CountUp value={m.unsubscribed} />, note: <span className="tnum text-[13px] text-muted">{pct(m.unsubscribeRate)} of delivered</span> },
-  ] satisfies { label: string; icon: React.ReactNode; tone: ChipTone; value: React.ReactNode; note: React.ReactNode }[];
+function Kpis({ c }: { c: Communication['thisMonth'] }) {
+  const mounted = useMounted();
+  const emailShare = c.sent ? (c.email / c.sent) * 100 : 50;
+  const items: { label: string; icon: ReactNode; tone: ChipTone; value: ReactNode; note: ReactNode }[] = [
+    {
+      label: 'Messages sent',
+      icon: <Send />,
+      tone: 'indigo',
+      value: <CountUp value={c.sent} />,
+      note: (
+        <span className="flex flex-col gap-1.5">
+          <span className="flex h-1.5 overflow-hidden rounded-full bg-line-soft" aria-hidden>
+            <span className="h-full bg-accent transition-[width] duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)]" style={{ width: mounted ? `${emailShare}%` : '0%' }} />
+            <span className="h-full bg-success transition-[width] duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] delay-150" style={{ width: mounted ? `${100 - emailShare}%` : '0%' }} />
+          </span>
+          <span className="tnum text-[13px] text-muted">
+            {n(c.email)} by email, {n(c.whatsapp)} on WhatsApp
+          </span>
+          <Change value={c.sentChange} suffix="%" />
+        </span>
+      ),
+    },
+    {
+      label: 'Sent automatically',
+      icon: <Zap />,
+      tone: 'saffron',
+      value: <CountUp value={c.automatic} />,
+      note: <span className="tnum text-[13px] text-muted">{c.automaticShare}% of all messages, with nobody at the desk</span>,
+    },
+    {
+      label: 'Delivered',
+      icon: <Inbox />,
+      tone: 'green',
+      value: <CountPercent value={c.deliveryRate} />,
+      note: <span className="tnum text-[13px] text-muted">{n(c.delivered)} reached your customers</span>,
+    },
+    {
+      label: 'Opened or read',
+      icon: <Check />,
+      tone: 'plum',
+      value: <CountPercent value={c.openRate} />,
+      note: <span className="tnum text-[13px] text-muted">{n(c.opened)} opened by email or read on WhatsApp</span>,
+    },
+  ];
   return (
     <Panel className="stagger grid grid-cols-2 overflow-hidden lg:grid-cols-4">
       {items.map((k, i) => (
         <div
           key={k.label}
           className={cn(
-            'group/kpi flex flex-col gap-2.5 p-5 transition-colors duration-200 hover:bg-sunken sm:p-6',
+            'spotlight group/kpi flex flex-col gap-2.5 p-5 transition-colors duration-200 sm:p-6',
             i % 2 === 1 && 'border-l border-line-soft',
             i >= 2 && 'border-t border-line-soft lg:border-t-0',
             i === 2 && 'lg:border-l',
@@ -67,39 +154,32 @@ function Kpis({ o }: { o: Overview }) {
   );
 }
 
-// ---------------------------------------------------------------- 30-day chart
+// ---------------------------------------------------------------- 30 days, by what sent it
 
-type Metric = 'delivered' | 'clicked';
-const METRIC: Record<Metric, { label: string; noun: string; color: string }> = {
-  delivered: { label: 'Delivered', noun: 'emails delivered', color: 'var(--color-chart-1)' },
-  clicked: { label: 'Clicks', noun: 'clicks', color: 'var(--color-chart-2)' },
+type Series = 'automatic' | 'broadcast' | 'direct';
+const SERIES: Record<Series, { label: string; color: string }> = {
+  automatic: { label: 'Automatic', color: 'var(--color-chart-1)' },
+  broadcast: { label: 'Broadcasts', color: 'var(--color-chart-2)' },
+  direct: { label: 'Sent by your team', color: '#b7b2f2' },
 };
-
-type Point = Overview['last30Days'][number];
-
+const ORDER: Series[] = ['automatic', 'broadcast', 'direct'];
+type Day = Communication['last30Days'][number];
 const dayLabel = (d: string, opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }) => date(d + 'T12:00:00Z', opts);
 
-function ChartTooltip({ active, payload }: { active?: boolean; payload?: { payload: Point }[] }) {
+function ChartTooltip({ active, payload }: { active?: boolean; payload?: { payload: Day }[] }) {
   const p = active && payload?.[0]?.payload;
   if (!p) return null;
   return (
-    <div className="min-w-52 rounded-[12px] border border-line bg-surface px-3.5 py-3 shadow-[var(--shadow-pop)]">
+    <div className="min-w-48 rounded-[12px] border border-line bg-surface px-3.5 py-3 shadow-[var(--shadow-pop)]">
       <p className="text-xs font-semibold text-muted">{dayLabel(p.day, { weekday: 'short', day: 'numeric', month: 'short' })}</p>
-      {p.campaigns.length > 0 && <p className="mt-1 text-[13px] font-semibold text-ink">{p.campaigns.map((c) => c.name).join(', ')}</p>}
       <dl className="mt-2 flex flex-col gap-1.5 text-[13px]">
-        {(
-          [
-            ['Sent', p.sent, 'var(--color-faint)'],
-            ['Delivered', p.delivered, METRIC.delivered.color],
-            ['Clicks', p.clicked, METRIC.clicked.color],
-          ] as const
-        ).map(([label, v, color]) => (
-          <div key={label} className="flex items-center justify-between gap-6">
+        {ORDER.map((k) => (
+          <div key={k} className="flex items-center justify-between gap-6">
             <dt className="flex items-center gap-2 text-ink-2">
-              <span className="h-2 w-2 rounded-[3px]" style={{ background: color }} aria-hidden />
-              {label}
+              <span className="h-2 w-2 rounded-[3px]" style={{ background: SERIES[k].color }} aria-hidden />
+              {SERIES[k].label}
             </dt>
-            <dd className="tnum font-semibold">{n(v)}</dd>
+            <dd className="tnum font-semibold">{n(p[k])}</dd>
           </div>
         ))}
       </dl>
@@ -107,140 +187,167 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { paylo
   );
 }
 
-function ActivityChart({ o }: { o: Overview }) {
-  const [metric, setMetric] = useState<Metric>('delivered');
-  const [active, setActive] = useState<number | null>(null);
+function MessagesChart({ data }: { data: Day[] }) {
   const reduced = useReducedMotion();
-  const data = o.last30Days;
-  const total = data.reduce((a, d) => a + d[metric], 0);
-  const peakIdx = data.reduce((best, d, i) => (d[metric] > (data[best]?.[metric] ?? 0) ? i : best), 0);
-  const peak = data[peakIdx];
-  const color = METRIC[metric].color;
-  const empty = data.every((d) => d.sent === 0);
-
+  const [hidden, setHidden] = useState<Set<Series>>(new Set());
+  const shown = ORDER.filter((k) => !hidden.has(k));
+  const total = data.reduce((a, d) => a + shown.reduce((x, k) => x + d[k], 0), 0);
+  const auto = data.reduce((a, d) => a + d.automatic, 0);
+  const all = data.reduce((a, d) => a + d.automatic + d.broadcast + d.direct, 0);
+  const empty = all === 0;
+  const toggle = (k: Series) =>
+    setHidden((h) => {
+      const next = new Set(h);
+      if (next.has(k)) next.delete(k);
+      else if (shown.length > 1) next.add(k); // always keep one series on
+      return next;
+    });
   return (
-    <Panel className="flex flex-col gap-5 p-5 sm:p-6">
+    <Panel className="spotlight flex flex-col gap-5 p-5 sm:p-6">
       <PanelHeader
-        title="Last 30 days"
+        title="Messages, last 30 days"
         description={
           empty ? (
-            'Daily activity shows up here once your first emails go out.'
+            'Every message Dhrona sends shows up here, by what sent it.'
           ) : (
             <>
-              <span className="tnum font-semibold text-ink">{n(total)}</span> {METRIC[metric].noun}
-              {peak && peak[metric] > 0 && <>, most on {dayLabel(peak.day)}</>}
+              <span className="tnum font-semibold text-ink">{n(total)}</span> messages shown, <span className="tnum font-semibold text-ink">{pct(all ? (auto / all) * 100 : 0)}</span> of them sent automatically
             </>
           )
         }
-        action={
-          <Segmented
-            label="Chart metric"
-            size="sm"
-            value={metric}
-            onChange={setMetric}
-            options={[
-              { value: 'delivered', label: 'Delivered' },
-              { value: 'clicked', label: 'Clicks' },
-            ]}
-          />
-        }
       />
-      <div className="relative -ml-2 h-[260px] sm:h-[280px]">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Show or hide">
+        {ORDER.map((k) => {
+          const on = !hidden.has(k);
+          return (
+            <button
+              key={k}
+              type="button"
+              aria-pressed={on}
+              onClick={() => toggle(k)}
+              className={cn(
+                'inline-flex h-8 items-center gap-2 rounded-full border px-3 text-[13px] font-semibold transition-all duration-200 active:scale-95',
+                on ? 'border-line bg-surface text-ink' : 'border-dashed border-line bg-transparent text-faint',
+              )}
+            >
+              <span className={cn('h-2.5 w-2.5 rounded-full transition-transform duration-300', on ? 'scale-100' : 'scale-50')} style={{ background: SERIES[k].color }} aria-hidden />
+              {SERIES[k].label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="relative -ml-2 h-[240px] sm:h-[260px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            margin={{ top: 30, right: 8, bottom: 0, left: 0 }}
-            barCategoryGap="22%"
-            onMouseMove={(s) => setActive(typeof s?.activeTooltipIndex === 'number' ? s.activeTooltipIndex : s?.activeTooltipIndex != null ? Number(s.activeTooltipIndex) : null)}
-            onMouseLeave={() => setActive(null)}
-          >
+          <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap="24%">
             <CartesianGrid vertical={false} stroke="var(--color-line-soft)" />
-            <XAxis
-              dataKey="day"
-              tickLine={false}
-              axisLine={{ stroke: 'var(--color-line)' }}
-              tick={{ fill: 'var(--color-muted)', fontSize: 12 }}
-              tickFormatter={(d: string) => dayLabel(d)}
-              interval={6}
-              tickMargin={10}
-            />
-            <YAxis
-              width={44}
-              tickLine={false}
-              axisLine={false}
-              allowDecimals={false}
-              tick={{ fill: 'var(--color-muted)', fontSize: 12 }}
-              tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 100) / 10}k` : String(v))}
-            />
+            <XAxis dataKey="day" tickLine={false} axisLine={{ stroke: 'var(--color-line)' }} tick={{ fill: 'var(--color-muted)', fontSize: 12 }} tickFormatter={(d: string) => dayLabel(d)} interval={6} tickMargin={10} />
+            <YAxis width={40} tickLine={false} axisLine={false} allowDecimals={false} tick={{ fill: 'var(--color-muted)', fontSize: 12 }} />
             <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--color-ink)', fillOpacity: 0.04, radius: 6 }} isAnimationActive={false} />
-            <Bar
-              dataKey={metric}
-              isAnimationActive={!reduced}
-              animationDuration={900}
-              animationEasing="ease-out"
-              shape={(props: unknown) => {
-                const { x, y, width, height, index } = props as { x: number; y: number; width: number; height: number; index: number };
-                const isPeak = index === peakIdx && !!peak && peak[metric] > 0;
-                const name = isPeak ? peak.campaigns[0]?.name : undefined;
-                const cx = x + width / 2;
-                const anchor = index < 5 ? 'start' : index > data.length - 6 ? 'end' : 'middle';
-                const lx = anchor === 'start' ? x : anchor === 'end' ? x + width : cx;
-                const r = Math.min(4, width / 2, height);
-                return (
-                  <g>
-                    {height > 0 && (
-                      <path
-                        d={`M${x},${y + height} V${y + r} Q${x},${y} ${x + r},${y} H${x + width - r} Q${x + width},${y} ${x + width},${y + r} V${y + height} Z`}
-                        fill={color}
-                        fillOpacity={active === null || active === index ? 1 : 0.35}
-                        style={{ transition: 'fill-opacity 200ms ease, fill 300ms ease' }}
-                      />
-                    )}
-                    {isPeak && (
-                      <text x={lx} y={y - 10} textAnchor={anchor} fontSize={12} fontWeight={600} fill="var(--color-ink)" pointerEvents="none" className="animate-in">
-                        {name ? (name.length > 26 ? name.slice(0, 25) + '…' : name) : n(peak[metric])}
-                      </text>
-                    )}
-                  </g>
-                );
-              }}
-            />
+            {shown.map((k, i) => (
+              <Bar
+                key={k}
+                dataKey={k}
+                stackId="all"
+                fill={SERIES[k].color}
+                radius={i === shown.length - 1 ? [5, 5, 0, 0] : 0}
+                isAnimationActive={!reduced}
+                animationDuration={700}
+                animationBegin={i * 160}
+                animationEasing="ease-out"
+              />
+            ))}
           </BarChart>
         </ResponsiveContainer>
         {empty && (
           <div className="absolute inset-0 grid place-items-center">
-            <span className="rounded-full border border-line bg-surface px-3.5 py-1.5 text-[13px] text-muted">No emails sent in the last 30 days</span>
+            <span className="rounded-full border border-line bg-surface px-3.5 py-1.5 text-[13px] text-muted">Nothing sent in the last 30 days yet</span>
           </div>
         )}
       </div>
-      <table className="sr-only">
-        <caption>Emails per day, last 30 days</caption>
-        <thead>
-          <tr>
-            <th>Day</th>
-            <th>Campaign</th>
-            <th>Sent</th>
-            <th>Delivered</th>
-            <th>Clicks</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((d) => (
-            <tr key={d.day}>
-              <td>{d.day}</td>
-              <td>{d.campaigns.map((c) => c.name).join(', ')}</td>
-              <td>{d.sent}</td>
-              <td>{d.delivered}</td>
-              <td>{d.clicked}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </Panel>
   );
 }
 
-// ---------------------------------------------------------------- Side column
+// ---------------------------------------------------------------- Working for you: the live feed
+
+const SOURCE: Record<MessageSource, { icon: ReactNode; tone: ChipTone; label: string }> = {
+  automation: { icon: <Repeat2 />, tone: 'indigo', label: 'Automation' },
+  payment_reminder: { icon: <Wallet />, tone: 'saffron', label: 'Payment reminder' },
+  trip_message: { icon: <PlaneTakeoff />, tone: 'blue', label: 'Trip message' },
+  broadcast: { icon: <Megaphone />, tone: 'plum', label: 'Broadcast' },
+  direct: { icon: <Send />, tone: 'green', label: 'Sent by your team' },
+};
+
+function deliveryLabel(a: Communication['activity'][number]) {
+  if (['BOUNCED', 'COMPLAINED', 'FAILED'].includes(a.status)) return { text: 'Didn’t arrive', cls: 'text-danger' };
+  if (a.opened) return { text: a.channel === 'WHATSAPP' ? 'Read' : 'Opened', cls: 'text-success-strong' };
+  if (a.status === 'DELIVERED') return { text: 'Delivered', cls: 'text-ink-2' };
+  return { text: 'Sent', cls: 'text-muted' };
+}
+
+function WorkingForYou({ items }: { items: Communication['activity'] }) {
+  return (
+    <Panel className="spotlight flex flex-col">
+      <div className="flex items-start justify-between gap-3 px-5 pb-3 pt-5 sm:px-6 sm:pt-6">
+        <div className="flex flex-col gap-1">
+          <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight">
+            <span className="relative flex h-2 w-2" aria-hidden>
+              <span className="dispatch-live absolute inset-0 rounded-full bg-success" />
+              <span className="relative h-2 w-2 rounded-full bg-success" />
+            </span>
+            Working for you
+          </h2>
+          <p className="text-[13px] text-muted">The latest messages Dhrona sent, newest first.</p>
+        </div>
+      </div>
+      {items.length === 0 ? (
+        <p className="px-6 pb-8 pt-2 text-sm leading-relaxed text-muted">
+          Nothing sent yet. Payment reminders, pre-trip details and birthday wishes appear here as Dhrona sends them.
+        </p>
+      ) : (
+        <ol className="stagger flex flex-col px-2 pb-2 sm:px-3 sm:pb-3">
+          {items.map((a) => {
+            const s = SOURCE[a.source];
+            const d = deliveryLabel(a);
+            const body = (
+              <>
+                <IconChip icon={s.icon} tone={s.tone} className="feed-chip" />
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="truncate text-[13px] font-semibold">{a.title}</span>
+                  <span className="truncate text-xs text-muted">
+                    To {a.to}
+                    {a.trip?.title ? `, ${a.trip.title}` : ''}
+                  </span>
+                </span>
+                <span className="flex shrink-0 flex-col items-end gap-0.5">
+                  <span className={cn('flex items-center gap-1 text-xs font-semibold', d.cls)}>
+                    {a.channel === 'WHATSAPP' ? <MessageCircle className="h-3 w-3" aria-label="WhatsApp" /> : <Mail className="h-3 w-3" aria-label="Email" />}
+                    {d.text}
+                  </span>
+                  <span className="text-[11px] text-faint">{ago(a.at)}</span>
+                </span>
+              </>
+            );
+            const cls = 'group flex items-center gap-3 rounded-[12px] px-3 py-2.5 transition-colors duration-200';
+            return (
+              <li key={a.id}>
+                {a.trip ? (
+                  <Link to={`/trips/${a.trip.id}`} className={cn(cls, 'hover:bg-hover')}>
+                    {body}
+                  </Link>
+                ) : (
+                  <div className={cls}>{body}</div>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------- This week
 
 function Countdown({ at }: { at: string }) {
   const [, tick] = useState(0);
@@ -265,32 +372,109 @@ function Countdown({ at }: { at: string }) {
   );
 }
 
-function UpNext({ o }: { o: Overview }) {
-  const u = o.upcoming;
+function ComingUp({ o }: { o: Overview }) {
+  const c = o.communication.comingUp;
+  const rows: { key: string; icon: ReactNode; tone: ChipTone; title: ReactNode; note: string; to: string }[] = [];
+  if (c.overdue > 0)
+    rows.push({ key: 'overdue', icon: <AlertCircle />, tone: 'red', title: <>{inr(c.overdue)} overdue on {c.overdueTrips} {c.overdueTrips === 1 ? 'trip' : 'trips'}</>, note: 'Overdue reminders go out on their own', to: '/trips' });
+  if (c.dueThisWeek > 0) rows.push({ key: 'due', icon: <Wallet />, tone: 'saffron', title: <>{inr(c.dueThisWeek)} due this week</>, note: 'Customers get a reminder before each due date', to: '/trips' });
+  if (c.departingThisWeek > 0)
+    rows.push({ key: 'leaving', icon: <PlaneTakeoff />, tone: 'blue', title: <>{c.departingThisWeek} {c.departingThisWeek === 1 ? 'trip leaves' : 'trips leave'} this week</>, note: 'Pre-trip details are sent automatically', to: '/trips' });
+  if (c.newEnquiries > 0)
+    rows.push({ key: 'enquiries', icon: <MessageSquarePlus />, tone: 'indigo', title: <>{c.newEnquiries} {c.newEnquiries === 1 ? 'enquiry is' : 'enquiries are'} waiting for a quote</>, note: 'Draft one in minutes from your price list', to: '/trips' });
   return (
-    <Panel className="flex flex-col gap-4 p-5 sm:p-6">
-      <PanelHeader title="Up next" action={<Clock3 className="h-[18px] w-[18px] text-muted" aria-hidden />} />
-      {u ? (
-        <>
-          <Countdown at={u.scheduledAt} />
-          <Link to={`/campaigns/${u.id}/edit`} className="lift group flex items-center gap-3 rounded-[12px] border border-line-soft bg-sunken px-3.5 py-3 hover:border-line">
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="truncate text-sm font-semibold">{u.name}</span>
-              <span className="tnum text-xs text-muted">
-                {dateTime(u.scheduledAt)}, {n(u.recipients)} recipients
-              </span>
+    <Panel className="spotlight flex flex-col gap-4 p-5 sm:p-6">
+      <PanelHeader title="This week" action={<Clock3 className="h-[18px] w-[18px] text-muted" aria-hidden />} />
+      {o.upcoming && (
+        <Link to={`/campaigns/${o.upcoming.id}/edit`} className="lift group flex flex-col gap-3 rounded-[14px] border border-line-soft bg-sunken p-4 hover:border-line">
+          <span className="flex items-center justify-between gap-3">
+            <span className="flex min-w-0 items-center gap-2 text-[13px] font-semibold text-muted">
+              <Megaphone className="h-4 w-4 shrink-0 text-highlight" aria-hidden />
+              <span className="truncate">Next broadcast: {o.upcoming.name}</span>
             </span>
-            <ChevronRight className="h-4 w-4 text-faint transition-transform group-hover:translate-x-0.5" aria-hidden />
-          </Link>
-        </>
-      ) : (
-        <div className="flex flex-col items-start gap-3">
-          <p className="text-sm leading-relaxed text-muted">Nothing scheduled. Plan a campaign and it will go out at the time you pick, even if nobody is online.</p>
-          <LinkButton to="/campaigns/new" size="sm">
-            Schedule a campaign
-          </LinkButton>
-        </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-faint transition-transform group-hover:translate-x-0.5" aria-hidden />
+          </span>
+          <Countdown at={o.upcoming.scheduledAt} />
+          <span className="tnum text-xs text-muted">
+            {dateTime(o.upcoming.scheduledAt)}, {n(o.upcoming.recipients)} recipients
+          </span>
+        </Link>
       )}
+      {rows.length ? (
+        <ul className="stagger flex flex-col gap-1">
+          {rows.map((r) => (
+            <li key={r.key}>
+              <Link to={r.to} className="group flex items-center gap-3 rounded-[12px] px-2 py-2 transition-colors duration-200 hover:bg-hover">
+                <IconChip icon={r.icon} tone={r.tone} />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="tnum text-[13px] font-semibold">{r.title}</span>
+                  <span className="text-xs text-muted">{r.note}</span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-faint opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100" aria-hidden />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        !o.upcoming && <p className="text-sm leading-relaxed text-muted">A quiet week. Nothing is due and no trips leave in the next seven days.</p>
+      )}
+    </Panel>
+  );
+}
+
+function AiCard({ drafts }: { drafts: number }) {
+  const ai = useQuery({ queryKey: ['ai'], queryFn: () => api.get<{ enabled: boolean }>('/api/ai'), staleTime: 300_000 });
+  if (!ai.data?.enabled) return null;
+  return (
+    <Panel className="spotlight relative flex flex-col gap-3 overflow-hidden p-5 sm:p-6">
+      <div className="flex items-center gap-3">
+        <span className="ai-orb grid h-10 w-10 place-items-center rounded-[12px] bg-accent text-white">
+          <Sparkles className="ai-sparkle h-5 w-5" aria-hidden />
+        </span>
+        <div className="flex flex-col">
+          <h2 className="text-[15px] font-semibold tracking-tight">Dhrona AI</h2>
+          <span className="tnum text-[13px] text-muted">
+            <CountUp value={drafts} /> {drafts === 1 ? 'quote' : 'quotes'} drafted this month
+          </span>
+        </div>
+      </div>
+      <p className="text-[13px] leading-relaxed text-ink-2">
+        Open any enquiry and choose <strong className="font-semibold">Draft with AI</strong>. Dhrona writes the day-by-day plan in English, Telugu or Hindi, priced from your own rates.
+      </p>
+      <LinkButton to="/trips" size="sm" className="self-start">
+        Open trips
+      </LinkButton>
+    </Panel>
+  );
+}
+
+function Customers({ o }: { o: Overview }) {
+  const a = o.audience;
+  return (
+    <Panel className="spotlight flex flex-col gap-5 p-5 sm:p-6">
+      <PanelHeader title="Customers" action={<Link to="/contacts" className="text-[13px] font-semibold text-accent hover:text-accent-strong">View all</Link>} />
+      <div className="flex items-baseline gap-2">
+        <span className="tnum text-[34px] font-bold leading-none tracking-[-0.03em]">
+          <CountUp value={a.total} />
+        </span>
+        <span className="text-[13px] text-muted">in your address book</span>
+      </div>
+      <dl className="grid grid-cols-2 gap-4 text-[13px]">
+        <div className="flex flex-col gap-2">
+          <dt className="flex items-center gap-1.5 text-muted">
+            <Mail className="h-3.5 w-3.5" aria-hidden /> By email
+          </dt>
+          <dd className="tnum text-[18px] font-bold">{n(a.subscribed)}</dd>
+          <ProgressBar value={a.subscribed} max={Math.max(a.total, 1)} label="Customers who can receive email" />
+        </div>
+        <div className="flex flex-col gap-2">
+          <dt className="flex items-center gap-1.5 text-muted">
+            <MessageCircle className="h-3.5 w-3.5" aria-hidden /> On WhatsApp
+          </dt>
+          <dd className="tnum text-[18px] font-bold">{n(o.whatsappReachable)}</dd>
+          <ProgressBar value={o.whatsappReachable} max={Math.max(a.total, 1)} label="Customers who agreed to WhatsApp" tone="highlight" />
+        </div>
+      </dl>
     </Panel>
   );
 }
@@ -301,7 +485,7 @@ function Health({ o }: { o: Overview }) {
   return (
     <Panel className="flex flex-col gap-5 p-5 sm:p-6">
       <PanelHeader
-        title="Sending health"
+        title="Delivery health"
         action={
           early ? (
             <Badge tone="grey">Too early to tell</Badge>
@@ -333,76 +517,6 @@ function Health({ o }: { o: Overview }) {
   );
 }
 
-function Audience({ o }: { o: Overview }) {
-  const a = o.audience;
-  return (
-    <Panel className="flex flex-col gap-5 p-5 sm:p-6">
-      <PanelHeader title="Audience" action={<Link to="/contacts" className="text-[13px] font-semibold text-accent hover:text-accent-strong">View contacts</Link>} />
-      <div className="flex items-baseline gap-2">
-        <span className="tnum text-[34px] font-semibold leading-none tracking-[-0.03em]"><CountUp value={a.subscribed} /></span>
-        <span className="text-[13px] text-muted">can receive email</span>
-      </div>
-      <ProgressBar value={a.subscribed} max={Math.max(a.total, 1)} label="Subscribed share of contacts" />
-      <dl className="grid grid-cols-2 gap-3 text-[13px]">
-        <div className="flex flex-col gap-0.5">
-          <dt className="text-muted">All contacts</dt>
-          <dd className="tnum font-semibold">{n(a.total)}</dd>
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <dt className="text-muted">Unsubscribed or bounced</dt>
-          <dd className="tnum font-semibold">{n(a.suppressed)}</dd>
-        </div>
-      </dl>
-    </Panel>
-  );
-}
-
-// ---------------------------------------------------------------- Recent campaigns
-
-function RecentCampaigns({ o }: { o: Overview }) {
-  return (
-    <Panel className="flex flex-col">
-      <PanelHeader
-        className="px-5 pb-3 pt-5 sm:px-6 sm:pt-6"
-        title="Recent campaigns"
-        action={<Link to="/campaigns" className="text-[13px] font-semibold text-accent hover:text-accent-strong">All campaigns</Link>}
-      />
-      {o.recentCampaigns.length === 0 ? (
-        <p className="px-6 pb-8 pt-2 text-sm text-muted">Your campaigns will be listed here.</p>
-      ) : (
-        <ul className="stagger flex flex-col px-2 pb-2 sm:px-3 sm:pb-3">
-          {o.recentCampaigns.map((c) => {
-            const finished = c.status === 'SENT' || c.status === 'SENDING';
-            return (
-              <li key={c.id}>
-                <Link to={campaignHref(c)} className="grid grid-cols-[minmax(0,1fr)] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 rounded-[12px] px-3 py-3 transition-colors duration-200 hover:bg-hover sm:grid-cols-[minmax(0,1fr)_120px_88px_88px]">
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="truncate text-sm font-semibold">{c.name}</span>
-                    <span className="text-xs text-muted">
-                      {c.status === 'SCHEDULED' && c.scheduledAt ? `Sends ${dateTime(c.scheduledAt)}` : c.startedAt ? `Sent ${date(c.startedAt)}` : `Edited ${date(c.updatedAt)}`}
-                    </span>
-                  </span>
-                  <span className="justify-self-end sm:justify-self-start">
-                    <CampaignStatusBadge status={c.status} />
-                  </span>
-                  <span className="hidden flex-col sm:flex">
-                    <span className="tnum text-sm font-semibold">{finished ? pct(c.rates.delivery) : '—'}</span>
-                    <span className="text-[11px] text-muted">delivered</span>
-                  </span>
-                  <span className="hidden flex-col sm:flex">
-                    <span className="tnum text-sm font-semibold">{finished ? pct(c.rates.click) : '—'}</span>
-                    <span className="text-[11px] text-muted">clicked</span>
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </Panel>
-  );
-}
-
 // ---------------------------------------------------------------- Setup checklist
 
 function Setup({ o }: { o: Overview }) {
@@ -417,7 +531,7 @@ function Setup({ o }: { o: Overview }) {
     },
     {
       done: o.audience.total > 0,
-      title: 'Bring in your contacts',
+      title: 'Bring in your customers',
       body: 'Upload a CSV or Excel export. Columns are matched for you.',
       to: '/contacts?import=1',
       cta: 'Import',
@@ -425,8 +539,8 @@ function Setup({ o }: { o: Overview }) {
     },
     {
       done: o.recentCampaigns.some((c) => c.status !== 'DRAFT'),
-      title: 'Send your first campaign',
-      body: 'Start from a template, send yourself a test, then schedule it.',
+      title: 'Send your first message',
+      body: 'Turn on trip reminders, or send a broadcast from a template.',
       to: '/campaigns/new',
       cta: 'Create',
       icon: <Send />,
@@ -500,16 +614,21 @@ export function OverviewPage() {
   const q = useQuery({ queryKey: ['overview'], queryFn: () => api.get<Overview>('/api/overview'), refetchInterval: 60_000 });
   if (!q.data) return <OverviewSkeleton />;
   const o = q.data;
+  const c = o.communication;
   const domainsPending = o.sending.domains.filter((d) => !d.readyToSend);
 
   return (
     <div className="stagger flex flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.025em]">{o.greeting}</h1>
-          <p className="text-sm text-muted">
-            {date(new Date(), { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
+        <div className="flex items-center gap-3">
+          <TimeEmblem />
+          <div className="flex flex-col gap-1">
+            <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.025em]">{o.greeting}</h1>
+            <p className="text-sm text-muted">
+              {date(new Date(), { weekday: 'long', day: 'numeric', month: 'long' })}.{' '}
+              {c.thisMonth.automatic > 0 ? <>Dhrona has sent <span className="tnum font-semibold text-ink">{n(c.thisMonth.automatic)}</span> messages on its own this month.</> : 'Here is your agency today.'}
+            </p>
+          </div>
         </div>
         {o.sending.defaultSender && (
           <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] text-ink-2">
@@ -530,20 +649,20 @@ export function OverviewPage() {
       )}
 
       <Setup o={o} />
-      <Kpis o={o} />
+      <Kpis c={c.thisMonth} />
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
-          <ActivityChart o={o} />
-          <RecentCampaigns o={o} />
+          <MessagesChart data={c.last30Days} />
+          <WorkingForYou items={c.activity} />
         </div>
         <div className="stagger flex flex-col gap-6">
-          <UpNext o={o} />
+          <ComingUp o={o} />
+          <AiCard drafts={c.thisMonth.aiDrafts} />
           <Health o={o} />
-          <Audience o={o} />
+          <Customers o={o} />
         </div>
       </div>
     </div>
   );
 }
-

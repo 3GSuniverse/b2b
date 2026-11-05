@@ -25,6 +25,8 @@ import {
   tripDues,
   tripPayments,
   trips,
+  tripReminders,
+  tripFollowups,
   quotes,
   packages,
   rateItems,
@@ -304,7 +306,7 @@ async function main() {
     },
   ]);
 
-  await db.insert(automations).values([
+  const autoRows = await db.insert(automations).values([
     {
       tenantId,
       name: 'Trip reminder, 3 days before',
@@ -335,7 +337,7 @@ async function main() {
       delivered: 22,
       clicked: 5,
     },
-  ]);
+  ]).returning({ id: automations.id, name: automations.name });
 
   // ---- Trips: a believable week at a travel desk
   const people = (await db.query.contacts.findMany({ where: eq(contacts.tenantId, tenantId), limit: 40 })).filter((c) => c.phone && c.firstName);
@@ -412,6 +414,71 @@ async function main() {
       logs.push({ tenantId, userId: user!.id, action: 'trip.status', entity: 'trip', entityId: row!.id, meta: { from: 'ENQUIRY', to: t.status, reason: t.lostReason }, createdAt: daysAgo(Math.max(0, t.age - 2)) });
     }
     await db.insert(auditLogs).values(logs);
+  }
+
+  // ---- What Dhrona sent on its own: birthday wishes, trip reminders, payment reminders and
+  // pre-trip details, spread over the last month, so the Overview shows a real working desk
+  {
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000);
+    const [tripAuto, bdayAuto] = autoRows;
+    const auto: (typeof messages.$inferInsert)[] = [];
+    // About five a day for the last 30 days: a steady stream, as at a real desk
+    Array.from({ length: 150 }, (_, k) => people[k % people.length]!).forEach((c, k) => {
+      const whenMin = Math.floor(k / 5) * 60 * 24 + 40 + (k % 5) * 170 + ((k * 37) % 60); // spread across each day
+      const opened = k % 3 !== 0;
+      const isBday = k % 2 === 0;
+      const wa = k % 4 === 1;
+      auto.push({
+        tenantId,
+        automationId: (isBday ? bdayAuto : tripAuto)!.id,
+        contactId: c.id,
+        channel: wa ? 'WHATSAPP' : 'EMAIL',
+        toAddress: wa ? c.phone! : (c.email ?? c.phone!),
+        subject: isBday ? `Happy birthday, ${c.firstName}!` : 'Your trip is in 3 days',
+        status: 'DELIVERED',
+        queuedAt: ago(whenMin),
+        sentAt: ago(whenMin),
+        deliveredAt: ago(whenMin - 1),
+        firstOpenedAt: opened ? ago(whenMin - 30) : null,
+      });
+    });
+    await db.insert(messages).values(auto);
+
+    // Payment reminders and pre-trip details for the booked trips, on WhatsApp where possible
+    const booked = await db.query.trips.findMany({ where: and(eq(trips.tenantId, tenantId), eq(trips.status, 'BOOKED')), with: { contact: true } });
+    let minute = 25;
+    for (const t of booked) {
+      const dues = await db.query.tripDues.findMany({ where: eq(tripDues.tripId, t.id) });
+      const today = isoDay(new Date());
+      for (const [k, d] of dues.sort((x, y) => x.position - y.position).entries()) {
+        if (d.dueDate > isoDay(daysAgo(-7))) continue; // reminders only go out close to the date
+        // Earlier instalments were reminded before their date and paid; only the latest one can be late
+        const overdue = k === dues.length - 1 && d.dueDate < today;
+        const [m] = await db
+          .insert(messages)
+          .values({
+            tenantId, tripId: t.id, contactId: t.contactId, service: true, channel: 'WHATSAPP', toAddress: t.contact?.phone ?? '+919800000000',
+            body: `Reminder: ${d.label} for ${t.title}`, status: 'DELIVERED', queuedAt: ago(minute), sentAt: ago(minute), deliveredAt: ago(minute - 1),
+            firstOpenedAt: minute % 2 ? ago(minute - 5) : null,
+          })
+          .returning({ id: messages.id });
+        await db.insert(tripReminders).values({ tenantId, tripId: t.id, dueId: d.id, kind: overdue ? 'OVERDUE' : 'BEFORE', channel: 'WHATSAPP', messageId: m!.id, createdAt: ago(minute) });
+        minute += 170;
+      }
+      if (t.startDate && t.startDate <= isoDay(daysAgo(-7))) {
+        const [m] = await db
+          .insert(messages)
+          .values({
+            tenantId, tripId: t.id, contactId: t.contactId, service: true, channel: 'EMAIL', toAddress: t.contact?.email ?? 'traveller@example.com',
+            subject: `Your ${t.title} trip: pickup and details`, status: 'DELIVERED', queuedAt: ago(minute), sentAt: ago(minute), deliveredAt: ago(minute - 1), firstOpenedAt: ago(minute - 20),
+          })
+          .returning({ id: messages.id });
+        await db.insert(tripFollowups).values({ tenantId, tripId: t.id, kind: 'PRE_TRIP', channel: 'EMAIL', messageId: m!.id, createdAt: ago(minute) });
+        minute += 90;
+      }
+    }
+    // Three quotes drafted with AI this month
+    await db.insert(auditLogs).values([1, 3, 6].map((d) => ({ tenantId, userId: user!.id, action: 'ai.draft', entity: 'quote', createdAt: daysAgo(d) })));
   }
 
   // ---- Packages, and which trips were sold as which

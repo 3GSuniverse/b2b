@@ -127,7 +127,7 @@ export function AutomationsPage() {
     <>
       <PageHeader
         title="Automations"
-        description="Emails that go out by themselves on each person’s own date, like a reminder before their trip or wishes on their birthday."
+        description="Messages that go out by themselves on each customer’s own date, like wishes on their birthday or anniversary, by email or WhatsApp."
         actions={
           <LinkButton to="/automations/new" variant="primary">
             <Plus className="h-4 w-4" strokeWidth={2.4} />
@@ -172,7 +172,7 @@ export function AutomationsPage() {
                     </span>
                     <span className="flex flex-col gap-1">
                       <span className="text-[15px] font-semibold">Something else</span>
-                      <span className="text-[13px] text-muted">Any date you keep for your contacts: anniversaries, passport expiry, last trip.</span>
+                      <span className="text-[13px] text-muted">Any date you keep for your customers: anniversaries, passport expiry, last trip.</span>
                     </span>
                   </button>
                 )}

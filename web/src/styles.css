@@ -199,6 +199,73 @@ tbody > tr {
 .doc a:hover { color: var(--color-accent-strong); }
 .doc strong { color: var(--color-ink); font-weight: 600; }
 
+/* ---- Sidebar: each icon has its own small story on hover ---- */
+@keyframes nav-pop { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.22) rotate(-6deg); } 70% { transform: scale(0.94); } }
+@keyframes nav-fly { 0% { transform: none; } 45% { transform: translate(5px, -5px) rotate(-8deg); opacity: 0; } 46% { transform: translate(-6px, 6px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes nav-hop { 0%, 100% { transform: none; } 30% { transform: translateY(-4px); } 55% { transform: translateY(0) scaleY(0.9); } 75% { transform: translateY(-1.5px); } }
+@keyframes nav-shout { 0%, 100% { transform: none; } 20% { transform: rotate(-14deg) scale(1.12); } 40% { transform: rotate(10deg) scale(1.12); } 60% { transform: rotate(-6deg); } 80% { transform: rotate(3deg); } }
+@keyframes nav-tick { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+@keyframes nav-flip { 0% { transform: perspective(60px) rotateY(0); } 100% { transform: perspective(60px) rotateY(360deg); } }
+@keyframes nav-spin { from { transform: rotate(0); } to { transform: rotate(120deg); } }
+@keyframes nav-wiggle { 0%, 100% { transform: none; } 25% { transform: rotate(-12deg); } 50% { transform: rotate(10deg); } 75% { transform: rotate(-5deg); } }
+.group\/nav:hover .nav-pop { animation: nav-pop 520ms cubic-bezier(0.22, 1.2, 0.36, 1); }
+.group\/nav:hover .nav-fly { animation: nav-fly 640ms cubic-bezier(0.5, 0, 0.3, 1); }
+.group\/nav:hover .nav-hop { animation: nav-hop 560ms ease-out; }
+.group\/nav:hover .nav-shout { animation: nav-shout 620ms ease-in-out; }
+.group\/nav:hover .nav-tick { animation: nav-tick 700ms cubic-bezier(0.65, 0, 0.35, 1); }
+.group\/nav:hover .nav-flip { animation: nav-flip 650ms cubic-bezier(0.65, 0, 0.35, 1); }
+.group\/nav:hover .nav-spin { animation: nav-spin 600ms cubic-bezier(0.22, 1.2, 0.36, 1); }
+.group\/nav:hover .nav-wiggle { animation: nav-wiggle 560ms ease-in-out; }
+
+/* ---- Cards: a soft light follows the pointer (main.tsx sets --mx/--my) ---- */
+.spotlight { position: relative; }
+.spotlight::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(420px circle at var(--mx, -999px) var(--my, -999px), rgb(74 63 209 / 0.075), transparent 62%);
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.spotlight:hover::before { opacity: 1; }
+
+/* ---- Buttons: a ripple from where you pressed (ui/button.tsx) ---- */
+.ripple {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+  background: currentColor;
+  opacity: 0.28;
+  transform: scale(0);
+  animation: ripple-out 620ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+@keyframes ripple-out { to { transform: scale(1); opacity: 0; } }
+
+/* ---- Success toasts: the check draws itself ---- */
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.check-circle { stroke-dasharray: 64; stroke-dashoffset: 64; animation: draw 520ms cubic-bezier(0.65, 0, 0.35, 1) forwards; }
+.check-tick { stroke-dasharray: 20; stroke-dashoffset: 20; animation: draw 320ms cubic-bezier(0.65, 0, 0.35, 1) 380ms forwards; }
+
+/* ---- Overview: the sun turns, the stars twinkle, the AI sparkles ---- */
+.emblem-rays { animation: spin-slow 24s linear infinite; }
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+@keyframes twinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.6); } }
+.emblem-star { transform-box: fill-box; transform-origin: center; animation: twinkle 2.6s ease-in-out infinite; }
+@keyframes orb-glow { 0%, 100% { box-shadow: 0 0 0 0 rgb(74 63 209 / 0.35); } 50% { box-shadow: 0 0 0 8px rgb(74 63 209 / 0); } }
+.ai-orb { animation: orb-glow 2.8s ease-in-out infinite; }
+@keyframes sparkle { 0%, 100% { transform: rotate(0) scale(1); } 50% { transform: rotate(18deg) scale(1.15); } }
+.ai-sparkle { animation: sparkle 3.2s ease-in-out infinite; }
+.group:hover .feed-chip { transform: rotate(-8deg) scale(1.08); }
+.feed-chip { transition: transform 300ms cubic-bezier(0.22, 1.4, 0.36, 1); }
+
+/* ---- Home page: graphics rise into place as you reach them ---- */
+.reveal { opacity: 0; transform: translateY(28px) scale(0.98); transition: opacity 700ms ease, transform 900ms cubic-bezier(0.22, 1, 0.36, 1); }
+.reveal.revealed { opacity: 1; transform: none; }
+@keyframes glow-drift { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-40px, 30px) scale(1.08); } }
+.glow-drift { animation: glow-drift 14s ease-in-out infinite; }
+
 /* ---- Public home page illustrations ---- */
 @keyframes board-move {
   0%, 22% { transform: none; opacity: 1; }
@@ -286,6 +353,7 @@ tbody > tr {
 .dispatch-live { animation: live 1.8s ease-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
+  html .reveal { opacity: 1; transform: none; }
   *, *::before, *::after {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;

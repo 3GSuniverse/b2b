@@ -108,7 +108,7 @@ export function WhatsAppSettings() {
   const [was, setWas] = useState<WhatsAppStatus['status'] | null>(null);
   useEffect(() => {
     if (!wa) return;
-    if (was === 'CONNECTING' && wa.status === 'CONNECTED') toast.success(`${wa.phone} is linked`, { description: 'You can send WhatsApp campaigns now.' });
+    if (was === 'CONNECTING' && wa.status === 'CONNECTED') toast.success(`${wa.phone} is linked`, { description: 'You can send WhatsApp messages now.' });
     setWas(wa.status);
   }, [wa, was]);
 
@@ -119,7 +119,7 @@ export function WhatsAppSettings() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PanelHeader title="WhatsApp" description="Send WhatsApp campaigns from your own number. Messages appear in its chats like any you send from the phone." />
+      <PanelHeader title="WhatsApp" description="Send WhatsApp messages and broadcasts from your own number. Messages appear in its chats like any you send from the phone." />
       {trial?.whatsapp && (
         <div className="flex flex-col gap-2 rounded-[14px] border border-line bg-surface px-4 py-3.5">
           <div className="flex items-baseline justify-between gap-3 text-[13px]">
@@ -129,7 +129,7 @@ export function WhatsAppSettings() {
             </span>
           </div>
           <ProgressBar value={trial.whatsapp.sentToday} max={trial.whatsapp.perDay} label="Trial WhatsApp messages sent today" tone={trial.whatsapp.sentToday / trial.whatsapp.perDay > 0.8 ? 'warm' : 'accent'} />
-          <span className="text-xs text-muted">Bigger campaigns continue the next day by themselves, until the trial ends. Each number can be used for one trial. When the trial ends, the number is unlinked automatically.</span>
+          <span className="text-xs text-muted">Bigger broadcasts continue the next day by themselves, until the trial ends. Each number can be used for one trial. When the trial ends, the number is unlinked automatically.</span>
         </div>
       )}
       <RiskNote />
@@ -179,7 +179,7 @@ export function WhatsAppSettings() {
       </Panel>
 
       <Panel className="flex flex-col gap-5 p-5 sm:p-6">
-        <PanelHeader title="Sending pace" description="Slower is safer. Campaigns bigger than the daily limit continue the next day by themselves." />
+        <PanelHeader title="Sending pace" description="Slower is safer. Broadcasts bigger than the daily limit continue the next day by themselves." />
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Messages per day" hint={wa.trialPerDay ? `Up to ${wa.trialPerDay} during the free trial.` : 'Between 20 and 500. New numbers: start around 100.'} error={errOf('dailyLimit')}>
             {(p) => <Input {...p} type="number" min={20} max={wa.trialPerDay ?? 500} value={limits.dailyLimit} onChange={(e) => setLimits({ ...limits, dailyLimit: Number(e.target.value) })} />}
@@ -197,7 +197,7 @@ export function WhatsAppSettings() {
 
       <Panel className="flex flex-col gap-2 p-5 text-[13px] leading-relaxed text-muted sm:p-6">
         <p className="font-semibold text-ink">How it behaves</p>
-        <p>Only contacts marked “Agreed to WhatsApp messages” with a phone number get WhatsApp campaigns.</p>
+        <p>Only customers marked “Agreed to WhatsApp messages” with a phone number get WhatsApp broadcasts.</p>
         <p>If someone replies STOP, they’re unsubscribed from WhatsApp straight away and get a short confirmation.</p>
         <p>If the phone unlinks this device or WhatsApp blocks the number, sending pauses and you get an alert.</p>
       </Panel>
@@ -206,7 +206,7 @@ export function WhatsAppSettings() {
         open={confirmUnlink}
         onOpenChange={setConfirmUnlink}
         title={`Unlink ${wa.phone}?`}
-        description="WhatsApp campaigns stop until you link a number again. Your chats on the phone aren’t affected."
+        description="WhatsApp messages stop until you link a number again. Your chats on the phone aren’t affected."
         footer={
           <>
             <Button onClick={() => setConfirmUnlink(false)}>Keep linked</Button>

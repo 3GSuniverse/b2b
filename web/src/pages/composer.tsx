@@ -79,7 +79,7 @@ function NewCampaign() {
   const { tenant } = useSession();
   const [channel, setChannel] = useState<'EMAIL' | 'WHATSAPP'>('EMAIL');
   const createWa = useMutation({
-    mutationFn: () => api.post<{ campaign: Campaign }>('/api/campaigns', { name: name.trim() || 'Untitled campaign', channel: 'WHATSAPP', text: WHATSAPP_STARTER }),
+    mutationFn: () => api.post<{ campaign: Campaign }>('/api/campaigns', { name: name.trim() || 'Untitled broadcast', channel: 'WHATSAPP', text: WHATSAPP_STARTER }),
     onSuccess: ({ campaign }) => {
       qc.invalidateQueries({ queryKey: ['campaigns'] });
       nav(`/campaigns/${campaign.id}/edit`, { replace: true });
@@ -90,7 +90,7 @@ function NewCampaign() {
     mutationFn: (d: Design) => {
       const def = senders.data?.senders.find((s) => s.isDefault && s.readyToSend) ?? senders.data?.senders.find((s) => s.readyToSend);
       return api.post<{ campaign: Campaign }>('/api/campaigns', {
-        name: name.trim() || 'Untitled campaign',
+        name: name.trim() || 'Untitled broadcast',
         senderId: def?.id ?? null,
         ...(d.templateId ? { templateId: d.templateId } : { subject: d.subject, previewText: d.previewText, html: d.html }),
       });
@@ -106,14 +106,14 @@ function NewCampaign() {
       <PageHeader
         back={
           <Link to="/campaigns" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted hover:text-ink">
-            <ArrowLeft className="h-3.5 w-3.5" /> Campaigns
+            <ArrowLeft className="h-3.5 w-3.5" /> Broadcasts
           </Link>
         }
-        title="New campaign"
+        title="New broadcast"
         description="Name it, then pick a design to start from. You’ll change the words next."
       />
       <Panel className="flex flex-col gap-5 p-5 sm:p-6">
-        <Field label="Campaign name" hint="Only your team sees this.">
+        <Field label="Broadcast name" hint="Only your team sees this.">
           {(p) => <Input {...p} value={name} onChange={(e) => setName(e.target.value)} className="max-w-md" />}
         </Field>
         {tenant.features?.whatsapp && (
@@ -136,7 +136,7 @@ function NewCampaign() {
       ) : (
         <Panel className="flex flex-col items-start gap-4 p-5 sm:p-6">
           <p className="max-w-xl text-sm leading-relaxed text-muted">
-            A WhatsApp campaign is one message, sent from your linked number to everyone who agreed to WhatsApp messages. We’ll start you with a short example to edit.
+            A WhatsApp broadcast is one message, sent from your linked number to everyone who agreed to WhatsApp messages. We’ll start you with a short example to edit.
           </p>
           <Button variant="primary" loading={createWa.isPending} onClick={() => createWa.mutate()}>
             <MessageCircle className="h-4 w-4" />
@@ -239,7 +239,7 @@ function DesignEditorDialog({ open, onOpenChange, html, onChange }: { open: bool
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(17_24_22/0.4)] animate-in" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(23_21_59/0.4)] animate-in" />
         <DialogPrimitive.Content className="fixed inset-2 z-50 flex flex-col overflow-hidden rounded-[18px] bg-surface shadow-[var(--shadow-pop)] animate-pop focus:outline-none sm:inset-4">
           <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-3.5">
             <div className="flex flex-col">
@@ -431,16 +431,16 @@ function Composer({ id }: { id: string }) {
       {/* Header */}
       <header className="flex flex-col gap-4">
         <Link to="/campaigns" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
-          <ArrowLeft className="h-3.5 w-3.5" /> Campaigns
+          <ArrowLeft className="h-3.5 w-3.5" /> Broadcasts
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <label className="group relative min-w-0 flex-1">
-              <span className="sr-only">Campaign name</span>
+              <span className="sr-only">Broadcast name</span>
               <input
                 value={draft.name}
                 onChange={(e) => set({ name: e.target.value })}
-                onBlur={() => !draft.name.trim() && set({ name: 'Untitled campaign' })}
+                onBlur={() => !draft.name.trim() && set({ name: 'Untitled broadcast' })}
                 className="w-full max-w-xl truncate rounded-lg bg-transparent px-1 py-0.5 -ml-1 text-[26px] font-semibold tracking-[-0.025em] outline-none hover:bg-hover focus:bg-surface focus:shadow-[0_0_0_2px_var(--color-accent)]"
               />
             </label>

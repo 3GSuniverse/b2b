@@ -148,18 +148,18 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
     <>
       <header className="flex flex-col gap-4">
         <Link to="/campaigns" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
-          <ArrowLeft className="h-3.5 w-3.5" /> Campaigns
+          <ArrowLeft className="h-3.5 w-3.5" /> Broadcasts
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#e7f8ee] text-[#128c4a]" title="WhatsApp campaign">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#e7f8ee] text-[#128c4a]" title="WhatsApp broadcast">
               <MessageCircle className="h-[18px] w-[18px]" />
             </span>
             <input
-              aria-label="Campaign name"
+              aria-label="Broadcast name"
               value={draft.name}
               onChange={(e) => set({ name: e.target.value })}
-              onBlur={() => !draft.name.trim() && set({ name: 'Untitled campaign' })}
+              onBlur={() => !draft.name.trim() && set({ name: 'Untitled broadcast' })}
               className="-ml-1 w-full max-w-xl truncate rounded-lg bg-transparent px-1 py-0.5 text-[26px] font-semibold tracking-[-0.025em] outline-none hover:bg-hover focus:bg-surface focus:shadow-[0_0_0_2px_var(--color-accent)]"
             />
             <CampaignStatusBadge status={c.status} />

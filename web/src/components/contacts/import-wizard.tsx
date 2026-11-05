@@ -251,7 +251,7 @@ export function ImportWizard({ open, onClose, lists, onDone }: { open: boolean; 
     ) : undefined;
 
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()} title="Import contacts" description={<Steps step={step} />} width="max-w-[760px]" footer={footer}>
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()} title="Import customers" description={<Steps step={step} />} width="max-w-[760px]" footer={footer}>
       {step === 1 && <DropZone busy={previewM.isPending} onFile={(f) => previewM.mutate(f)} error={previewM.error?.message} />}
 
       {step === 2 && preview && (
@@ -379,10 +379,10 @@ export function ImportWizard({ open, onClose, lists, onDone }: { open: boolean; 
           <section className="flex flex-col gap-3">
             <label className="flex items-center justify-between gap-4 rounded-[12px] border border-line px-4 py-3 text-sm">
               <span className="flex flex-col">
-                <span className="font-medium">Update people who are already in your contacts</span>
+                <span className="font-medium">Update people who are already in your customers</span>
                 <span className="text-xs text-muted">Matched by email or phone. Empty cells never erase existing details.</span>
               </span>
-              <Switch label="Update existing contacts" checked={updateExisting} onCheckedChange={setUpdateExisting} />
+              <Switch label="Update existing customers" checked={updateExisting} onCheckedChange={setUpdateExisting} />
             </label>
             <label
               className={cn(
@@ -428,7 +428,7 @@ function ImportResult({ r }: { r: Result }) {
     );
   }
   const stats = [
-    { label: 'New contacts', value: r.imported ?? 0, tone: 'text-accent-strong' },
+    { label: 'New customers', value: r.imported ?? 0, tone: 'text-accent-strong' },
     { label: 'Updated', value: r.updated ?? 0, tone: 'text-ink' },
     { label: 'Skipped', value: r.skipped ?? 0, tone: (r.skipped ?? 0) > 0 ? 'text-warm-strong' : 'text-ink' },
   ];

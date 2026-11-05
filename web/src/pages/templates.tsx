@@ -58,7 +58,7 @@ export function TemplatesPage() {
     <>
       <PageHeader
         title="Templates"
-        description="Designs you reuse. Campaigns copy a template when they start, so editing one never changes what was already sent."
+        description="Designs you reuse. Broadcasts copy a template when they start, so editing one never changes what was already sent."
         actions={
           <Button variant="primary" onClick={() => setPicking(true)}>
             <Plus className="h-4 w-4" strokeWidth={2.4} />
@@ -124,7 +124,7 @@ export function TemplatesPage() {
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}
         title={`Delete “${deleting?.name}”?`}
-        description="Campaigns already sent with it aren’t affected."
+        description="Broadcasts already sent with it aren’t affected."
         footer={
           <>
             <Button onClick={() => setDeleting(null)}>Keep it</Button>

@@ -158,7 +158,7 @@ function TripCard({ t, onDragStart, dragging }: { t: TripSummary; onDragStart: (
       draggable
       onDragStart={(e) => onDragStart(e, t)}
       className={cn(
-        'group relative flex cursor-grab flex-col gap-2.5 rounded-[14px] border border-line bg-surface p-3.5 shadow-[0_1px_0_rgb(17_24_22/0.03)] lift active:cursor-grabbing',
+        'group relative flex cursor-grab flex-col gap-2.5 rounded-[14px] border border-line bg-surface p-3.5 shadow-[0_1px_0_rgb(23_21_59/0.03)] lift active:cursor-grabbing',
         dragging && 'opacity-40',
       )}
     >

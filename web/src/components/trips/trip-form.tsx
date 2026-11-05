@@ -52,12 +52,12 @@ function ContactPicker({ value, onChange, error }: { value: Picked | null; onCha
   }
   const results = q.data?.contacts ?? [];
   return (
-    <Field label="Find a contact" hint="Search by name, phone or email." error={error}>
+    <Field label="Find a customer" hint="Search by name, phone or email." error={error}>
       {(p) => (
         <div className="flex flex-col gap-1.5">
           <Input {...p} autoFocus leading={<Search className="h-4 w-4" />} value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Lakshmi, 98480…" />
           {search.trim().length >= 2 && (
-            <ul className="flex flex-col overflow-hidden rounded-[12px] border border-line" role="listbox" aria-label="Matching contacts">
+            <ul className="flex flex-col overflow-hidden rounded-[12px] border border-line" role="listbox" aria-label="Matching customers">
               {q.isPending && <li className="px-3 py-2.5 text-[13px] text-muted">Searching…</li>}
               {!q.isPending && !results.length && <li className="px-3 py-2.5 text-[13px] text-muted">No one matches “{search}”.</li>}
               {results.map((c) => (
@@ -307,7 +307,7 @@ export function NewTripSheet({ open, onClose, onCreated, contact }: { open: bool
               onChange={setMode}
               options={[
                 { value: 'new', label: 'New customer' },
-                { value: 'existing', label: 'From contacts' },
+                { value: 'existing', label: 'From customers' },
               ]}
             />
           </div>
@@ -329,7 +329,7 @@ export function NewTripSheet({ open, onClose, onCreated, contact }: { open: bool
               <label className="flex items-center justify-between gap-4 rounded-[12px] bg-sunken px-4 py-3 text-sm">
                 <span className="flex flex-col">
                   <span className="font-medium">Agreed to WhatsApp messages</span>
-                  <span className="text-xs text-muted">Offers and updates on WhatsApp. If they’re already a contact, nothing else about them changes.</span>
+                  <span className="text-xs text-muted">Offers and updates on WhatsApp. If they’re already a customer, nothing else about them changes.</span>
                 </span>
                 <Switch label="Agreed to WhatsApp messages" checked={cust.whatsappOptIn} disabled={!cust.phone} onCheckedChange={(v) => setCust({ ...cust, whatsappOptIn: v })} />
               </label>

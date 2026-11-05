@@ -96,7 +96,7 @@ export function ContactSheet({ id, onClose, onChanged, lists }: { id: string | n
       }),
     onSuccess: (r) => {
       after(r.contact);
-      toast.success('Contact saved');
+      toast.success('Customer saved');
     },
   });
   const setStatus = useMutation({
@@ -113,12 +113,12 @@ export function ContactSheet({ id, onClose, onChanged, lists }: { id: string | n
   const del = useMutation({
     mutationFn: () => api.del(`/api/contacts/${id}`),
     onSuccess: () => {
-      toast.success('Contact deleted');
+      toast.success('Customer deleted');
       setConfirmDelete(false);
       onChanged();
       onClose();
     },
-    onError: (e: Error) => toast.error(e instanceof ApiError && e.status === 403 ? 'Only admins can delete contacts.' : e.message),
+    onError: (e: Error) => toast.error(e instanceof ApiError && e.status === 403 ? 'Only admins can delete customers.' : e.message),
   });
 
   const dirty = !!c && !!draft && JSON.stringify(toDraft(c)) !== JSON.stringify(draft);
@@ -196,7 +196,7 @@ export function ContactSheet({ id, onClose, onChanged, lists }: { id: string | n
                   <p className="flex gap-2 text-[13px] leading-relaxed text-muted">
                     <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-warm" aria-hidden />
                     {c.emailStatus === 'BOUNCED'
-                      ? 'This address doesn’t accept mail, so it’s blocked for good. If they gave you a new address, add it as a new contact.'
+                      ? 'This address doesn’t accept mail, so it’s blocked for good. If they gave you a new address, add it as a new customer.'
                       : 'This person marked your email as spam. They’re blocked for good to protect your domain’s reputation.'}
                   </p>
                 )}
@@ -301,7 +301,7 @@ export function ContactSheet({ id, onClose, onChanged, lists }: { id: string | n
       <Dialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title="Delete this contact?"
+        title="Delete this customer?"
         description="Their details and history are erased. If they unsubscribed or bounced, they stay blocked so they can't be emailed by mistake."
         footer={
           <>

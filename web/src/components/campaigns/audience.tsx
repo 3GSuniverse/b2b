@@ -72,7 +72,7 @@ export function AudienceEditor({ value, onChange, channel = 'EMAIL' }: { value: 
       <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Who gets this">
         {(
           [
-            ['everyone', 'Everyone who’s subscribed', channel === 'WHATSAPP' ? 'Everyone who agreed to WhatsApp messages' : 'All contacts who can receive email'],
+            ['everyone', 'Everyone who’s subscribed', channel === 'WHATSAPP' ? 'Everyone who agreed to WhatsApp messages' : 'All customers who can receive email'],
             ['lists', 'People in lists', 'Pick one or more lists'],
           ] as const
         ).map(([m, title, sub]) => (
@@ -100,7 +100,7 @@ export function AudienceEditor({ value, onChange, channel = 'EMAIL' }: { value: 
 
       {mode === 'lists' && (
         <div className="flex flex-col divide-y divide-line-soft rounded-[12px] border border-line">
-          {lists.data?.lists.length === 0 && <p className="px-4 py-3 text-sm text-muted">You don’t have any lists yet. Create one in Contacts.</p>}
+          {lists.data?.lists.length === 0 && <p className="px-4 py-3 text-sm text-muted">You don’t have any lists yet. Create one in Customers.</p>}
           {lists.data?.lists.map((l) => {
             const on = listIds.includes(l.id);
             return (

@@ -117,7 +117,7 @@ export function ContactsPage() {
       setConfirmDelete(false);
       refresh();
     },
-    onError: (e: Error) => toast.error(e instanceof ApiError && e.status === 403 ? 'Only admins can delete contacts.' : e.message),
+    onError: (e: Error) => toast.error(e instanceof ApiError && e.status === 403 ? 'Only admins can delete customers.' : e.message),
   });
 
   const s = stats.data?.stats;
@@ -142,8 +142,8 @@ export function ContactsPage() {
   return (
     <>
       <PageHeader
-        title="Contacts"
-        description="Everyone you can email. Unsubscribes, bounces and spam reports are kept here so they're never emailed again."
+        title="Customers"
+        description="Everyone your agency talks to, by email and WhatsApp. Unsubscribes and bounces are kept here so they're never messaged again."
         actions={
           <>
             <Button onClick={() => setParam({ import: '1' })}>
@@ -152,7 +152,7 @@ export function ContactsPage() {
             </Button>
             <Button variant="primary" onClick={() => setParam({ add: '1' })}>
               <UserPlus className="h-4 w-4" />
-              Add contact
+              Add customer
             </Button>
           </>
         }
@@ -176,7 +176,7 @@ export function ContactsPage() {
         <Panel>
           <EmptyState
             icon={<Users />}
-            title="No contacts yet"
+            title="No customers yet"
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 <Button variant="primary" onClick={() => setParam({ import: '1' })}>
@@ -202,7 +202,7 @@ export function ContactsPage() {
                 placeholder="Search name, email or phone"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                aria-label="Search contacts"
+                aria-label="Search customers"
                 className="h-10"
               />
             </div>
@@ -333,7 +333,7 @@ export function ContactsPage() {
               </tbody>
             </table>
             {q.data && rows.length === 0 && (
-              <EmptyState icon={<Search />} title="No contacts match">
+              <EmptyState icon={<Search />} title="No customers match">
                 Try a different name, or clear the filters.
               </EmptyState>
             )}
@@ -363,7 +363,7 @@ export function ContactsPage() {
       {/* Floating bulk-action bar */}
       {selected.size > 0 && (
         <div className="fixed inset-x-0 bottom-5 z-40 flex justify-center px-4 animate-pop">
-          <div role="toolbar" aria-label="Selected contacts" className="flex items-center gap-1 rounded-[14px] bg-ink p-1.5 pl-4 text-white shadow-[var(--shadow-pop)]">
+          <div role="toolbar" aria-label="Selected customers" className="flex items-center gap-1 rounded-[14px] bg-ink p-1.5 pl-4 text-white shadow-[var(--shadow-pop)]">
             <span className="tnum mr-2 text-sm font-semibold">{n(selected.size)} selected</span>
             <Menu
               align="start"

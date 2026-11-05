@@ -167,7 +167,7 @@ export function ReportPage() {
     <>
       <header className="flex flex-col gap-4">
         <Link to="/campaigns" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
-          <ArrowLeft className="h-3.5 w-3.5" /> Campaigns
+          <ArrowLeft className="h-3.5 w-3.5" /> Broadcasts
         </Link>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-2">
@@ -283,7 +283,7 @@ export function ReportPage() {
               </div>
             ) : (
               <EmptyState icon={<MailX />} title={s.bounced ? `${n(s.bounced)} bounced` : 'Everything arrived'}>
-                {s.bounced ? 'Details show up here when the receiving server explains why.' : 'No bounces or spam reports for this campaign.'}
+                {s.bounced ? 'Details show up here when the receiving server explains why.' : 'No bounces or spam reports for this broadcast.'}
               </EmptyState>
             )}
             {(s.suppressed > 0 || s.failed > 0) && (

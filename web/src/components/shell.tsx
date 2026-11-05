@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock3, FileText, LayoutDashboard, LogOut, Menu as MenuIcon, MessageCircle, Plane, Plus, Search, Send, Settings, Users } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ChevronDown, Clock3, FileText, LayoutDashboard, LogOut, Megaphone, Menu as MenuIcon, MessageCircle, MessageSquarePlus, Plane, Plus, Repeat2, Search, Settings, UserPlus, Users } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { BRAND } from '@/lib/brand';
@@ -15,14 +15,15 @@ import { LinkButton } from './ui/button';
 import { Avatar, Badge, Kbd, ProgressBar } from './ui/display';
 import { Menu, MenuItem, MenuSeparator, Sheet } from './ui/overlay';
 
-const NAV = [
-  { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
-  { to: '/trips', label: 'Trips', icon: Plane },
-  { to: '/campaigns', label: 'Campaigns', icon: Send },
-  { to: '/automations', label: 'Automations', icon: Clock3 },
-  { to: '/contacts', label: 'Contacts', icon: Users },
-  { to: '/templates', label: 'Templates', icon: FileText },
-  { to: '/settings', label: 'Settings', icon: Settings },
+// The sidebar: the agency's day first, then everything about talking to customers
+const NAV: { to: string; label: string; icon: typeof Plane; end?: boolean; group?: string; anim: string }[] = [
+  { to: '/', label: 'Overview', icon: LayoutDashboard, end: true, anim: 'nav-pop' },
+  { to: '/trips', label: 'Trips', icon: Plane, anim: 'nav-fly' },
+  { to: '/contacts', label: 'Customers', icon: Users, anim: 'nav-hop' },
+  { to: '/campaigns', label: 'Broadcasts', icon: Megaphone, group: 'Communication', anim: 'nav-shout' },
+  { to: '/automations', label: 'Automations', icon: Clock3, anim: 'nav-tick' },
+  { to: '/templates', label: 'Templates', icon: FileText, anim: 'nav-flip' },
+  { to: '/settings', label: 'Settings', icon: Settings, anim: 'nav-spin' },
 ];
 
 /** The Dhrona mark: a D of target rings with an arrow in the centre. On hover the arrow strikes. */
@@ -63,7 +64,21 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
       lit ? 'text-nav-active-ink' : 'text-nav-ink hover:bg-nav-hover',
       lit && !box && 'bg-nav-active',
     );
-  const icon = 'h-[18px] w-[18px] transition-transform duration-300 ease-[cubic-bezier(0.22,1.4,0.36,1)] group-hover/nav:scale-110 group-active/nav:scale-95';
+  const icon = 'h-[18px] w-[18px] shrink-0';
+  const whatsappItem = whatsapp ? (
+        <NavLink to="/settings/whatsapp" onClick={onNavigate} data-lit={onWhatsapp} className={item(onWhatsapp)}>
+          <MessageCircle className={cn(icon, 'nav-wiggle', onWhatsapp && 'text-highlight')} aria-hidden />
+          WhatsApp
+        </NavLink>
+      ) : (
+        <span className="flex h-10 items-center justify-between rounded-[10px] px-3 text-sm font-medium text-nav-muted opacity-70" aria-disabled>
+          <span className="flex items-center gap-3">
+            <MessageCircle className="h-[18px] w-[18px]" aria-hidden />
+            WhatsApp
+          </span>
+          <Badge tone="orange" className="px-2 text-[11px]">Soon</Badge>
+        </span>
+      );
   return (
     <nav ref={ref} aria-label="Main" className="relative flex flex-col gap-0.5">
       {box && (
@@ -75,31 +90,26 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
           <span className="absolute bottom-2.5 left-0 top-2.5 w-[3px] rounded-r-full bg-highlight" />
         </span>
       )}
-      {NAV.map(({ to, label, icon: Icon, end }) => {
+      {NAV.map(({ to, label, icon: Icon, end, group, anim }) => {
         const active = end ? pathname === to : pathname === to || pathname.startsWith(`${to}/`);
         // WhatsApp has its own item, so Settings stays unlit there
         const lit = active && !(to === '/settings' && onWhatsapp);
         return (
-          <NavLink key={to} to={to} end={end} onClick={onNavigate} data-lit={lit} className={item(lit)}>
-            <Icon className={cn(icon, lit && 'text-highlight')} aria-hidden />
-            {label}
-          </NavLink>
+          <Fragment key={to}>
+            {group && <span className="px-3 pb-1 pt-4 text-[12px] font-semibold text-nav-muted">{group}</span>}
+            {to === '/settings' && (
+              <>
+                {whatsappItem}
+                <span className="mx-3 my-3 h-px bg-nav-line" aria-hidden />
+              </>
+            )}
+            <NavLink to={to} end={end} onClick={onNavigate} data-lit={lit} className={item(lit)}>
+              <Icon className={cn(icon, anim, lit && 'text-highlight')} aria-hidden />
+              {label}
+            </NavLink>
+          </Fragment>
         );
       })}
-      {whatsapp ? (
-        <NavLink to="/settings/whatsapp" onClick={onNavigate} data-lit={onWhatsapp} className={item(onWhatsapp)}>
-          <MessageCircle className={cn(icon, onWhatsapp && 'text-highlight')} aria-hidden />
-          WhatsApp
-        </NavLink>
-      ) : (
-        <span className="flex h-10 items-center justify-between rounded-[10px] px-3 text-sm font-medium text-nav-muted opacity-70" aria-disabled>
-          <span className="flex items-center gap-3">
-            <MessageCircle className="h-[18px] w-[18px]" aria-hidden />
-            WhatsApp
-          </span>
-          <Badge tone="orange" className="px-2 text-[11px]">Soon</Badge>
-        </span>
-      )}
     </nav>
   );
 }
@@ -174,6 +184,43 @@ function Sidebar() {
   );
 }
 
+/** One button for everything new: an enquiry, a message to many, an automatic message, a customer. */
+function CreateMenu() {
+  const nav = useNavigate();
+  const items = [
+    { icon: <MessageSquarePlus />, label: 'New enquiry', note: 'A trip someone asked about', to: '/trips?new=1' },
+    { icon: <Megaphone />, label: 'Broadcast', note: 'One message to many customers', to: '/campaigns/new' },
+    { icon: <Repeat2 />, label: 'Automatic message', note: 'Birthdays, anniversaries, any date', to: '/automations?new=1' },
+    { icon: <UserPlus />, label: 'Customer', note: 'Add someone to your address book', to: '/contacts?add=1' },
+  ];
+  return (
+    <Menu
+      trigger={
+        <button
+          type="button"
+          className="group/create inline-flex h-11 items-center gap-2 rounded-[var(--radius-button)] bg-primary px-3 text-sm font-semibold text-on-primary shadow-[inset_0_-1px_0_rgb(0_0_0/0.2)] transition-[background,transform,box-shadow] duration-200 hover:bg-primary-hover hover:shadow-[0_6px_16px_-6px_var(--color-primary)] active:scale-[0.97] data-[state=open]:bg-primary-hover sm:px-4"
+          aria-label="Create"
+        >
+          <Plus className="h-[18px] w-[18px] transition-transform duration-300 ease-[cubic-bezier(0.22,1.4,0.36,1)] group-data-[state=open]/create:rotate-45" strokeWidth={2.4} />
+          <span className="hidden sm:inline">Create</span>
+          <ChevronDown className="hidden h-4 w-4 opacity-70 transition-transform duration-200 group-data-[state=open]/create:rotate-180 sm:inline" />
+        </button>
+      }
+    >
+      <div className="stagger flex w-72 flex-col">
+        {items.map((it) => (
+          <MenuItem key={it.to} icon={it.icon} onSelect={() => nav(it.to)}>
+            <span className="flex flex-col">
+              <span className="font-semibold">{it.label}</span>
+              <span className="text-xs text-muted">{it.note}</span>
+            </span>
+          </MenuItem>
+        ))}
+      </div>
+    </Menu>
+  );
+}
+
 function TopBar({ onSearch, onMenu }: { onSearch: () => void; onMenu: () => void }) {
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   return (
@@ -187,20 +234,14 @@ function TopBar({ onSearch, onMenu }: { onSearch: () => void; onMenu: () => void
         className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[var(--radius-control)] border border-line bg-surface px-3.5 text-left text-sm text-faint hover:border-[#cfcde6] sm:max-w-80"
       >
         <Search className="h-4 w-4 shrink-0 text-muted" aria-hidden />
-        <span className="min-w-0 flex-1 truncate">Search contacts, campaigns…</span>
+        <span className="min-w-0 flex-1 truncate">Search customers, trips, broadcasts…</span>
         <span className="hidden sm:inline">
           <Kbd>{isMac ? '⌘' : 'Ctrl'} K</Kbd>
         </span>
       </button>
       <div className="ml-auto flex items-center gap-2.5">
         <NotificationsButton />
-        <LinkButton to="/campaigns/new" variant="primary" size="icon" className="h-11 w-11 sm:hidden" aria-label="New campaign">
-          <Plus className="h-[18px] w-[18px]" strokeWidth={2.4} />
-        </LinkButton>
-        <LinkButton to="/campaigns/new" variant="primary" className="hidden sm:inline-flex">
-          <Plus className="h-4 w-4" strokeWidth={2.4} />
-          New campaign
-        </LinkButton>
+        <CreateMenu />
       </div>
     </div>
   );
@@ -217,7 +258,7 @@ export function TrialBanner() {
       <div role="alert" className="flex flex-wrap items-center gap-4 rounded-[14px] bg-ink px-5 py-4 text-white">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <strong className="text-[15px] font-semibold">Your free trial has ended</strong>
-          <span className="text-[13px] text-white/70">Sending is off and WhatsApp has been unlinked. Your contacts, templates and reports are safe. Upgrade to pick up where you left off.</span>
+          <span className="text-[13px] text-white/70">Sending is off and WhatsApp has been unlinked. Your customers, trips, templates and reports are safe. Upgrade to pick up where you left off.</span>
         </div>
         <a href={upgrade} className="inline-flex h-10 items-center rounded-[var(--radius-control)] bg-white px-4 text-sm font-semibold text-ink hover:bg-white/90">
           Upgrade

@@ -28,7 +28,7 @@ export function Dialog({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(17_24_22/0.32)] backdrop-blur-[2px] animate-in data-[state=closed]:animate-out" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(23_21_59/0.32)] backdrop-blur-[2px] animate-in data-[state=closed]:animate-out" />
         <DialogPrimitive.Content
           className={cn(
             'fixed left-1/2 top-1/2 z-50 flex max-h-[min(88vh,760px)] w-[calc(100vw-32px)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-[var(--radius-panel)] bg-surface shadow-[var(--shadow-pop)] animate-pop data-[state=closed]:animate-pop-out focus:outline-none',
@@ -83,7 +83,7 @@ export function Sheet({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(17_24_22/0.24)] animate-in data-[state=closed]:animate-out" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(23_21_59/0.24)] animate-in data-[state=closed]:animate-out" />
         <DialogPrimitive.Content
           className={cn(
             'fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l shadow-[var(--shadow-pop)] animate-sheet data-[state=closed]:animate-sheet-out focus:outline-none',
