@@ -17,6 +17,20 @@ export function EmailFrame({ html, width, title = 'Email preview', minHeight = 4
     const doc = ref.current?.contentDocument;
     if (doc?.body) setHeight(Math.max(minHeight, doc.documentElement.scrollHeight));
   }, [minHeight]);
+  // A click on a link must never navigate the preview itself: a real web address opens in a new
+  // tab, and a placeholder like [LINK] does nothing (it would otherwise load a page that refuses to be framed).
+  const onLoad = useCallback(() => {
+    measure();
+    const doc = ref.current?.contentDocument;
+    if (!doc) return;
+    doc.addEventListener('click', (e) => {
+      const a = (e.target as Element | null)?.closest?.('a');
+      if (!a) return;
+      e.preventDefault();
+      const href = a.getAttribute('href') ?? '';
+      if (/^(https?:|mailto:|tel:)/i.test(href)) window.open(href, '_blank', 'noopener,noreferrer');
+    });
+  }, [measure]);
   useEffect(() => {
     const t = setTimeout(measure, 120);
     return () => clearTimeout(t);
@@ -27,7 +41,7 @@ export function EmailFrame({ html, width, title = 'Email preview', minHeight = 4
       title={title}
       sandbox="allow-same-origin allow-popups"
       srcDoc={html}
-      onLoad={measure}
+      onLoad={onLoad}
       style={{ width, height }}
       className="mx-auto block max-w-full border-0 bg-white"
     />
