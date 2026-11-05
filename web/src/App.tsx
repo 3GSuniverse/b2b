@@ -8,6 +8,11 @@ import { NotFoundPage } from './pages/not-found';
 const HomePage = lazy(() => import('./pages/public/home').then((m) => ({ default: m.HomePage })));
 const PrivacyPage = lazy(() => import('./pages/public/privacy').then((m) => ({ default: m.PrivacyPage })));
 const TermsPage = lazy(() => import('./pages/public/terms').then((m) => ({ default: m.TermsPage })));
+const PricingPage = lazy(() => import('./pages/public/pricing').then((m) => ({ default: m.PricingPage })));
+const RefundsPage = lazy(() => import('./pages/public/policies').then((m) => ({ default: m.RefundsPage })));
+const DeliveryPage = lazy(() => import('./pages/public/policies').then((m) => ({ default: m.DeliveryPage })));
+const ContactPage = lazy(() => import('./pages/public/policies').then((m) => ({ default: m.ContactPage })));
+const AboutPage = lazy(() => import('./pages/public/policies').then((m) => ({ default: m.AboutPage })));
 
 const OverviewPage = lazy(() => import('./pages/overview').then((m) => ({ default: m.OverviewPage })));
 const ContactsPage = lazy(() => import('./pages/contacts').then((m) => ({ default: m.ContactsPage })));
@@ -43,6 +48,11 @@ export function App() {
     <Routes>
       <Route path="/privacy" element={<Suspense fallback={null}><PrivacyPage /></Suspense>} />
       <Route path="/terms" element={<Suspense fallback={null}><TermsPage /></Suspense>} />
+      <Route path="/pricing" element={<Suspense fallback={null}><PricingPage /></Suspense>} />
+      <Route path="/refunds" element={<Suspense fallback={null}><RefundsPage /></Suspense>} />
+      <Route path="/delivery" element={<Suspense fallback={null}><DeliveryPage /></Suspense>} />
+      <Route path="/contact" element={<Suspense fallback={null}><ContactPage /></Suspense>} />
+      <Route path="/about" element={<Suspense fallback={null}><AboutPage /></Suspense>} />
       <Route element={<AuthShell />}>
         <Route path="/signin" element={<SignInPage />} />
         <Route path="/signup" element={<SignUpPage />} />

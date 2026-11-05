@@ -23,6 +23,9 @@ export function PublicHeader({ sections }: { sections?: { href: string; label: s
         </nav>
       )}
       <nav aria-label="Account" className="flex items-center gap-2">
+        <Link to="/pricing" className="hidden rounded-full px-3.5 py-2 text-sm font-semibold text-ink-2 transition-colors hover:bg-surface hover:text-ink sm:inline-flex">
+          Pricing
+        </Link>
         <LinkButton to="/signin" variant="ghost" size="sm">
           Sign in
         </LinkButton>
@@ -34,24 +37,42 @@ export function PublicHeader({ sections }: { sections?: { href: string; label: s
   );
 }
 
+const FOOTER = [
+  { to: '/pricing', label: 'Pricing' },
+  { to: '/about', label: 'About' },
+  { to: '/contact', label: 'Contact' },
+  { to: '/privacy', label: 'Privacy Policy' },
+  { to: '/terms', label: 'Terms of Service' },
+  { to: '/refunds', label: 'Cancellation and refunds' },
+  { to: '/delivery', label: 'Delivery' },
+];
+
 export function PublicFooter() {
   return (
     <footer className="border-t border-line">
-      <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-8 text-[13px] text-muted sm:px-6 lg:px-8">
-        <span>
-          {BRAND.name} is run by {BRAND.operator}.
-        </span>
-        <nav aria-label="Legal" className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <Link to="/privacy" className="font-medium hover:text-ink">
-            Privacy Policy
-          </Link>
-          <Link to="/terms" className="font-medium hover:text-ink">
-            Terms of Service
-          </Link>
-          <a href={`mailto:${BRAND.supportEmail}`} className="font-medium hover:text-ink">
-            {BRAND.supportEmail}
-          </a>
+      <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-4 px-4 py-8 text-[13px] text-muted sm:px-6 lg:px-8">
+        <nav aria-label="Site" className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          {FOOTER.map((l) => (
+            <Link key={l.to} to={l.to} className="font-medium hover:text-ink">
+              {l.label}
+            </Link>
+          ))}
         </nav>
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+          <span>
+            {BRAND.name} is run by {BRAND.operator}.
+          </span>
+          <span className="flex flex-wrap gap-x-5 gap-y-1">
+            <a href={`mailto:${BRAND.supportEmail}`} className="font-medium hover:text-ink">
+              {BRAND.supportEmail}
+            </a>
+            {BRAND.phone && (
+              <a href={`tel:${BRAND.phone.replace(/\s/g, '')}`} className="font-medium hover:text-ink">
+                {BRAND.phone}
+              </a>
+            )}
+          </span>
+        </div>
       </div>
     </footer>
   );
