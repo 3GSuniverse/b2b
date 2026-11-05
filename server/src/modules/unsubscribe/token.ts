@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { env } from '../../config/env.js';
+import { customerLink } from '../../lib/links.js';
 
 // Unsubscribe links carry the message id plus an HMAC, so nobody can
 // unsubscribe someone else by guessing ids. No database lookup needed to verify.
@@ -24,5 +25,5 @@ export function verifyUnsubscribeToken(token: string): string | null {
 }
 
 export function unsubscribeUrl(messageId: string): string {
-  return `${env.PUBLIC_URL.replace(/\/$/, '')}/u/${createUnsubscribeToken(messageId)}`;
+  return customerLink(`/u/${createUnsubscribeToken(messageId)}`);
 }

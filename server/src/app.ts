@@ -34,6 +34,7 @@ import { senderRoutes } from './modules/senders/routes.js';
 import { unsubscribeRoutes } from './modules/unsubscribe/routes.js';
 import { webhookRoutes, type WebhookOptions } from './modules/webhooks/routes.js';
 import { webRoutes } from './modules/web/routes.js';
+import { blockedOnLinksHost, NOT_A_LINK_PAGE } from './lib/links.js';
 import { whatsappRoutes } from './modules/whatsapp/routes.js';
 
 export interface AppOptions {
@@ -87,6 +88,13 @@ export async function buildApp(opts: AppOptions = {}) {
 
   // CSRF protection for the API: browsers can't send a cross-site JSON body without
   // a CORS preflight, so requiring JSON on every write blocks forged form posts.
+  // The neutral links address serves customer pages only: no app, no sign-in, no branding
+  app.addHook('onRequest', async (req, reply) => {
+    if (blockedOnLinksHost(req.headers.host, req.url)) {
+      return reply.code(404).header('cache-control', 'no-store').type('text/html; charset=utf-8').send(NOT_A_LINK_PAGE);
+    }
+  });
+
   app.addHook('onRequest', async (req) => {
     if (!req.url.startsWith('/api/') || !MUTATING.has(req.method)) return;
     const hasBody = Number(req.headers['content-length'] ?? 0) > 0 || req.headers['transfer-encoding'] !== undefined;

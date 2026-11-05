@@ -8,6 +8,9 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
   PUBLIC_URL: z.string().url(),
+  // Optional: a neutral address for the links customers get (payment, quote, receipt,
+  // unsubscribe), so agencies' customers never see the platform's own domain
+  LINKS_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()), // an empty line in .env means not set
   APP_SECRET: z.string().min(16, 'APP_SECRET must be at least 16 characters'),
 
   DATABASE_URL: z.string().url(),

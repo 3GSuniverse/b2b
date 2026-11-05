@@ -10,6 +10,7 @@ import { trialEnded, whatsappWebAllowed } from '../plans/entitlements.js';
 import { addDays, formatInr, localDate, tripMoney, type DueInput } from '../trips/money.js';
 import { getSession } from '../whatsapp/service.js';
 import { resolvedSettings } from './settings.js';
+import { customerLink } from '../../lib/links.js';
 
 /** Reminders go out from this hour, company time — never at midnight. */
 export const REMINDER_HOUR = 10;
@@ -17,10 +18,10 @@ export const REMINDER_HOUR = 10;
 const OVERDUE_WINDOW_DAYS = 7;
 
 export function payPageUrl(token: string) {
-  return `${env.PUBLIC_URL.replace(/\/$/, '')}/p/${token}`;
+  return customerLink(`/p/${token}`);
 }
 export function receiptUrl(token: string) {
-  return `${env.PUBLIC_URL.replace(/\/$/, '')}/r/${token}`;
+  return customerLink(`/r/${token}`);
 }
 
 function localHour(timezone: string, now: Date) {

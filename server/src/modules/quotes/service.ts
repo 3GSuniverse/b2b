@@ -8,6 +8,7 @@ import { enqueueEmails } from '../../queues/index.js';
 import { addDays, formatInr, localDate, rupeesToPaise, suggestSchedule } from '../trips/money.js';
 import { notify } from '../notifications/service.js';
 import type { Actor } from '../trips/service.js';
+import { customerLink } from '../../lib/links.js';
 
 // ---------------------------------------------------------------------
 //  Money
@@ -29,7 +30,7 @@ export function quoteTotals(lines: QuoteLine[], discount: number, travellers: nu
 }
 
 export function quoteUrl(token: string) {
-  return `${env.PUBLIC_URL.replace(/\/$/, '')}/q/${token}`;
+  return customerLink(`/q/${token}`);
 }
 
 // ---------------------------------------------------------------------

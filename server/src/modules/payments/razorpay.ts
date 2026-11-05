@@ -10,6 +10,7 @@ import { notify } from '../notifications/service.js';
 import { formatInr, localDate, tripMoney, type DueInput } from '../trips/money.js';
 import { recordPayment } from '../trips/service.js';
 import { resolvedSettings } from './settings.js';
+import { customerLink } from '../../lib/links.js';
 
 /**
  * Online payments through the agency's OWN Razorpay account: we create a payment link with
@@ -105,7 +106,7 @@ export async function razorpayRoutes(app: FastifyInstance) {
           referenceId: `T${trip.number}-${Date.now().toString(36)}`,
           customer: { name: trip.customerName, ...(trip.contact?.phone ? { contact: trip.contact.phone } : {}), ...(trip.contact?.email ? { email: trip.contact.email } : {}) },
           notes: { trip_id: trip.id, tenant_id: tenant.id },
-          callbackUrl: `${env.PUBLIC_URL.replace(/\/$/, '')}${back}?paid=1`,
+          callbackUrl: customerLink(`${back}?paid=1`),
         });
         return reply.redirect(link.shortUrl, 303);
       } catch (err) {
