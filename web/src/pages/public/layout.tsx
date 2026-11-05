@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '@/components/shell';
 import { LinkButton } from '@/components/ui/button';
@@ -8,6 +8,11 @@ import { cn } from '@/lib/cn';
 /** Pages anyone can open without signing in: the home page, Privacy Policy and Terms. */
 
 export function PublicHeader({ sections }: { sections?: { href: string; label: string }[] }) {
+  // The server sends public pages already drawn (for checkers that don't run JavaScript).
+  // Once the live page is here, drop that copy before the browser paints, so nothing shows twice.
+  useLayoutEffect(() => {
+    document.getElementById('prerender')?.remove();
+  }, []);
   return (
     <header className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
       <Link to="/" aria-label={`${BRAND.name} home`}>

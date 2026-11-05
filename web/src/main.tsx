@@ -23,6 +23,9 @@ if (typeof window !== 'undefined') {
   );
 }
 
+// A page the server sent already drawn is replaced by the live one (see PublicHeader); never leave it behind
+setTimeout(() => document.getElementById('prerender')?.remove(), 8000);
+
 /** The success toast's check mark, drawn stroke by stroke */
 const DrawnCheck = (
   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden>

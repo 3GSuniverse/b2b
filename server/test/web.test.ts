@@ -11,6 +11,9 @@ const root = mkdtempSync(path.join(tmpdir(), 'web-dist-'));
 mkdirSync(path.join(root, 'assets'));
 writeFileSync(path.join(root, 'index.html'), '<!doctype html><div id="root"></div><script type="module" src="/assets/app-abc123.js"></script>');
 writeFileSync(path.join(root, 'assets', 'app-abc123.js'), 'console.log(1)');
+mkdirSync(path.join(root, 'prerendered'));
+writeFileSync(path.join(root, 'prerendered', 'pricing.html'), '<!doctype html><div id="prerender"><h1>Simple pricing</h1></div><div id="root"></div>');
+writeFileSync(path.join(root, 'prerendered', 'index.html'), '<!doctype html><div id="prerender"><h1>Home</h1></div><div id="root"></div>');
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 beforeAll(async () => {
@@ -48,6 +51,17 @@ describe('serving the dashboard', () => {
     expect(r.statusCode).toBe(404);
     expect(r.json().error).toBe('not_found');
     expect((await app.inject({ method: 'GET', url: '/assets/missing.js' })).statusCode).toBe(404);
+  });
+
+  it('public pages arrive as real HTML, even to checkers that don’t ask for HTML', async () => {
+    const r = await app.inject({ method: 'GET', url: '/pricing', headers: { accept: '*/*' } });
+    expect(r.statusCode).toBe(200);
+    expect(r.body).toContain('Simple pricing');
+    // no Accept header at all, like many bots
+    expect((await app.inject({ method: 'GET', url: '/campaigns' })).body).toContain('id="root"');
+    // signed in: "/" is the dashboard, not the public home page
+    expect((await app.inject({ method: 'GET', url: '/' })).body).toContain('Home');
+    expect((await app.inject({ method: 'GET', url: '/', headers: { cookie: 'sid=abc' } })).body).not.toContain('Home');
   });
 
   it('the page runs only our own scripts and can’t be framed', async () => {

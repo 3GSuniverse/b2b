@@ -18,3 +18,4 @@ client_secret*.json
 # Production server files (deploy/drona creates these on the VM)
 deploy/secrets/
 deploy/backups/
+dist-ssr/

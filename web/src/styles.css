@@ -402,3 +402,6 @@ tbody > tr {
     transition-duration: 1ms !important;
   }
 }
+
+/* The server's already-drawn copy of a public page: nothing waits for scrolling to appear */
+#prerender .reveal { opacity: 1; transform: none; }

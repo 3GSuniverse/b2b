@@ -6,6 +6,8 @@ import path from 'node:path';
 
 /** Paths the API owns. Anything else that asks for HTML is a dashboard page. */
 const SERVER_PREFIXES = ['/api/', '/u/', '/p/', '/q/', '/r/', '/webhooks/', '/health'];
+/** Pages anyone can read without signing in, rendered to HTML when the dashboard is built */
+const PUBLIC_PAGES = ['index', 'pricing', 'about', 'contact', 'privacy', 'terms', 'refunds', 'delivery'];
 
 /**
  * Serves the built dashboard (web/dist) from the same origin as the API, so
@@ -30,10 +32,27 @@ async function web(app: FastifyInstance, opts: { root?: string }) {
     });
   }
 
+  // Public pages already rendered to HTML at build time (web/scripts/prerender.mjs)
+  const prerendered = new Map<string, string>();
+  for (const name of PUBLIC_PAGES) {
+    const file = `prerendered/${name}.html`;
+    if (existsSync(path.join(root, file))) prerendered.set(name === 'index' ? '/' : `/${name}`, file);
+  }
+
   app.setNotFoundHandler((req, reply) => {
-    const wantsPage = (req.method === 'GET' || req.method === 'HEAD') && !SERVER_PREFIXES.some((p) => req.url.startsWith(p)) && String(req.headers.accept ?? '').includes('text/html');
+    const pathname = req.url.split('?')[0]!.replace(/\/+$/, '') || '/';
+    // A page, not a missing file: checkers and crawlers often don't say they want HTML, so don't require it
+    const looksLikeFile = /\.[a-z0-9]{1,8}$/i.test(pathname);
+    const wantsPage =
+      (req.method === 'GET' || req.method === 'HEAD') &&
+      !SERVER_PREFIXES.some((p) => req.url.startsWith(p)) &&
+      (!looksLikeFile || String(req.headers.accept ?? '').includes('text/html'));
     if (enabled && wantsPage) {
-      return reply.header('cache-control', 'no-cache').type('text/html').sendFile('index.html', { cacheControl: false });
+      // Signed-in people opening "/" get their dashboard, not the public home page
+      const signedIn = /(?:^|;\s*)sid=/.test(String(req.headers.cookie ?? ''));
+      const file = prerendered.get(pathname);
+      const send = file && !(pathname === '/' && signedIn) ? file : 'index.html';
+      return reply.header('cache-control', 'no-cache').type('text/html').sendFile(send, { cacheControl: false });
     }
     return reply.code(404).send({ error: 'not_found', message: 'Not found' });
   });
