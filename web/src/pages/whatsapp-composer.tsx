@@ -270,7 +270,7 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
             ) : (
               <div className="flex flex-col items-start gap-3">
                 <p className="text-sm text-muted">Link the WhatsApp number you want to send from. It takes a minute: scan a QR code with the phone.</p>
-                <LinkButton to="/settings/whatsapp" variant="primary" size="sm">
+                <LinkButton to="/whatsapp" variant="primary" size="sm">
                   Link WhatsApp
                 </LinkButton>
               </div>

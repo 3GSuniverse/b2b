@@ -55,7 +55,7 @@ export function Logo({ className }: { className?: string }) {
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   const whatsapp = !!useSession().tenant.features?.whatsapp;
   const { pathname } = useLocation();
-  const onWhatsapp = whatsapp && pathname.startsWith('/settings/whatsapp');
+  const onWhatsapp = pathname.startsWith('/whatsapp');
   // The green highlight slides from item to item instead of jumping
   const { ref, box, animate } = useSlidingIndicator<HTMLElement>('[data-lit=true]', 'y', [pathname, whatsapp]);
   const item = (lit: boolean) =>
@@ -66,7 +66,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
     );
   const icon = 'h-[18px] w-[18px] shrink-0';
   const whatsappItem = whatsapp ? (
-        <NavLink to="/settings/whatsapp" onClick={onNavigate} data-lit={onWhatsapp} className={item(onWhatsapp)}>
+        <NavLink to="/whatsapp" onClick={onNavigate} data-lit={onWhatsapp} className={item(onWhatsapp)}>
           <MessageCircle className={cn(icon, 'nav-wiggle', onWhatsapp && 'text-highlight')} aria-hidden />
           WhatsApp
         </NavLink>
@@ -92,8 +92,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
       )}
       {NAV.map(({ to, label, icon: Icon, end, group, anim }) => {
         const active = end ? pathname === to : pathname === to || pathname.startsWith(`${to}/`);
-        // WhatsApp has its own item, so Settings stays unlit there
-        const lit = active && !(to === '/settings' && onWhatsapp);
+        const lit = active;
         return (
           <Fragment key={to}>
             {group && <span className="px-3 pb-1 pt-4 text-[12px] font-semibold text-nav-muted">{group}</span>}

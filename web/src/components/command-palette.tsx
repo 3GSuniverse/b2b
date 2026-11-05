@@ -1,7 +1,7 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
-import { Clock3, FileText, LayoutDashboard, Mail, Megaphone, MessageSquarePlus, Plane, Repeat2, Search, Settings, Upload, UserPlus, Users } from 'lucide-react';
+import { Clock3, FileText, LayoutDashboard, Mail, Megaphone, MessageCircle, MessageSquarePlus, Plane, Repeat2, Search, Settings, Upload, UserPlus, Users } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, qs } from '@/lib/api';
@@ -98,6 +98,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 <Item icon={<Megaphone />} onSelect={() => go('/campaigns')}>Broadcasts</Item>
                 <Item icon={<Clock3 />} onSelect={() => go('/automations')}>Automations</Item>
                 <Item icon={<FileText />} onSelect={() => go('/templates')}>Templates</Item>
+                <Item icon={<MessageCircle />} onSelect={() => go('/whatsapp')}>WhatsApp</Item>
                 <Item icon={<Settings />} onSelect={() => go('/settings/senders')}>Settings</Item>
               </Command.Group>
 

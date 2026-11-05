@@ -74,7 +74,7 @@ function Linking({ wa, onCancel }: { wa: WhatsAppStatus; onCancel: () => void })
   );
 }
 
-export function WhatsAppSettings() {
+export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {}) {
   const qc = useQueryClient();
   const { tenant } = useSession();
   const trial = tenant.plan?.plan === 'TRIAL' ? tenant.plan : null;
@@ -119,7 +119,7 @@ export function WhatsAppSettings() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PanelHeader title="WhatsApp" description="Send WhatsApp messages and broadcasts from your own number. Messages appear in its chats like any you send from the phone." />
+      {heading && <PanelHeader title="WhatsApp" description="Send WhatsApp messages and broadcasts from your own number. Messages appear in its chats like any you send from the phone." />}
       {trial?.whatsapp && (
         <div className="flex flex-col gap-2 rounded-[14px] border border-line bg-surface px-4 py-3.5">
           <div className="flex items-baseline justify-between gap-3 text-[13px]">

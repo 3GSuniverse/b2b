@@ -95,7 +95,7 @@ export async function onConnected(tenantId: string, phone: string, displayName: 
       level: 'SUCCESS',
       title: `WhatsApp ${phone} is linked`,
       body: 'You can send WhatsApp campaigns from it now.',
-      link: '/settings/whatsapp',
+      link: '/whatsapp',
       dedupeKey: `whatsapp.connected:${phone}:${new Date().toISOString().slice(0, 10)}`,
     });
   }
@@ -128,7 +128,7 @@ export async function onEnded(tenantId: string, reason: 'LOGGED_OUT' | 'BLOCKED'
     level: 'ERROR',
     title: reason === 'BLOCKED' ? `WhatsApp blocked ${s.phone ?? 'your number'}` : `WhatsApp ${s.phone ?? ''} was unlinked`,
     body: reason === 'BLOCKED' ? 'WhatsApp campaigns are paused. This usually follows complaints or sending too fast.' : 'WhatsApp campaigns are paused until you link the number again.',
-    link: '/settings/whatsapp',
+    link: '/whatsapp',
     dedupeKey: `whatsapp.${reason}:${Date.now()}`,
   });
   return detail;

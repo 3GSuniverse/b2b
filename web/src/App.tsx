@@ -26,6 +26,7 @@ const QuoteEditorPage = lazy(() => import('./pages/quote-editor').then((m) => ({
 const GroupPage = lazy(() => import('./pages/group').then((m) => ({ default: m.GroupPage })));
 const ManifestPage = lazy(() => import('./pages/manifest').then((m) => ({ default: m.ManifestPage })));
 const TripPage = lazy(() => import('./pages/trip').then((m) => ({ default: m.TripPage })));
+const WhatsAppPage = lazy(() => import('./pages/whatsapp').then((m) => ({ default: m.WhatsAppPage })));
 const SettingsPage = lazy(() => import('./pages/settings').then((m) => ({ default: m.SettingsPage })));
 
 function PageFallback() {
@@ -73,6 +74,7 @@ export function App() {
         <Route path="contacts" element={<Suspense fallback={<PageFallback />}><ContactsPage /></Suspense>} />
         <Route path="templates" element={<Suspense fallback={<PageFallback />}><TemplatesPage /></Suspense>} />
         <Route path="templates/:id" element={<Suspense fallback={<PageFallback />}><TemplateEditorPage /></Suspense>} />
+        <Route path="whatsapp" element={<Suspense fallback={<PageFallback />}><WhatsAppPage /></Suspense>} />
         <Route path="settings" element={<Navigate to="/settings/senders" replace />} />
         <Route path="settings/:section" element={<Suspense fallback={<PageFallback />}><SettingsPage /></Suspense>} />
         <Route path="*" element={<NotFoundPage />} />
