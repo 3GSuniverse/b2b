@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, LayoutTemplate, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Copy, LayoutTemplate, MoreHorizontal, Paperclip, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -89,7 +89,15 @@ export function TemplatesPage() {
                     {t.name}
                   </Link>
                   <span className="truncate text-xs text-muted">{t.subject ? <PrettyTags text={t.subject} /> : 'No subject'}</span>
-                  <span className="text-[11px] text-faint">Edited {ago(t.updatedAt)}</span>
+                  <span className="flex items-center gap-2 text-[11px] text-faint">
+                    Edited {ago(t.updatedAt)}
+                    {(t.attachments?.length ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-0.5 font-medium text-muted" title={t.attachments!.map((f) => f.name).join(', ')}>
+                        <Paperclip className="h-3 w-3" />
+                        {t.attachments!.length}
+                      </span>
+                    )}
+                  </span>
                 </div>
                 <div className="relative z-10">
                   <Menu

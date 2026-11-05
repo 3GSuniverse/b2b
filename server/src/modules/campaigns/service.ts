@@ -15,6 +15,7 @@ import { getMailboxProviderFactory } from '../mailboxes/gmail-provider.js';
 import { CampaignError, startCampaign } from '../sending/start-campaign.js';
 import { campaignChecks, whatsappChecks } from './checks.js';
 import { trialEnded, whatsappWebAllowed } from '../plans/entitlements.js';
+import { attachmentIds, loadFiles, resolveRefs } from '../attachments/service.js';
 
 // ---------------------------------------------------------------------
 //  Validation
@@ -42,6 +43,7 @@ export const campaignBody = z.object({
   html: z.string().max(500_000, 'The email is too large').nullable().optional(),
   text: z.string().max(200_000).nullable().optional(),
   audience: audienceSchema.nullable().optional(),
+  attachments: attachmentIds.optional(), // ids of uploaded files, in order
 });
 
 const EDITABLE = ['DRAFT', 'SCHEDULED'] as const;
@@ -69,6 +71,7 @@ export function campaignDto(c: CampaignRow) {
     html: c.html,
     text: c.text,
     audience: c.audience,
+    attachments: c.attachments ?? [],
     scheduledAt: c.scheduledAt,
     startedAt: c.startedAt,
     completedAt: c.completedAt,
@@ -164,14 +167,16 @@ export async function createCampaign(tenantId: string, userId: string, input: z.
     if (!t || !whatsappWebAllowed(t)) throw new AppError(403, 'feature_not_enabled', 'WhatsApp sending isn’t available on this account');
     const [row] = await db
       .insert(campaigns)
-      .values({ tenantId, channel: 'WHATSAPP', name: input.name, text: input.text ?? null, audience: input.audience ?? null, createdById: userId })
+      .values({ tenantId, channel: 'WHATSAPP', name: input.name, text: input.text ?? null, audience: input.audience ?? null, attachments: await resolveRefs(tenantId, input.attachments), createdById: userId })
       .returning();
     return getCampaign(tenantId, row!.id);
   }
   let content = { subject: input.subject ?? null, previewText: input.previewText ?? null, html: input.html ?? null, text: input.text ?? null };
+  let files = await resolveRefs(tenantId, input.attachments);
   if (input.templateId && !content.html) {
     const t = (await db.query.templates.findFirst({ where: eq(templates.id, input.templateId) }))!;
     content = { subject: content.subject ?? t.subject, previewText: content.previewText ?? t.previewText, html: t.html, text: t.text };
+    if (!input.attachments) files = t.attachments;
   }
   let senderId = input.senderId ?? null;
   if (!senderId) {
@@ -180,7 +185,7 @@ export async function createCampaign(tenantId: string, userId: string, input: z.
   }
   const [row] = await db
     .insert(campaigns)
-    .values({ tenantId, name: input.name, senderId, templateId: input.templateId ?? null, audience: input.audience ?? null, createdById: userId, ...content })
+    .values({ tenantId, name: input.name, senderId, templateId: input.templateId ?? null, audience: input.audience ?? null, attachments: files, createdById: userId, ...content })
     .returning();
   return getCampaign(tenantId, row!.id);
 }
@@ -191,8 +196,14 @@ export async function updateCampaign(tenantId: string, id: string, input: Partia
     throw new AppError(409, 'not_editable', `A ${c.status.toLowerCase()} campaign can’t be edited. Duplicate it instead.`);
   }
   await assertRefs(tenantId, input);
-  const { channel: _ignored, ...rest } = input;
-  const patch = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined));
+  const { channel: _ignored, attachments: ids, ...rest } = input;
+  const patch: Record<string, unknown> = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined));
+  if (ids !== undefined) patch.attachments = await resolveRefs(tenantId, ids);
+  else if (input.templateId && input.templateId !== c.templateId && !c.attachments.length) {
+    // Choosing a template with files brings its files along, unless files were already attached
+    const t = await db.query.templates.findFirst({ where: eq(templates.id, input.templateId), columns: { attachments: true } });
+    if (t?.attachments.length) patch.attachments = t.attachments;
+  }
   if (Object.keys(patch).length) await db.update(campaigns).set(patch).where(eq(campaigns.id, id));
   return getCampaign(tenantId, id);
 }
@@ -219,6 +230,7 @@ export async function duplicateCampaign(tenantId: string, userId: string, id: st
       html: c.html,
       text: c.text,
       audience: c.audience,
+      attachments: c.attachments,
       createdById: userId,
     })
     .returning();
@@ -247,6 +259,7 @@ async function checkInputFor(tenantId: string, id: string) {
       sender: c.sender,
       channel: c.channel,
       text: c.text,
+      attachments: c.attachments,
     },
   };
 }
@@ -292,14 +305,14 @@ export async function sendTestWhatsApp(tenantId: string, id: string, phones: str
   const { c } = await checkInputFor(tenantId, id);
   if (c.channel !== 'WHATSAPP') throw new AppError(400, 'wrong_channel', 'This is an email campaign');
   if (!whatsappWebAllowed(c.tenant)) throw new AppError(403, 'trial_ended', 'Your free trial has ended');
-  if (!c.text?.trim()) throw new AppError(400, 'no_content', 'Write the message first');
+  if (!c.text?.trim() && !c.attachments.length) throw new AppError(400, 'no_content', 'Write the message first');
   const session = await getSession(tenantId);
   if (session.status !== 'CONNECTED') throw new AppError(400, 'whatsapp_not_connected', 'Link your WhatsApp number first, in Settings → WhatsApp');
   const normalized = phones.map((p) => normalizePhone(p));
   if (normalized.some((p) => !p)) throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { phones: 'Enter valid phone numbers' } });
   const [sample] = await db.select().from(contacts).where(whatsappAudienceWhere(tenantId, c.audience)).orderBy(contacts.createdAt).limit(1);
-  const text = `[Test] ${renderWhatsApp(c.text, sample ?? null, c.tenant)}`;
-  for (const p of normalized) await enqueueWhatsAppTest(tenantId, p!, text);
+  const text = `[Test] ${renderWhatsApp(c.text ?? '', sample ?? null, c.tenant)}`;
+  for (const p of normalized) await enqueueWhatsAppTest(tenantId, p!, text, c.attachments);
   return { queued: normalized as string[], previewAs: sample?.phone ?? null };
 }
 
@@ -314,6 +327,7 @@ export async function sendTestEmail(tenantId: string, id: string, to: string[]) 
   const vars = buildMergeVars(sample ?? null, c.tenant, { unsubscribe_url: `#test-email-unsubscribe` });
   const r = renderEmail({ subject: c.subject, html: c.html, text: c.text, previewText: c.previewText }, vars, c.tenant);
 
+  const files = await loadFiles(tenantId, c.attachments);
   let provider;
   if (sender.kind === 'DOMAIN') provider = getEmailProvider();
   else if (sender.connection?.status === 'ACTIVE') provider = getMailboxProviderFactory()(sender.connection);
@@ -331,6 +345,7 @@ export async function sendTestEmail(tenantId: string, id: string, to: string[]) 
         text: r.text,
         headers: {},
         tags: { tenant_id: tenantId, campaign_id: c.id, test: 'true' },
+        attachments: files,
       });
       results.push({ to: address, ok: true });
     } catch (err) {

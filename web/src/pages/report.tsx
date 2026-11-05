@@ -308,7 +308,7 @@ export function ReportPage() {
             {!wa && <DeviceToggle value={device} onChange={setDevice} />}
           </div>
           {wa ? (
-            <WhatsAppPreview text={preview.data?.rendered?.text ?? c.text} businessName={tenant.name} />
+            <WhatsAppPreview text={preview.data?.rendered?.text ?? c.text} businessName={tenant.name} attachments={c.attachments} />
           ) : (
             <EmailPreview
               html={preview.data?.rendered?.html ?? null}
@@ -316,6 +316,7 @@ export function ReportPage() {
               fromName={c.sender?.fromName ?? ''}
               subject={preview.data?.rendered?.subject ?? c.subject ?? ''}
               previewText={c.previewText}
+              attachments={c.attachments}
             />
           )}
         </Panel>

@@ -28,8 +28,16 @@ export function encodeHeader(v: string): string {
   return words.map((w) => `=?UTF-8?B?${Buffer.from(w, 'utf8').toString('base64')}?=`).join(`${CRLF} `);
 }
 
-function base64Body(text: string) {
-  return (Buffer.from(text, 'utf8').toString('base64').match(/.{1,76}/g) ?? ['']).join(CRLF);
+function base64Body(text: string | Buffer) {
+  const buf = typeof text === 'string' ? Buffer.from(text, 'utf8') : text;
+  return (buf.toString('base64').match(/.{1,76}/g) ?? ['']).join(CRLF);
+}
+
+/** RFC 2231 file name, so Telugu or Hindi names arrive intact; plus a plain fallback for old clients. */
+function fileNameParams(name: string) {
+  const ascii = clean(name).replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '');
+  const encoded = encodeURIComponent(clean(name)).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
 export function buildMime(email: OutgoingEmail, now = new Date()): string {
@@ -47,11 +55,7 @@ export function buildMime(email: OutgoingEmail, now = new Date()): string {
   for (const [name, value] of Object.entries(email.headers)) {
     if (/^[A-Za-z0-9-]+$/.test(name)) headers.push([name, clean(value)]);
   }
-  headers.push(['Content-Type', `multipart/alternative; boundary="${boundary}"`]);
-
-  return [
-    ...headers.map(([k, v]) => `${k}: ${v}`),
-    '',
+  const alternative = [
     `--${boundary}`,
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
@@ -63,6 +67,32 @@ export function buildMime(email: OutgoingEmail, now = new Date()): string {
     '',
     base64Body(email.html),
     `--${boundary}--`,
+  ];
+  const files = email.attachments ?? [];
+  if (!files.length) {
+    headers.push(['Content-Type', `multipart/alternative; boundary="${boundary}"`]);
+    return [...headers.map(([k, v]) => `${k}: ${v}`), '', ...alternative, ''].join(CRLF);
+  }
+
+  // With attachments: the text and HTML versions first, then each file
+  const mixed = `m_${randomBytes(12).toString('hex')}`;
+  headers.push(['Content-Type', `multipart/mixed; boundary="${mixed}"`]);
+  return [
+    ...headers.map(([k, v]) => `${k}: ${v}`),
+    '',
+    `--${mixed}`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    ...alternative,
+    ...files.flatMap((f) => [
+      `--${mixed}`,
+      `Content-Type: ${/^[\w.+-]+\/[\w.+-]+$/.test(f.type) ? f.type : 'application/octet-stream'}; name="${clean(f.name).replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '')}"`,
+      `Content-Disposition: attachment; ${fileNameParams(f.name)}`,
+      'Content-Transfer-Encoding: base64',
+      '',
+      base64Body(f.data),
+    ]),
+    `--${mixed}--`,
     '',
   ].join(CRLF);
 }

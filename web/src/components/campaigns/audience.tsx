@@ -1,5 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
-import { Filter, Plus, Users, X } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Filter, Plus, UserPlus, Users, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { AddContactSheet } from '@/components/contacts/add-contact';
 import { useEffect, useState } from 'react';
 import { useFields } from '@/components/contacts/contact-sheet';
 import { Button } from '@/components/ui/button';
@@ -8,7 +10,7 @@ import { Input, NativeSelect } from '@/components/ui/field';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { n } from '@/lib/format';
-import type { Audience, AudienceFilter, ContactList } from '@/lib/types';
+import type { Audience, AudienceFilter, Contact, ContactList } from '@/lib/types';
 
 const CORE_FIELDS = [
   { key: 'first_name', label: 'First name' },
@@ -66,6 +68,30 @@ export function AudienceEditor({ value, onChange, channel = 'EMAIL' }: { value: 
   const allFields = [...CORE_FIELDS, ...(fields.data?.fields.map((f) => ({ key: f.key, label: f.label })) ?? [])];
 
   const setFilters = (next: AudienceFilter[]) => onChange({ ...a, filters: next });
+
+  // Add a customer without leaving the broadcast
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [bump, setBump] = useState(0);
+  const added = (c: Contact) => {
+    setAdding(false);
+    qc.invalidateQueries({ queryKey: ['audience-count'] });
+    qc.invalidateQueries({ queryKey: ['lists'] });
+    qc.invalidateQueries({ queryKey: ['contacts'] });
+    setBump((b) => b + 1);
+    const name = [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email || c.phone || 'They';
+    const reachable = channel === 'WHATSAPP' ? !!c.phone && c.whatsappStatus === 'SUBSCRIBED' : !!c.email && c.emailStatus === 'SUBSCRIBED';
+    const inLists = mode === 'everyone' || c.lists.some((l) => listIds.includes(l.id));
+    if (reachable && inLists) toast.success(`${name} is in this broadcast`, { description: filters.length ? 'As long as they match your conditions.' : undefined });
+    else
+      toast.message(`${name} was added to Customers`, {
+        description: !reachable
+          ? channel === 'WHATSAPP'
+            ? 'They won’t get this one: they need a phone number and to have agreed to WhatsApp messages.'
+            : 'They won’t get this one: they need an email address.'
+          : 'They aren’t in the lists this goes to. Add them to one of those lists to include them.',
+      });
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -158,16 +184,23 @@ export function AudienceEditor({ value, onChange, channel = 'EMAIL' }: { value: 
           </div>
         ))}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Button size="sm" variant="ghost" onClick={() => setFilters([...filters, { field: allFields[4]?.key ?? 'first_name', op: 'eq', value: '' }])}>
-            {filters.length ? <Plus className="h-4 w-4" /> : <Filter className="h-4 w-4" />}
-            {filters.length ? 'Add another condition' : 'Only people where…'}
-          </Button>
-          <span className="inline-flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1.5 text-[13px] font-semibold text-accent-strong" aria-live="polite">
+          <span className="flex flex-wrap items-center gap-1">
+            <Button size="sm" variant="ghost" onClick={() => setFilters([...filters, { field: allFields[4]?.key ?? 'first_name', op: 'eq', value: '' }])}>
+              {filters.length ? <Plus className="h-4 w-4" /> : <Filter className="h-4 w-4" />}
+              {filters.length ? 'Add another condition' : 'Only people where…'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setAdding(true)} className="text-accent">
+              <UserPlus className="h-4 w-4" />
+              Add a customer
+            </Button>
+          </span>
+          <span key={bump} className={cn('inline-flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1.5 text-[13px] font-semibold text-accent-strong', bump > 0 && 'add-burst')} aria-live="polite">
             <Users className="h-4 w-4" />
             <span className="tnum">{count.data ? n(count.data.count) : '…'}</span> {count.data?.count === 1 ? 'person' : 'people'}
           </span>
         </div>
       </div>
+      <AddContactSheet open={adding} onClose={() => setAdding(false)} lists={lists.data?.lists ?? []} defaultListIds={mode === 'lists' ? listIds : []} forChannel={channel} onCreated={added} />
     </div>
   );
 }

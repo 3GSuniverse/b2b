@@ -6,21 +6,23 @@ import { toast } from 'sonner';
 import { useFields } from '@/components/contacts/contact-sheet';
 import { DeviceToggle, EmailPreview, type Device } from '@/components/email/email-frame';
 import { VisualEditor } from '@/components/email/visual-editor';
+import { AttachmentPicker } from '@/components/attachments/attachments';
 import { Button } from '@/components/ui/button';
 import { Panel, Skeleton } from '@/components/ui/display';
 import { Field, Input } from '@/components/ui/field';
 import { Sheet } from '@/components/ui/overlay';
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
-import type { Rendered, Template } from '@/lib/types';
+import type { Attachment, Rendered, Template } from '@/lib/types';
 
 interface Draft {
   name: string;
   subject: string;
   previewText: string;
   html: string;
+  attachments: Attachment[];
 }
-const toDraft = (t: Template): Draft => ({ name: t.name, subject: t.subject ?? '', previewText: t.previewText ?? '', html: t.html ?? '' });
+const toDraft = (t: Template): Draft => ({ name: t.name, subject: t.subject ?? '', previewText: t.previewText ?? '', html: t.html ?? '', attachments: t.attachments ?? [] });
 
 export function TemplateEditorPage() {
   const { id } = useParams();
@@ -53,6 +55,7 @@ export function TemplateEditorPage() {
       if ('name' in body) body.name = draft.name.trim() || 'Untitled template';
       if ('subject' in body) body.subject = draft.subject || null;
       if ('previewText' in body) body.previewText = draft.previewText || null;
+      if ('attachments' in body) body.attachments = draft.attachments.map((a) => a.id);
       await api.patch(`/api/templates/${id}`, body);
       saved.current = { ...saved.current, ...diff } as Draft;
       setState('saved');
@@ -120,6 +123,13 @@ export function TemplateEditorPage() {
         <Field label="Preview text" aside={`${draft.previewText.length} / 90`}>
           {(p) => <Input {...p} value={draft.previewText} onChange={(e) => set({ previewText: e.target.value })} placeholder="Everything you need for the journey" />}
         </Field>
+        <div className="flex flex-col gap-2 sm:col-span-2">
+          <span className="flex items-baseline justify-between gap-3">
+            <span className="text-[13px] font-semibold">Attachments</span>
+            <span className="text-xs text-muted">Go with every broadcast and automation that uses this template.</span>
+          </span>
+          <AttachmentPicker channel="EMAIL" value={draft.attachments} onChange={(attachments) => set({ attachments })} />
+        </div>
       </Panel>
 
       <Panel className="flex h-[min(78vh,880px)] min-h-[560px] flex-col overflow-hidden">
@@ -134,7 +144,7 @@ export function TemplateEditorPage() {
           {preview.isPending ? (
             <Skeleton className="h-[560px]" />
           ) : (
-            <EmailPreview html={preview.data?.rendered?.html ?? null} device={device} fromName={tenant.name} subject={preview.data?.rendered?.subject ?? draft.subject} previewText={draft.previewText} />
+            <EmailPreview html={preview.data?.rendered?.html ?? null} device={device} fromName={tenant.name} subject={preview.data?.rendered?.subject ?? draft.subject} previewText={draft.previewText} attachments={draft.attachments} />
           )}
         </div>
       </Sheet>

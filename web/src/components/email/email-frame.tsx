@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Segmented } from '@/components/ui/controls';
 import { Avatar } from '@/components/ui/display';
 import { cn } from '@/lib/cn';
+import { EmailAttachments } from '@/components/attachments/attachments';
+import type { Attachment } from '@/lib/types';
 
 export type Device = 'desktop' | 'mobile';
 
@@ -87,12 +89,14 @@ export function EmailPreview({
   fromName,
   subject,
   previewText,
+  attachments = [],
 }: {
   html: string | null;
   device: Device;
   fromName: string;
   subject: string;
   previewText?: string | null;
+  attachments?: Attachment[];
 }) {
   const body = html ? (
     <EmailFrame html={html} width={device === 'mobile' ? 375 : 640} minHeight={device === 'mobile' ? 520 : 360} />
@@ -110,7 +114,10 @@ export function EmailPreview({
             <div className="px-3 pb-3">
               <InboxRow fromName={fromName} subject={subject} previewText={previewText} />
             </div>
-            <div className="max-h-[640px] overflow-y-auto bg-white">{body}</div>
+            <div className="max-h-[640px] overflow-y-auto bg-white">
+              {body}
+              <EmailAttachments files={attachments} className="px-4" />
+            </div>
           </div>
         </div>
       </div>
@@ -131,6 +138,7 @@ export function EmailPreview({
           </p>
         </div>
         <div className="overflow-x-auto py-4">{body}</div>
+        <EmailAttachments files={attachments} />
       </div>
     </div>
   );

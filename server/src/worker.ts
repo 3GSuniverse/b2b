@@ -9,7 +9,8 @@ import { processImport } from './modules/imports/process.js';
 import { closeQueues, getSchedulerQueue, QUEUES, type EmailSendJob, type WhatsAppJob } from './queues/index.js';
 import { setWhatsAppGateway } from './modules/whatsapp/gateway.js';
 import { WhatsAppManager } from './modules/whatsapp/manager.js';
-import { processWhatsAppJob } from './modules/whatsapp/service.js';
+import { deliverWhatsApp, processWhatsAppJob } from './modules/whatsapp/service.js';
+import { loadFiles } from './modules/attachments/service.js';
 
 // The worker runs as its own process, separate from the API,
 // so a burst of sending never slows down the dashboard.
@@ -85,8 +86,8 @@ const whatsappWorker = new Worker<WhatsAppJob>(
   QUEUES.whatsappSend,
   async (job, token) => {
     if (job.data.kind === 'test') {
-      const { tenantId, to, text } = job.data;
-      await whatsapp.sendText(tenantId, to, text);
+      const { tenantId, to, text, attachments } = job.data;
+      await deliverWhatsApp(whatsapp, tenantId, to, text, await loadFiles(tenantId, attachments ?? []));
       return 'test_sent';
     }
     const { messageId } = job.data;

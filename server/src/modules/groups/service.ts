@@ -11,6 +11,7 @@ import { addDays, localDate, rupeesToPaise, tripMoney, type DueInput } from '../
 import { ownedPackage } from '../packages/service.js';
 import { createTrip, createTripBody, type Actor } from '../trips/service.js';
 import { getSession } from '../whatsapp/service.js';
+import { attachmentIds, LIMITS, resolveRefs, totalSize } from '../attachments/service.js';
 
 /**
  * Group departures (yatras, group tours). The group is a trip of kind GROUP with seats and a
@@ -365,15 +366,20 @@ export async function autoAssign(actor: Actor, groupId: string) {
 //  One message to everyone
 // ---------------------------------------------------------------------
 
-export const broadcastBody = z.object({
-  text: z.string().trim().min(5, 'Write the message').max(1500),
-  channel: z.enum(['AUTO', 'WHATSAPP', 'EMAIL']).default('AUTO'),
-});
+export const broadcastBody = z
+  .object({
+    text: z.string().trim().max(1500).default(''),
+    channel: z.enum(['AUTO', 'WHATSAPP', 'EMAIL']).default('AUTO'),
+    attachments: attachmentIds.default([]),
+  })
+  .refine((b) => b.text.length >= 5 || b.attachments.length > 0, { message: 'Write the message', path: ['text'] });
 
 /** "Bus leaves 5:30 AM from…": to the person who booked, for each family. A service message about their trip. */
 export async function broadcast(actor: Actor, groupId: string, input: z.infer<typeof broadcastBody>, enqueue = { email: enqueueEmails, whatsapp: enqueueWhatsApp }) {
   const g = await ownedGroup(actor.tenantId, groupId);
   const tenant = (await db.query.tenants.findFirst({ where: eq(tenants.id, actor.tenantId) }))!;
+  const files = await resolveRefs(tenant.id, input.attachments);
+  const emailFits = totalSize(files) <= LIMITS.emailTotalBytes;
   const bookings = await db.query.trips.findMany({ where: and(eq(trips.groupId, groupId), inArray(trips.status, ['QUOTED', 'BOOKED'])), with: { contact: true } });
   const whatsappUp = whatsappWebAllowed(tenant) && (await getSession(tenant.id)).status === 'CONNECTED';
   const sender =
@@ -388,7 +394,7 @@ export async function broadcast(actor: Actor, groupId: string, input: z.infer<ty
     seen.add(c.id);
     const blocked = await db.select({ channel: suppressions.channel, reason: suppressions.reason }).from(suppressions).where(and(eq(suppressions.tenantId, tenant.id), inArray(suppressions.address, [c.phone ?? '', c.email ?? ''].filter(Boolean))));
     const wa = whatsappUp && c.phone && !blocked.some((x) => x.channel === 'WHATSAPP');
-    const em = sender && c.email && c.emailStatus !== 'BOUNCED' && c.emailStatus !== 'COMPLAINED' && !blocked.some((x) => x.channel === 'EMAIL' && x.reason !== 'UNSUBSCRIBE');
+    const em = emailFits && sender && c.email && c.emailStatus !== 'BOUNCED' && c.emailStatus !== 'COMPLAINED' && !blocked.some((x) => x.channel === 'EMAIL' && x.reason !== 'UNSUBSCRIBE');
     const channel = input.channel === 'WHATSAPP' ? (wa ? 'WHATSAPP' : null) : input.channel === 'EMAIL' ? (em ? 'EMAIL' : null) : wa ? 'WHATSAPP' : em ? 'EMAIL' : null;
     if (!channel) {
       skipped.push(b.customerName);
@@ -404,7 +410,8 @@ export async function broadcast(actor: Actor, groupId: string, input: z.infer<ty
         channel,
         toAddress: channel === 'EMAIL' ? c.email!.toLowerCase() : c.phone!,
         subject: channel === 'EMAIL' ? `${g.title}: an update` : null,
-        body: input.text,
+        body: input.text || (channel === 'EMAIL' ? `Please find ${files.length > 1 ? 'the files' : 'the file'} attached.` : ''),
+        attachments: files,
         service: true,
       })
       .returning({ id: messages.id });
@@ -412,6 +419,6 @@ export async function broadcast(actor: Actor, groupId: string, input: z.infer<ty
   }
   if (sent.email.length) await enqueue.email(sent.email);
   if (sent.whatsapp.length) await enqueue.whatsapp(sent.whatsapp);
-  await db.insert(auditLogs).values({ tenantId: tenant.id, userId: actor.userId, action: 'group.broadcast', entity: 'trip', entityId: groupId, meta: { whatsapp: sent.whatsapp.length, email: sent.email.length, skipped: skipped.length, text: input.text.slice(0, 120) } });
+  await db.insert(auditLogs).values({ tenantId: tenant.id, userId: actor.userId, action: 'group.broadcast', entity: 'trip', entityId: groupId, meta: { whatsapp: sent.whatsapp.length, email: sent.email.length, skipped: skipped.length, text: input.text.slice(0, 120), files: files.length } });
   return { whatsapp: sent.whatsapp.length, email: sent.email.length, skipped };
 }

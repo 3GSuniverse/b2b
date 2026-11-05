@@ -11,6 +11,7 @@ import { trialEnded } from '../plans/entitlements.js';
 import { notify } from '../notifications/service.js';
 import { syncAutomationSend } from '../automations/engine.js';
 import { payPageUrl, serviceEmailHtml } from '../payments/reminders.js';
+import { loadFiles, mergeRefs, type AttachmentFile } from '../attachments/service.js';
 
 export type SendOutcome =
   | 'sent'
@@ -212,6 +213,16 @@ export async function processSendJob(
         msg.tenant,
       );
 
+  // Files go with every copy: the message's own, the campaign's, or the automation's (its template's first)
+  const refs = own ? msg.attachments : msg.campaign ? msg.campaign.attachments : mergeRefs(msg.automation?.template?.attachments, msg.automation?.attachments);
+  let files: AttachmentFile[];
+  try {
+    files = await loadFiles(msg.tenantId, refs ?? []);
+  } catch {
+    await finalizeMessage(msg, 'FAILED', 'attachment_missing');
+    return 'failed';
+  }
+
   // 5. Send
   let providerMessageId: string;
   try {
@@ -224,6 +235,7 @@ export async function processSendJob(
       text: rendered.text,
       // Gmail & Yahoo one-click unsubscribe (RFC 8058). Not on booking messages: there's nothing to unsubscribe from.
       headers: service ? {} : { 'List-Unsubscribe': `<${unsubUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+      attachments: files,
       tags: {
         message_id: msg.id,
         tenant_id: msg.tenantId,

@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { Mail, Phone } from 'lucide-react';
+import { Info, Mail, Phone } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -12,11 +12,29 @@ import { AttributeInput, useFields } from './contact-sheet';
 
 const EMPTY = { email: '', phone: '', firstName: '', lastName: '', consentNote: '', whatsappOptIn: false, listIds: [] as string[], attributes: {} as Record<string, unknown> };
 
-export function AddContactSheet({ open, onClose, lists, onCreated }: { open: boolean; onClose: () => void; lists: ContactList[]; onCreated: (c: Contact) => void }) {
+export function AddContactSheet({
+  open,
+  onClose,
+  lists,
+  onCreated,
+  defaultListIds,
+  forChannel,
+}: {
+  open: boolean;
+  onClose: () => void;
+  lists: ContactList[];
+  onCreated: (c: Contact) => void;
+  /** Ticked at the start, e.g. the lists a broadcast goes to */
+  defaultListIds?: string[];
+  /** Opened from a broadcast: say what this customer needs to get it */
+  forChannel?: 'EMAIL' | 'WHATSAPP';
+}) {
   const [f, setF] = useState(EMPTY);
   const fields = useFields();
   useEffect(() => {
-    if (open) setF(EMPTY);
+    if (open) setF({ ...EMPTY, listIds: defaultListIds ?? [] });
+    // Only when it opens: the lists picked at that moment
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const m = useMutation({
@@ -31,7 +49,7 @@ export function AddContactSheet({ open, onClose, lists, onCreated }: { open: boo
         attributes: Object.fromEntries(Object.entries(f.attributes).filter(([, v]) => v !== null && v !== '')),
       }),
     onSuccess: ({ contact }) => {
-      toast.success('Customer added');
+      if (!forChannel) toast.success('Customer added'); // from a broadcast, the broadcast says whether they're in it
       onCreated(contact);
     },
   });
@@ -49,7 +67,7 @@ export function AddContactSheet({ open, onClose, lists, onCreated }: { open: boo
         <>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" loading={m.isPending} onClick={() => m.mutate()}>
-            Add contact
+            Add customer
           </Button>
         </>
       }
@@ -61,6 +79,15 @@ export function AddContactSheet({ open, onClose, lists, onCreated }: { open: boo
           m.mutate();
         }}
       >
+        {forChannel && (
+          <p className="flex items-start gap-2 rounded-[12px] bg-blue-soft px-3.5 py-2.5 text-[13px] leading-relaxed text-blue-ink">
+            <Info className="mt-0.5 h-4 w-4 shrink-0" />
+            {forChannel === 'WHATSAPP'
+              ? 'To get this WhatsApp broadcast, they need a phone number and “Also agreed to WhatsApp messages” switched on.'
+              : 'To get this broadcast, they need an email address.'}
+            {(defaultListIds?.length ?? 0) > 0 && ' The broadcast’s lists are ticked below.'}
+          </p>
+        )}
         {general && (
           <div role="alert" className="rounded-[12px] border border-[#f4c7c2] bg-danger-soft px-4 py-3 text-sm text-danger">
             {general}

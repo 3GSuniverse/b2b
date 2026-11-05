@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, BedDouble, MessageCircle, MoreHorizontal, Pencil, Plus, Printer, Send, Users } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button, LinkButton } from '@/components/ui/button';
@@ -40,6 +40,7 @@ export function GroupPage() {
   const [tab, setTab] = useState<Tab>('families');
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
+  const backToMessage = useRef(false);
   const [messaging, setMessaging] = useState(false);
   const [travellersOf, setTravellersOf] = useState<{ id: string; seats: number } | null>(null);
   const q = useQuery({ queryKey: ['group', id], queryFn: () => api.get<{ group: GroupDetail }>(`/api/groups/${id}`).then((r) => r.group) });
@@ -286,13 +287,33 @@ export function GroupPage() {
       <AddFamilyDialog
         group={g}
         open={adding}
-        onClose={() => setAdding(false)}
+        onClose={() => {
+          setAdding(false);
+          if (backToMessage.current) setMessaging(true);
+          backToMessage.current = false;
+        }}
         onSaved={() => {
           setAdding(false);
           refresh();
+          // Came from "Message everyone": go back to the message, now including the new family
+          if (backToMessage.current) setMessaging(true);
+          backToMessage.current = false;
         }}
       />
-      <BroadcastDialog group={g} open={messaging} onClose={() => setMessaging(false)} />
+      <BroadcastDialog
+        group={g}
+        open={messaging}
+        onClose={() => setMessaging(false)}
+        onAddFamily={
+          g.status === 'CANCELLED'
+            ? undefined
+            : () => {
+                backToMessage.current = true;
+                setMessaging(false);
+                setAdding(true);
+              }
+        }
+      />
       {travellersOf && <TravellersSheet tripId={travellersOf.id} seats={travellersOf.seats} open onClose={() => { setTravellersOf(null); refresh(); }} />}
     </>
   );

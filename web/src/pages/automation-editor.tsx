@@ -14,7 +14,8 @@ import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { date, n } from '@/lib/format';
 import { PrettyTags } from '@/lib/tags';
-import type { Audience, Automation, CustomField, Sender, Starter, Template } from '@/lib/types';
+import type { Attachment, Audience, Automation, CustomField, Sender, Starter, Template } from '@/lib/types';
+import { AttachmentPicker } from '@/components/attachments/attachments';
 import type { Upcoming } from './automations';
 
 type Timing = 'before' | 'on' | 'after';
@@ -28,6 +29,7 @@ interface Draft {
   sendTime: string;
   repeat: 'ONCE' | 'YEARLY';
   audience: Audience | null;
+  attachments: Attachment[];
 }
 
 const RECIPES = {
@@ -45,6 +47,7 @@ const fromAutomation = (a: Automation): Draft => ({
   sendTime: a.sendTime,
   repeat: a.repeat,
   audience: a.audience,
+  attachments: a.attachments ?? [],
 });
 const toBody = (d: Draft) => ({
   name: d.name.trim() || 'Untitled automation',
@@ -55,6 +58,7 @@ const toBody = (d: Draft) => ({
   sendTime: d.sendTime,
   repeat: d.repeat,
   audience: d.audience,
+  attachments: d.attachments.map((f) => f.id),
 });
 
 /** A select that reads as part of a sentence. */
@@ -170,6 +174,7 @@ export function AutomationEditorPage() {
       sendTime: recipe?.sendTime ?? '09:00',
       repeat: recipe?.repeat ?? 'ONCE',
       audience: null,
+      attachments: [],
     });
   }, [draft, id, a, fields.data, senders.data, recipe, dateFields]);
 
@@ -458,6 +463,20 @@ export function AutomationEditorPage() {
                 <p className="text-[13px] leading-relaxed text-muted">Choose a template, or start from the ready-made Trip reminder or Birthday design.</p>
               )}
             </div>
+          </Panel>
+
+          <Panel className="flex flex-col gap-3 p-5 sm:p-6">
+            <div className="flex flex-col gap-0.5">
+              <h2 className="text-[15px] font-semibold">Attachments</h2>
+              <p className="text-[13px] text-muted">Sent with every email of this automation: a packing list, the hotel voucher format, a greeting card.</p>
+            </div>
+            <AttachmentPicker
+              channel="EMAIL"
+              value={draft.attachments}
+              inherited={template.data?.template.attachments ?? []}
+              inheritedLabel="From the template"
+              onChange={(attachments) => set({ attachments })}
+            />
           </Panel>
         </div>
 

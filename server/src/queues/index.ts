@@ -1,5 +1,6 @@
 import { Queue } from 'bullmq';
 import { createRedis } from '../lib/redis.js';
+import type { AttachmentRef } from '../db/schema.js';
 
 // Queue names in one place so the API and the worker never drift apart.
 export const QUEUES = {
@@ -13,7 +14,9 @@ export const QUEUES = {
   whatsappSend: 'whatsapp-send',
 } as const;
 
-export type WhatsAppJob = { kind: 'message'; messageId: string } | { kind: 'test'; tenantId: string; to: string; text: string };
+export type WhatsAppJob =
+  | { kind: 'message'; messageId: string }
+  | { kind: 'test'; tenantId: string; to: string; text: string; attachments?: AttachmentRef[] };
 
 export interface EmailSendJob {
   messageId: string; // the Message row holds everything else
@@ -45,8 +48,8 @@ export async function enqueueWhatsApp(messageIds: string[]): Promise<void> {
   await getWhatsAppQueue().addBulk(messageIds.map((messageId) => ({ name: 'send', data: { kind: 'message' as const, messageId }, opts: { jobId: messageId } })));
 }
 
-export async function enqueueWhatsAppTest(tenantId: string, to: string, text: string) {
-  await getWhatsAppQueue().add('test', { kind: 'test', tenantId, to, text }, { attempts: 1 });
+export async function enqueueWhatsAppTest(tenantId: string, to: string, text: string, attachments: AttachmentRef[] = []) {
+  await getWhatsAppQueue().add('test', { kind: 'test', tenantId, to, text, attachments }, { attempts: 1 });
 }
 
 export function getImportQueue(): Queue<{ importId: string }> {

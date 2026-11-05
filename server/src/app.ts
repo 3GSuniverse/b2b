@@ -13,6 +13,7 @@ import { authRoutes } from './modules/auth/routes.js';
 import { automationRoutes } from './modules/automations/routes.js';
 import { campaignRoutes } from './modules/campaigns/routes.js';
 import { templateRoutes } from './modules/templates/routes.js';
+import { attachmentRoutes } from './modules/attachments/routes.js';
 import { tripRoutes } from './modules/trips/routes.js';
 import { tripMessageRoutes } from './modules/trips/followups.js';
 import { apiKeyRoutes } from './modules/api-keys/routes.js';
@@ -68,7 +69,8 @@ export async function buildApp(opts: AppOptions = {}) {
         scriptSrc: ["'self'"], // no inline or third-party scripts, anywhere
         // Email designs use inline styles; previews render them in sandboxed frames
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https:'], // images inside email previews live on other sites
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'], // images inside email previews live on other sites; blob: = a photo being attached
+        mediaSrc: ["'self'", 'blob:'], // attached videos and voice notes
         fontSrc: ["'self'"],
         connectSrc: ["'self'"],
         frameSrc: ["'self'"],
@@ -99,7 +101,7 @@ export async function buildApp(opts: AppOptions = {}) {
     if (!req.url.startsWith('/api/') || !MUTATING.has(req.method)) return;
     const hasBody = Number(req.headers['content-length'] ?? 0) > 0 || req.headers['transfer-encoding'] !== undefined;
     const type = String(req.headers['content-type'] ?? '');
-    const uploadOk = req.url.startsWith('/api/imports') && type.startsWith('multipart/form-data');
+    const uploadOk = (req.url.startsWith('/api/imports') || req.url === '/api/attachments') && type.startsWith('multipart/form-data');
     if (hasBody && !type.startsWith('application/json') && !uploadOk) {
       throw new AppError(415, 'json_required', 'Send the request body as JSON');
     }
@@ -116,6 +118,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(importRoutes);
   await app.register(campaignRoutes);
   await app.register(templateRoutes);
+  await app.register(attachmentRoutes);
   await app.register(automationRoutes);
   await app.register(apiKeyRoutes);
   await app.register(quoteRoutes);

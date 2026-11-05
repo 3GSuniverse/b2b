@@ -1,6 +1,6 @@
 /** A stand-in for Google's OAuth and Gmail APIs, so the whole flow runs offline. */
 export class FakeGoogle {
-  sent: { raw: string; token: string; mime: string }[] = [];
+  sent: { raw: string; token: string; mime: string; upload?: boolean }[] = [];
   revoked: string[] = [];
   tokenRequests: URLSearchParams[] = [];
   email = 'ravi.kt@gmail.com';
@@ -49,15 +49,16 @@ export class FakeGoogle {
       return this.json({});
     }
 
-    if (url.startsWith('https://gmail.googleapis.com/gmail/v1/users/me/messages/send')) {
+    const upload = url.startsWith('https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send');
+    if (upload || url.startsWith('https://gmail.googleapis.com/gmail/v1/users/me/messages/send')) {
       const token = String((init?.headers as Record<string, string>)?.authorization ?? '').replace('Bearer ', '');
       if (this.nextSendError) {
         const e = this.nextSendError;
         this.nextSendError = null;
         return this.json({ error: { message: 'error', errors: [{ reason: e.reason }] } }, e.status);
       }
-      const raw = JSON.parse(String(init?.body)).raw as string;
-      this.sent.push({ raw, token, mime: Buffer.from(raw, 'base64url').toString('utf8') });
+      const raw = upload ? Buffer.from(String(init?.body)).toString('base64url') : (JSON.parse(String(init?.body)).raw as string);
+      this.sent.push({ raw, token, mime: Buffer.from(raw, 'base64url').toString('utf8'), upload });
       return this.json({ id: `gm-${this.sent.length}` });
     }
 

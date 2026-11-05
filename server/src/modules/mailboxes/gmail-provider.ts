@@ -61,7 +61,7 @@ export function createGmailProvider(conn: MailboxConnection): EmailProvider {
   return {
     name: 'gmail',
     async send(email) {
-      const raw = Buffer.from(buildMime(email)).toString('base64url');
+      const raw = buildMime(email);
       let token = await accessToken(conn);
       let res = await gmailSendRaw(token, raw);
 

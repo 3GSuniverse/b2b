@@ -41,6 +41,14 @@ export interface Audience {
 }
 
 export type Channel = 'EMAIL' | 'WHATSAPP';
+/** A file sent with a message: a brochure, itinerary, photo, video or voice note. */
+export interface Attachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
 export interface Campaign {
   id: string;
   name: string;
@@ -53,6 +61,7 @@ export interface Campaign {
   html: string | null;
   text: string | null;
   audience: Audience | null;
+  attachments: Attachment[];
   scheduledAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -218,6 +227,7 @@ export interface Template {
   subject: string | null;
   previewText: string | null;
   html?: string | null;
+  attachments?: Attachment[];
   updatedAt: string;
 }
 
@@ -232,7 +242,8 @@ export interface Automation {
   repeat: 'ONCE' | 'YEARLY';
   timezone: string;
   audience: Audience | null;
-  template: { id: string; name: string; subject: string | null } | null;
+  template: { id: string; name: string; subject: string | null; attachments: Attachment[] } | null;
+  attachments: Attachment[];
   sender: { id: string; fromName: string; fromEmail: string } | null;
   activatedAt: string | null;
   stats: { sent: number; delivered: number; clicked: number; clickRate: number };

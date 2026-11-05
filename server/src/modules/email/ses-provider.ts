@@ -1,4 +1,5 @@
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
+import { buildMime } from '../mailboxes/mime.js';
 import { SendError, type EmailProvider, type OutgoingEmail } from './types.js';
 
 const TRANSIENT_CODES = new Set([
@@ -57,7 +58,10 @@ export function createSesProvider(opts: {
               Name,
               Value: tagValue(Value),
             })),
-            Content: {
+            // With attachments the whole message is built here (multipart/mixed); otherwise SES builds it
+            Content: email.attachments?.length
+              ? { Raw: { Data: Buffer.from(buildMime(email)) } }
+              : {
               Simple: {
                 Subject: { Data: email.subject, Charset: 'UTF-8' },
                 Body: {
@@ -66,7 +70,7 @@ export function createSesProvider(opts: {
                 },
                 Headers: Object.entries(email.headers).map(([Name, Value]) => ({ Name, Value })),
               },
-            },
+              },
           }),
         );
         if (!out.MessageId) throw new SendError('SES returned no MessageId', false, 'NoMessageId');

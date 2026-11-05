@@ -7,6 +7,7 @@ import { AppError, parseBody } from '../../lib/http.js';
 import { requireAuth, tenantOf } from '../auth/guard.js';
 import { buildMergeVars, renderEmail } from '../email/render.js';
 import { STARTERS } from './starters.js';
+import { attachmentIds, resolveRefs } from '../attachments/service.js';
 
 const body = z.object({
   name: z.string().trim().min(1, 'Give the template a name').max(120),
@@ -15,6 +16,7 @@ const body = z.object({
   html: z.string().max(500_000, 'The template is too large').nullable().optional(),
   text: z.string().max(200_000).nullable().optional(),
   design: z.unknown().optional(), // editor state, stored as-is
+  attachments: attachmentIds.optional(), // file ids; automations and broadcasts using the template send them too
 });
 type IdParams = { Params: { id: string } };
 
@@ -48,6 +50,7 @@ export async function templateRoutes(app: FastifyInstance) {
         name: templates.name,
         subject: templates.subject,
         previewText: templates.previewText,
+        attachments: templates.attachments,
         updatedAt: templates.updatedAt,
         createdAt: templates.createdAt,
         ...(req.query.include === 'html' ? { html: templates.html } : {}),
@@ -58,8 +61,11 @@ export async function templateRoutes(app: FastifyInstance) {
   }));
 
   app.post('/api/templates', { preHandler: requireAuth }, async (req, reply) => {
-    const b = parseBody(body, req.body);
-    const [t] = await db.insert(templates).values({ tenantId: tenantOf(req), ...b, design: b.design ?? null }).returning();
+    const { attachments: ids, ...b } = parseBody(body, req.body);
+    const [t] = await db
+      .insert(templates)
+      .values({ tenantId: tenantOf(req), ...b, design: b.design ?? null, attachments: await resolveRefs(tenantOf(req), ids) })
+      .returning();
     return reply.code(201).send({ template: t });
   });
 
@@ -67,8 +73,9 @@ export async function templateRoutes(app: FastifyInstance) {
 
   app.patch<IdParams>('/api/templates/:id', { preHandler: requireAuth }, async (req) => {
     await owned(tenantOf(req), req.params.id);
-    const b = parseBody(body.partial(), req.body);
-    const patch = Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined));
+    const { attachments: ids, ...b } = parseBody(body.partial(), req.body);
+    const patch: Record<string, unknown> = Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined));
+    if (ids !== undefined) patch.attachments = await resolveRefs(tenantOf(req), ids);
     const [t] = await db.update(templates).set(patch).where(eq(templates.id, req.params.id)).returning();
     return { template: t };
   });
@@ -77,7 +84,7 @@ export async function templateRoutes(app: FastifyInstance) {
     const t = await owned(tenantOf(req), req.params.id);
     const [copy] = await db
       .insert(templates)
-      .values({ tenantId: t.tenantId, name: `Copy of ${t.name}`.slice(0, 120), subject: t.subject, previewText: t.previewText, html: t.html, text: t.text, design: t.design })
+      .values({ tenantId: t.tenantId, name: `Copy of ${t.name}`.slice(0, 120), subject: t.subject, previewText: t.previewText, html: t.html, text: t.text, design: t.design, attachments: t.attachments })
       .returning();
     return reply.code(201).send({ template: copy });
   });

@@ -10,6 +10,42 @@ import { DeferSend, finalizeMessage, maybeCompleteCampaign, type SendOutcome } f
 import { getQr } from './bus.js';
 import { trialEnded, trialWhatsAppPerDay, whatsappWebAllowed } from '../plans/entitlements.js';
 import { getWhatsAppGateway, WhatsAppError, type WhatsAppGateway } from './gateway.js';
+import { loadFiles, whatsappKind, type AttachmentFile } from '../attachments/service.js';
+
+/** WhatsApp's limit for the caption under a photo, video or document. */
+const CAPTION_MAX = 1024;
+
+/**
+ * Sends the text and the files as WhatsApp shows them best:
+ * one photo, video or document with a short message goes as that file with the message as its caption;
+ * otherwise the message first, then each file.
+ *
+ * Returns the first message's id (for ✓✓ receipts). Once anything has reached the customer,
+ * a later failure is reported in `partial` instead of thrown: retrying would send the first part twice.
+ */
+export async function deliverWhatsApp(gateway: WhatsAppGateway, tenantId: string, to: string, text: string, files: AttachmentFile[]) {
+  const media = (f: AttachmentFile, caption?: string) =>
+    gateway.sendMedia(tenantId, to, { kind: whatsappKind(f.type), data: f.data, mimeType: f.type, fileName: f.name, caption });
+  const only = files.length === 1 ? files[0]! : null;
+  if (only && whatsappKind(only.type) !== 'audio' && text.length <= CAPTION_MAX) {
+    return { id: (await media(only, text || undefined)).id, partial: null as string | null };
+  }
+  const parts: (() => Promise<{ id: string }>)[] = [
+    ...(text.trim() ? [() => gateway.sendText(tenantId, to, text)] : []),
+    ...files.map((f) => () => media(f)),
+  ];
+  let first: string | null = null;
+  for (const [i, send] of parts.entries()) {
+    try {
+      const { id } = await send();
+      first ??= id;
+    } catch (err) {
+      if (!first) throw err;
+      return { id: first, partial: `${parts.length - i} of ${parts.length} parts not sent: ${(err as Error).message}`.slice(0, 300) };
+    }
+  }
+  return { id: first!, partial: null as string | null };
+}
 
 /** WhatsApp's own limit for one text message. */
 export const WHATSAPP_MAX_LENGTH = 4096;
@@ -232,8 +268,9 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
     return 'suppressed';
   }
 
-  const body = own ? msg.body : msg.campaign?.text;
-  if (!body?.trim()) {
+  const body = (own ? msg.body : msg.campaign?.text) ?? '';
+  const refs = (own ? msg.attachments : msg.campaign?.attachments) ?? [];
+  if (!body.trim() && !refs.length) {
     await finalizeMessage(msg, 'FAILED', 'no_content');
     return 'failed';
   }
@@ -271,9 +308,17 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
   }
 
   const text = renderString(body, buildMergeVars(msg.contact, msg.tenant), { html: false }).slice(0, WHATSAPP_MAX_LENGTH);
-  let id: string;
+  let files: AttachmentFile[];
   try {
-    ({ id } = await gateway.sendText(msg.tenantId, msg.toAddress, text));
+    files = await loadFiles(msg.tenantId, refs);
+  } catch {
+    await finalizeMessage(msg, 'FAILED', 'attachment_missing');
+    return 'failed';
+  }
+  let id: string;
+  let partial: string | null;
+  try {
+    ({ id, partial } = await deliverWhatsApp(gateway, msg.tenantId, msg.toAddress, text, files));
   } catch (err) {
     if (err instanceof WhatsAppError && err.permanent) {
       await finalizeMessage(msg, 'FAILED', err.code);
@@ -285,7 +330,7 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
   await db.transaction(async (tx) => {
     const updated = await tx
       .update(messages)
-      .set({ status: 'SENT', providerMessageId: id, sentAt: new Date(), attempts: sql`${messages.attempts} + 1`, error: null })
+      .set({ status: 'SENT', providerMessageId: id, sentAt: new Date(), attempts: sql`${messages.attempts} + 1`, error: partial })
       .where(and(eq(messages.id, msg.id), eq(messages.status, 'QUEUED')))
       .returning({ id: messages.id });
     if (updated.length) await bumpCounter(tx, msg, 'sent');

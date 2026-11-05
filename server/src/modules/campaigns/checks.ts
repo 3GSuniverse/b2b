@@ -1,5 +1,6 @@
 import { and, count, eq, sql, type SQL } from 'drizzle-orm';
-import { contacts, customFields, type Audience } from '../../db/schema.js';
+import { contacts, customFields, type Audience, type AttachmentRef } from '../../db/schema.js';
+import { LIMITS, totalSize } from '../attachments/service.js';
 import { db } from '../../lib/db.js';
 import { emailAudienceWhere } from '../audience/resolve.js';
 import { isDomainReady } from '../domains/service.js';
@@ -23,6 +24,7 @@ interface CheckInput {
   html: string | null;
   previewText: string | null;
   audience: Audience | null;
+  attachments?: AttachmentRef[];
   sender:
     | {
         id: string;
@@ -140,6 +142,8 @@ export async function campaignChecks(input: CheckInput): Promise<{ checks: Check
     }
   }
 
+  attachmentCheck(input.attachments ?? [], 'EMAIL', add);
+
   // Limits
   if (recipients) {
     const used = await monthlyUsage(input.tenantId, new Date(), input.tenant.timezone);
@@ -171,6 +175,7 @@ export async function whatsappChecks(input: {
   tenant: { id: string; status: string; pausedReason: string | null; whatsappWebEnabled: boolean; plan: 'TRIAL' | 'PAID'; trialEndsAt: Date | null };
   text: string | null;
   audience: Audience | null;
+  attachments?: AttachmentRef[];
 }): Promise<{ checks: Check[]; canSend: boolean; recipients: number }> {
   const { countWhatsAppAudience } = await import('../audience/resolve.js');
   const { getSession, whatsappUsageLast24h, WHATSAPP_MAX_LENGTH } = await import('../whatsapp/service.js');
@@ -187,7 +192,8 @@ export async function whatsappChecks(input: {
   else add({ id: 'sender', level: 'error', title: 'Link your WhatsApp number first.', note: 'Settings → WhatsApp, then scan the QR code with your phone.' });
 
   const text = input.text?.trim() ?? '';
-  if (!text) add({ id: 'content', level: 'error', title: 'Write the message.' });
+  const files = input.attachments ?? [];
+  if (!text && !files.length) add({ id: 'content', level: 'error', title: 'Write the message, or attach a file.' });
   else if (text.length > WHATSAPP_MAX_LENGTH) add({ id: 'content', level: 'error', title: 'The message is too long for WhatsApp.', note: `${text.length} of ${WHATSAPP_MAX_LENGTH} characters.` });
 
   const placeholders = [...new Set(text.match(PLACEHOLDER) ?? [])];
@@ -196,6 +202,7 @@ export async function whatsappChecks(input: {
   const fields = await db.select({ key: customFields.key }).from(customFields).where(eq(customFields.tenantId, input.tenantId));
   const unknown = findUnknownTags(text, [...CORE_KEYS, ...fields.map((f) => f.key)]);
   if (unknown.length) add({ id: 'unknown_tags', level: 'error', title: `${unknown.map((u) => `{${u}}`).join(', ')} ${unknown.length > 1 ? 'aren’t fields' : 'isn’t a field'} you have.`, note: 'Fix the spelling, or add a fallback like {first_name|there}.' });
+  attachmentCheck(files, 'WHATSAPP', add);
   add({ id: 'stop', level: 'ok', title: 'People can reply STOP to stop messages.', note: 'They’re unsubscribed from WhatsApp automatically.' });
 
   const recipients = await countWhatsAppAudience(db, input.tenantId, input.audience);
@@ -223,4 +230,20 @@ export async function whatsappChecks(input: {
   add({ id: 'risk', level: 'warning', title: 'Unofficial WhatsApp sending.', note: 'WhatsApp can block numbers that send in bulk this way. Send only to people who expect your messages.' });
 
   return { checks, canSend: !checks.some((c) => c.level === 'error'), recipients };
+}
+
+const mb = (bytes: number) => `${Math.max(0.1, Math.round((bytes / 1048576) * 10) / 10)} MB`;
+
+/** Attached files: within what the channel can carry? */
+export function attachmentCheck(files: AttachmentRef[], channel: 'EMAIL' | 'WHATSAPP', add: (c: Check) => void) {
+  if (!files.length) return;
+  const total = totalSize(files);
+  const what = `${files.length} file${files.length > 1 ? 's' : ''} attached`;
+  if (channel === 'EMAIL' && total > LIMITS.emailTotalBytes) {
+    add({ id: 'attachments', level: 'error', title: `The attachments are too large for email (${mb(total)}).`, note: `Most inboxes refuse emails over ${mb(LIMITS.emailTotalBytes)} of files. Remove some, or share a link instead.` });
+  } else if (channel === 'WHATSAPP') {
+    add({ id: 'attachments', level: 'ok', title: `${what} (${mb(total)}).`, note: files.length === 1 ? 'Sent with your message as its caption.' : 'Your message goes first, then each file.' });
+  } else {
+    add({ id: 'attachments', level: total > 8 * 1048576 ? 'warning' : 'ok', title: `${what} (${mb(total)}).`, note: total > 8 * 1048576 ? 'Large emails send more slowly and some phones won’t download them on mobile data.' : undefined });
+  }
 }

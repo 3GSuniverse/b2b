@@ -6,6 +6,7 @@ import { countEmailAudience, countWhatsAppAudience, iterateEmailAudience, iterat
 import { trialEnded, whatsappTrialCapacity, whatsappWebAllowed } from '../plans/entitlements.js';
 import { whatsappSessions } from '../../db/schema.js';
 import { isDomainReady } from '../domains/service.js';
+import { LIMITS, totalSize } from '../attachments/service.js';
 
 export class CampaignError extends Error {
   constructor(
@@ -20,7 +21,8 @@ export class CampaignError extends Error {
       | 'quota_exceeded'
       | 'whatsapp_not_ready'
       | 'trial_ended'
-      | 'trial_limit',
+      | 'trial_limit'
+      | 'attachments_too_large',
   ) {
     super(message);
     this.name = 'CampaignError';
@@ -85,6 +87,9 @@ export async function startCampaign(
   const subject = campaign.subject ?? campaign.template?.subject;
   const html = campaign.html ?? campaign.template?.html;
   if (!subject || !html) throw new CampaignError('The email has no subject or content', 'no_content');
+  if (totalSize(campaign.attachments) > LIMITS.emailTotalBytes) {
+    throw new CampaignError('The attachments are too large for email (over 15 MB in all). Remove some first.', 'attachments_too_large');
+  }
 
   const audienceSize = await countEmailAudience(db, campaign.tenantId, campaign.audience);
   const used = await monthlyUsage(campaign.tenantId, now, campaign.tenant.timezone);
@@ -160,7 +165,7 @@ export async function startWhatsAppCampaign(campaignId: string, opts: { enqueue?
   if (!whatsappWebAllowed(campaign.tenant, now)) throw new CampaignError('WhatsApp sending isn’t available on this account', 'whatsapp_not_ready');
   const session = await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.tenantId, campaign.tenantId) });
   if (session?.status !== 'CONNECTED') throw new CampaignError('Link your WhatsApp number first, in Settings → WhatsApp', 'whatsapp_not_ready');
-  if (!campaign.text?.trim()) throw new CampaignError('The message is empty', 'no_content');
+  if (!campaign.text?.trim() && !campaign.attachments.length) throw new CampaignError('The message is empty', 'no_content');
   // A trial sends at most N a day; refuse a campaign that couldn't finish before the trial ends
   const cap = await whatsappTrialCapacity(campaign.tenant, now);
   if (cap !== null) {

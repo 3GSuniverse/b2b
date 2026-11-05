@@ -352,6 +352,48 @@ tbody > tr {
 }
 .dispatch-live { animation: live 1.8s ease-out infinite; }
 
+/* ---------------------------------------------------------------- attachments */
+@keyframes attach-in {
+  0% { opacity: 0; transform: translateY(-14px) rotate(-3deg) scale(0.92); }
+  60% { opacity: 1; transform: translateY(2px) rotate(0.6deg) scale(1.01); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes attach-out { to { opacity: 0; transform: scale(0.9) translateY(4px); } }
+.attach-tile { animation: attach-in 380ms cubic-bezier(0.22, 1.2, 0.36, 1) both; }
+.attach-tile.attach-leave { animation: attach-out 170ms ease-in forwards; }
+@keyframes clip-wiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg) scale(1.06); } 60% { transform: rotate(9deg) scale(1.06); } }
+.attach-zone:hover .attach-clip { animation: clip-wiggle 520ms ease-in-out; }
+@keyframes clip-bob { 0%, 100% { transform: translateY(0) scale(1.08); } 50% { transform: translateY(-5px) scale(1.08); } }
+.attach-over .attach-clip { animation: clip-bob 700ms ease-in-out infinite; }
+.attach-over::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.6) 50%, transparent 70%);
+  animation: sweep 1.1s ease-in-out infinite;
+  pointer-events: none;
+}
+.attach-sheen { position: relative; overflow: hidden; }
+.attach-sheen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.7), transparent);
+  animation: sweep 1s ease-in-out infinite;
+}
+@keyframes wa-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); transform-origin: right bottom; }
+  to { opacity: 1; transform: none; }
+}
+.wa-bubble { animation: wa-in 320ms cubic-bezier(0.22, 1.2, 0.36, 1) both; }
+.wa-bubble + .wa-bubble { animation-delay: 90ms; }
+.wa-bubble + .wa-bubble + .wa-bubble { animation-delay: 180ms; }
+@keyframes wa-wave { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.55); } }
+.wa-bubble:hover .wa-wave { animation: wa-wave 900ms ease-in-out infinite; }
+@keyframes add-burst { 0% { box-shadow: 0 0 0 0 rgb(14 148 102 / 0.45); } 100% { box-shadow: 0 0 0 14px rgb(14 148 102 / 0); } }
+.add-burst { animation: add-burst 700ms ease-out; }
+
 @media (prefers-reduced-motion: reduce) {
   html .reveal { opacity: 1; transform: none; }
   *, *::before, *::after {

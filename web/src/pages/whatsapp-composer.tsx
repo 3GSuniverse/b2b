@@ -11,6 +11,7 @@ import { Badge, Panel } from '@/components/ui/display';
 import { Field, Input, Textarea } from '@/components/ui/field';
 import { Dialog, Popover, Tooltip } from '@/components/ui/overlay';
 import { WhatsAppPreview } from '@/components/whatsapp/preview';
+import { AttachmentPicker, describeFiles } from '@/components/attachments/attachments';
 import { useWhatsApp } from '@/components/whatsapp/settings';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -18,7 +19,7 @@ import { dateTime, n, phone as formatPhone } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { CampaignStatusBadge } from '@/lib/status';
 import { PrettyTags } from '@/lib/tags';
-import type { Audience, Campaign, CampaignPreview } from '@/lib/types';
+import type { Attachment, Audience, Campaign, CampaignPreview } from '@/lib/types';
 import { ChecksPanel, nextAt, Step, toIso, toLocalInput } from './composer';
 import { takeoff } from '@/lib/celebrate';
 
@@ -27,6 +28,7 @@ interface Draft {
   name: string;
   text: string;
   audience: Audience | null;
+  attachments: Attachment[];
 }
 
 export const WHATSAPP_STARTER = 'Namaste {first_name|there} 🙏\n\n*[TRIP NAME]* has a few seats left for [DATES].\n\nReply to this message to book, or call us on [PHONE].\n\n_Reply STOP to stop these messages._';
@@ -56,7 +58,7 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
   const wa = useWhatsApp();
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  const [draft, setDraft] = useState<Draft>(() => ({ name: c.name, text: c.text ?? '', audience: c.audience }));
+  const [draft, setDraft] = useState<Draft>(() => ({ name: c.name, text: c.text ?? '', audience: c.audience, attachments: c.attachments ?? [] }));
   const saved = useRef<Draft>(draft);
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved');
   const [version, setVersion] = useState(0);
@@ -71,7 +73,9 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
     if (!Object.keys(diff).length) return;
     setSaveState('saving');
     try {
-      const r = await api.patch<{ campaign: Campaign }>(`/api/campaigns/${id}`, diff);
+      const body: Record<string, unknown> = { ...diff };
+      if ('attachments' in body) body.attachments = draft.attachments.map((a) => a.id);
+      const r = await api.patch<{ campaign: Campaign }>(`/api/campaigns/${id}`, body);
       saved.current = { ...saved.current, ...diff } as Draft;
       qc.setQueryData(['campaign', id], r);
       setSaveState('saved');
@@ -280,8 +284,19 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
           <Step
             icon={<Braces className="h-4 w-4" />}
             title="Message"
-            summary={draft.text ? <PrettyTags text={draft.text.split('\n')[0]!.slice(0, 80)} /> : 'Write the message'}
-            done={!!draft.text.trim() && !errorFor(['content', 'placeholders', 'unknown_tags'])}
+            summary={
+              draft.text ? (
+                <>
+                  <PrettyTags text={draft.text.split('\n')[0]!.slice(0, 80)} />
+                  {draft.attachments.length > 0 && <span className="font-normal text-muted"> · {describeFiles(draft.attachments)}</span>}
+                </>
+              ) : draft.attachments.length ? (
+                describeFiles(draft.attachments)
+              ) : (
+                'Write the message'
+              )
+            }
+            done={(!!draft.text.trim() || draft.attachments.length > 0) && !errorFor(['content', 'placeholders', 'unknown_tags'])}
             error={errorFor(['content', 'placeholders', 'unknown_tags'])}
             open={open === 'message'}
             onToggle={() => setOpen(open === 'message' ? null : 'message')}
@@ -337,6 +352,10 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
               <p className="text-xs leading-relaxed text-muted">
                 Keep it short and personal, like a message you’d type yourself. Ending with “Reply STOP to stop these messages” lowers the chance of being reported.
               </p>
+              <div className="flex flex-col gap-2 border-t border-line-soft pt-4">
+                <span className="text-[13px] font-semibold">Photos, videos and files</span>
+                <AttachmentPicker channel="WHATSAPP" value={draft.attachments} onChange={(attachments) => set({ attachments })} />
+              </div>
             </div>
           </Step>
         </div>
@@ -350,7 +369,7 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
               </div>
               <Badge tone="grey">WhatsApp</Badge>
             </div>
-            <WhatsAppPreview text={preview.data?.rendered?.text ?? draft.text} businessName={wa.data?.displayName || tenant.name} phone={formatPhone(wa.data?.phone) || null} />
+            <WhatsAppPreview text={preview.data?.rendered?.text ?? draft.text} businessName={wa.data?.displayName || tenant.name} phone={formatPhone(wa.data?.phone) || null} attachments={draft.attachments} />
           </Panel>
           <ChecksPanel checks={checks} loading={preview.isFetching} />
         </div>

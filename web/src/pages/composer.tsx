@@ -15,6 +15,7 @@ import {
   MessageCircle,
   Loader2,
   Mail,
+  Paperclip,
   Pencil,
   Send,
   TriangleAlert,
@@ -25,6 +26,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AudienceEditor, describeAudience, useAudienceCount, useFieldLabel, useLists } from '@/components/campaigns/audience';
 import { DesignGallery, type Design } from '@/components/campaigns/design-picker';
+import { AttachmentPicker, describeFiles } from '@/components/attachments/attachments';
 import { useFields } from '@/components/contacts/contact-sheet';
 import { DeviceToggle, EmailPreview, type Device } from '@/components/email/email-frame';
 import { EmailThumbnail } from '@/components/email/thumbnail';
@@ -41,7 +43,7 @@ import { CampaignStatusBadge } from '@/lib/status';
 import { WHATSAPP_STARTER, WhatsAppComposer } from './whatsapp-composer';
 import { Segmented } from '@/components/ui/controls';
 import { PrettyTags } from '@/lib/tags';
-import type { Audience, Campaign, CampaignPreview, Check as CheckT, Sender } from '@/lib/types';
+import type { Attachment, Audience, Campaign, CampaignPreview, Check as CheckT, Sender } from '@/lib/types';
 import { takeoff } from '@/lib/celebrate';
 
 // ---------------------------------------------------------------- time helpers
@@ -157,6 +159,7 @@ interface Draft {
   previewText: string;
   html: string | null;
   audience: Audience | null;
+  attachments: Attachment[];
 }
 const toDraft = (c: Campaign): Draft => ({
   name: c.name,
@@ -165,6 +168,7 @@ const toDraft = (c: Campaign): Draft => ({
   previewText: c.previewText ?? '',
   html: c.html,
   audience: c.audience,
+  attachments: c.attachments ?? [],
 });
 
 export function Step({ icon, title, summary, done, open, onToggle, children, error }: { icon: ReactNode; title: string; summary: ReactNode; done: boolean; open: boolean; onToggle: () => void; children: ReactNode; error?: boolean }) {
@@ -306,7 +310,7 @@ function Composer({ id }: { id: string }) {
   const saved = useRef<Draft | null>(null);
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved');
   const [version, setVersion] = useState(0);
-  const [open, setOpen] = useState<'to' | 'from' | 'subject' | 'content' | null>(null);
+  const [open, setOpen] = useState<'to' | 'from' | 'subject' | 'content' | 'files' | null>(null);
   const [device, setDevice] = useState<Device>('desktop');
   const [editing, setEditing] = useState(false);
   const [changingDesign, setChangingDesign] = useState(false);
@@ -329,7 +333,8 @@ function Composer({ id }: { id: string }) {
     if (!Object.keys(diff).length) return;
     setSaveState('saving');
     try {
-      const body = { ...diff };
+      const body: Record<string, unknown> = { ...diff };
+      if ('attachments' in body) body.attachments = draft.attachments.map((a) => a.id);
       if ('subject' in body) body.subject = draft.subject || null;
       if ('previewText' in body) body.previewText = draft.previewText || null;
       const r = await api.patch<{ campaign: Campaign }>(`/api/campaigns/${id}`, body);
@@ -667,6 +672,18 @@ function Composer({ id }: { id: string }) {
               </div>
             </div>
           </Step>
+
+          <Step
+            icon={<Paperclip className="h-4 w-4" />}
+            title="Attachments"
+            summary={draft.attachments.length ? describeFiles(draft.attachments) : 'Optional: brochure, itinerary, photos'}
+            done={draft.attachments.length > 0 && !errorFor(['attachments'])}
+            error={errorFor(['attachments'])}
+            open={open === 'files'}
+            onToggle={() => setOpen(open === 'files' ? null : 'files')}
+          >
+            <AttachmentPicker channel="EMAIL" value={draft.attachments} onChange={(attachments) => set({ attachments })} />
+          </Step>
         </div>
 
         {/* Right: live preview + checks */}
@@ -687,6 +704,7 @@ function Composer({ id }: { id: string }) {
               fromName={sender?.fromName ?? tenant.name}
               subject={preview.data?.rendered?.subject ?? draft.subject}
               previewText={draft.previewText}
+              attachments={draft.attachments}
             />
           </Panel>
           <ChecksPanel checks={checks} loading={preview.isFetching} />

@@ -11,6 +11,8 @@ const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const SEND_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
+// For messages with attachments: takes the raw message as-is, up to 35 MB
+const UPLOAD_SEND_URL = 'https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=media';
 
 type Fetch = typeof fetch;
 let fetchImpl: Fetch = (...args) => fetch(...args);
@@ -181,12 +183,20 @@ export interface GmailSendResult {
   message?: string;
 }
 
-export async function gmailSendRaw(accessToken: string, raw: string): Promise<GmailSendResult> {
-  const res = await fetchImpl(SEND_URL, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ raw }),
-  });
+/** Sends a whole RFC 5322 message. Large ones (attachments) go through Gmail's upload endpoint. */
+export async function gmailSendRaw(accessToken: string, mime: string): Promise<GmailSendResult> {
+  const large = mime.length > 2 * 1024 * 1024 || /^Content-Type: multipart\/mixed/m.test(mime.slice(0, 4000));
+  const res = large
+    ? await fetchImpl(UPLOAD_SEND_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'message/rfc822' },
+        body: mime,
+      })
+    : await fetchImpl(SEND_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ raw: Buffer.from(mime).toString('base64url') }),
+      });
   const json = (await res.json().catch(() => ({}))) as {
     id?: string;
     error?: { message?: string; errors?: { reason?: string }[]; status?: string };

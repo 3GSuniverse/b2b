@@ -8,6 +8,7 @@ import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  customType,
   type AnyPgColumn,
   date,
   index,
@@ -387,6 +388,30 @@ export const importJobs = pgTable('import_jobs', {
 //  Content & campaigns
 // ---------------------------------------------------------------------
 
+/** A file attached to a message, as the message stores it (the bytes live in `attachments`). */
+export type AttachmentRef = { id: string; name: string; type: string; size: number };
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
+
+/**
+ * Files a company attaches to emails and WhatsApp messages: brochures, itineraries, photos, voice notes.
+ * Kept in the database so backups carry them; never changed once uploaded.
+ */
+export const attachments = pgTable(
+  'attachments',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    name: text().notNull(),
+    type: text().notNull(), // MIME type
+    size: integer().notNull(),
+    data: bytea().notNull(),
+    createdById: text().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.tenantId, t.createdAt)],
+);
+
 export const templates = pgTable('templates', {
   id: id(),
   tenantId: tenantRef(),
@@ -397,6 +422,7 @@ export const templates = pgTable('templates', {
   html: text(),
   text: text(),
   design: jsonb(), // editor state, so templates can be re-edited visually
+  attachments: jsonb().$type<AttachmentRef[]>().notNull().default([]),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -429,6 +455,7 @@ export const campaigns = pgTable(
     html: text(),
     text: text(),
     audience: jsonb().$type<Audience>(),
+    attachments: jsonb().$type<AttachmentRef[]>().notNull().default([]),
     scheduledAt: ts(),
     startedAt: ts(),
     completedAt: ts(),
@@ -472,6 +499,8 @@ export const automations = pgTable(
     audience: jsonb().$type<Audience>(),
     templateId: text().references(() => templates.id, { onDelete: 'set null' }),
     senderId: text().references(() => senders.id, { onDelete: 'set null' }),
+    // Sent along with the template's own attachments
+    attachments: jsonb().$type<AttachmentRef[]>().notNull().default([]),
     activatedAt: ts(), // dates before activation are never back-filled
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -497,6 +526,7 @@ export const messages = pgTable(
     tripId: text().references((): AnyPgColumn => trips.id, { onDelete: 'set null' }),
     subject: text(),
     body: text(),
+    attachments: jsonb().$type<AttachmentRef[]>().notNull().default([]),
     // About the customer's own booking (payment reminder, trip starting): sent even if they opted out of offers
     service: boolean().notNull().default(false),
     contactId: text().references(() => contacts.id, { onDelete: 'set null' }),
@@ -1071,6 +1101,7 @@ export const quotesRelations = relations(quotes, ({ one }) => ({
   tenant: one(tenants, { fields: [quotes.tenantId], references: [tenants.id] }),
 }));
 
+export type Attachment = typeof attachments.$inferSelect;
 export type Quote = typeof quotes.$inferSelect;
 export type Package = typeof packages.$inferSelect;
 export type RateItem = typeof rateItems.$inferSelect;

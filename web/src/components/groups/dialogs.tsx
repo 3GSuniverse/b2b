@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
-import { Mail, Phone } from 'lucide-react';
+import { Mail, Phone, UserPlus } from 'lucide-react';
+import { AttachmentPicker, MAX_EMAIL_BYTES } from '@/components/attachments/attachments';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,7 @@ import { sanitizeRupees } from '@/components/trips/shared';
 import { PackageSelect } from '@/components/packages/package-sheet';
 import { api, ApiError } from '@/lib/api';
 import { inr, rupeesInput } from '@/lib/format';
-import type { GroupDetail } from '@/lib/types';
+import type { Attachment, GroupDetail } from '@/lib/types';
 import { takeoff } from '@/lib/celebrate';
 
 const errOf = (e: unknown, k: string) => (e instanceof ApiError ? e.field(k) : undefined);
@@ -167,20 +168,22 @@ const PRESETS = [
   'Weather update: roads are clear and we’re on schedule. See you soon!',
 ];
 
-/** One message to every family on the departure. */
-export function BroadcastDialog({ group, open, onClose }: { group: GroupDetail; open: boolean; onClose: () => void }) {
+/** One message to every family on the departure, with files if needed (bus timings, the hotel list). */
+export function BroadcastDialog({ group, open, onClose, onAddFamily }: { group: GroupDetail; open: boolean; onClose: () => void; onAddFamily?: () => void }) {
+  // Kept while the dialog is closed to add a family, cleared once the message goes
   const [text, setText] = useState('');
+  const [files, setFiles] = useState<Attachment[]>([]);
   const [channel, setChannel] = useState<'AUTO' | 'WHATSAPP' | 'EMAIL'>('AUTO');
-  useEffect(() => {
-    if (open) setText('');
-  }, [open]);
   const families = group.bookings.filter((b) => b.status === 'BOOKED' || b.status === 'QUOTED').length;
+  const tooBigForEmail = files.reduce((a, f) => a + f.size, 0) > MAX_EMAIL_BYTES;
   const m = useMutation({
-    mutationFn: () => api.post<{ whatsapp: number; email: number; skipped: string[] }>(`/api/groups/${group.id}/broadcast`, { text, channel }),
+    mutationFn: () => api.post<{ whatsapp: number; email: number; skipped: string[] }>(`/api/groups/${group.id}/broadcast`, { text, channel, attachments: files.map((f) => f.id) }),
     onSuccess: (r) => {
       const n = r.whatsapp + r.email;
       if (n > 0) takeoff();
       toast.success(`Sent to ${n} famil${n === 1 ? 'y' : 'ies'}`, { description: r.skipped.length ? `Couldn’t reach ${r.skipped.join(', ')}. Call them.` : undefined, duration: r.skipped.length ? 12_000 : 4000 });
+      setText('');
+      setFiles([]);
       onClose();
     },
   });
@@ -194,7 +197,7 @@ export function BroadcastDialog({ group, open, onClose }: { group: GroupDetail; 
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={m.isPending} disabled={!text.trim() || !families} onClick={() => m.mutate()}>
+          <Button variant="primary" loading={m.isPending} disabled={(!text.trim() && !files.length) || !families || (channel === 'EMAIL' && tooBigForEmail)} onClick={() => m.mutate()}>
             Send to {families} famil{families === 1 ? 'y' : 'ies'}
           </Button>
         </>
@@ -211,6 +214,11 @@ export function BroadcastDialog({ group, open, onClose }: { group: GroupDetail; 
             </button>
           ))}
         </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-[13px] font-semibold">Files</span>
+          <AttachmentPicker channel={channel === 'AUTO' ? 'BOTH' : channel} value={files} onChange={setFiles} />
+          {channel === 'AUTO' && tooBigForEmail && <p className="text-xs text-muted">Families without WhatsApp can’t get files this large by email; they’ll be listed so you can call them.</p>}
+        </div>
         <Field label="Send by">
           {(p) => (
             <NativeSelect {...p} value={channel} onChange={(e) => setChannel(e.target.value as typeof channel)}>
@@ -220,6 +228,17 @@ export function BroadcastDialog({ group, open, onClose }: { group: GroupDetail; 
             </NativeSelect>
           )}
         </Field>
+        {onAddFamily && (
+          <button type="button" onClick={onAddFamily} className="group flex items-center gap-3 rounded-[12px] border border-dashed border-line px-3.5 py-2.5 text-left hover:border-accent/50 hover:bg-accent-soft/30">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft text-accent transition-transform group-hover:scale-110">
+              <UserPlus className="h-4 w-4" />
+            </span>
+            <span className="flex flex-col">
+              <span className="text-[13px] font-semibold">Someone missing? Add a family</span>
+              <span className="text-xs text-muted">Your message stays here; it goes to them too.</span>
+            </span>
+          </button>
+        )}
       </div>
     </Dialog>
   );

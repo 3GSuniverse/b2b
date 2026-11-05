@@ -5,7 +5,8 @@ import { db } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
 import { clearAuthState, useDbAuthState } from './auth-store.js';
 import { setQr, subscribeCommands, type WhatsAppCommand } from './bus.js';
-import { fromJid, toJid, WhatsAppError, type WhatsAppGateway } from './gateway.js';
+import { fromJid, toJid, WhatsAppError, type WhatsAppGateway, type WhatsAppMedia } from './gateway.js';
+import type { AnyMessageContent } from 'baileys';
 import { onConnected, onEnded, onIncoming, onLinkFailed, onQr, onReceipt } from './service.js';
 
 const log = logger.child({ module: 'whatsapp' });
@@ -182,6 +183,20 @@ export class WhatsAppManager implements WhatsAppGateway {
   async sendText(tenantId: string, phone: string, text: string) {
     const sent = await this.socketFor(tenantId).sendMessage(toJid(phone), { text });
     if (!sent?.key.id) throw new WhatsAppError('WhatsApp didn’t accept the message', false, 'send_failed');
+    return { id: sent.key.id };
+  }
+
+  async sendMedia(tenantId: string, phone: string, m: WhatsAppMedia) {
+    const content: AnyMessageContent =
+      m.kind === 'image'
+        ? { image: m.data, mimetype: m.mimeType, caption: m.caption }
+        : m.kind === 'video'
+          ? { video: m.data, mimetype: m.mimeType, caption: m.caption }
+          : m.kind === 'audio'
+            ? { audio: m.data, mimetype: m.mimeType }
+            : { document: m.data, mimetype: m.mimeType, fileName: m.fileName, caption: m.caption };
+    const sent = await this.socketFor(tenantId).sendMessage(toJid(phone), content);
+    if (!sent?.key.id) throw new WhatsAppError('WhatsApp didn’t accept the file', false, 'send_failed');
     return { id: sent.key.id };
   }
 }

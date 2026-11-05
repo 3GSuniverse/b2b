@@ -10,6 +10,7 @@ import { audienceSchema } from '../campaigns/service.js';
 import { countEmailAudience } from '../audience/resolve.js';
 import { isDomainReady } from '../domains/service.js';
 import { dueContactsQuery } from './engine.js';
+import { attachmentIds, LIMITS, mergeRefs, resolveRefs, totalSize } from '../attachments/service.js';
 
 const body = z.object({
   name: z.string().trim().min(1, 'Give the automation a name').max(120),
@@ -20,6 +21,7 @@ const body = z.object({
   audience: audienceSchema.nullable().optional(),
   templateId: z.string().nullable().optional(),
   senderId: z.string().nullable().optional(),
+  attachments: attachmentIds.optional(), // sent along with the template's own files
 });
 type IdParams = { Params: { id: string } };
 
@@ -69,7 +71,8 @@ async function dto(a: Awaited<ReturnType<typeof owned>>) {
     repeat: a.repeat,
     timezone: a.tenant.timezone,
     audience: a.audience,
-    template: a.template ? { id: a.template.id, name: a.template.name, subject: a.template.subject } : null,
+    template: a.template ? { id: a.template.id, name: a.template.name, subject: a.template.subject, attachments: a.template.attachments } : null,
+    attachments: a.attachments,
     sender: a.sender ? { id: a.sender.id, fromName: a.sender.fromName, fromEmail: a.sender.fromEmail } : null,
     activatedAt: a.activatedAt,
     stats: { sent: a.sent, delivered: a.delivered, clicked: a.clicked, clickRate: a.sent ? Math.round((a.clicked / a.sent) * 1000) / 10 : 0 },
@@ -90,11 +93,11 @@ export async function automationRoutes(app: FastifyInstance) {
 
   app.post('/api/automations', { preHandler: requireAuth }, async (req, reply) => {
     const tenantId = tenantOf(req);
-    const b = parseBody(body, req.body);
+    const { attachments: ids, ...b } = parseBody(body, req.body);
     await assertRefs(tenantId, b);
     const [row] = await db
       .insert(automations)
-      .values({ tenantId, ...b, audience: b.audience ?? null, templateId: b.templateId ?? null, senderId: b.senderId ?? null })
+      .values({ tenantId, ...b, audience: b.audience ?? null, templateId: b.templateId ?? null, senderId: b.senderId ?? null, attachments: await resolveRefs(tenantId, ids) })
       .returning();
     return reply.code(201).send({ automation: await dto(await owned(tenantId, row!.id)) });
   });
@@ -107,9 +110,10 @@ export async function automationRoutes(app: FastifyInstance) {
   app.patch<IdParams>('/api/automations/:id', { preHandler: requireAuth }, async (req) => {
     const tenantId = tenantOf(req);
     await owned(tenantId, req.params.id);
-    const b = parseBody(body.partial(), req.body);
+    const { attachments: ids, ...b } = parseBody(body.partial(), req.body);
     await assertRefs(tenantId, b);
-    const patch = Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined));
+    const patch: Record<string, unknown> = Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined));
+    if (ids !== undefined) patch.attachments = await resolveRefs(tenantId, ids);
     if (Object.keys(patch).length) await db.update(automations).set(patch).where(eq(automations.id, req.params.id));
     return { automation: await dto(await owned(tenantId, req.params.id)) };
   });
@@ -123,6 +127,9 @@ export async function automationRoutes(app: FastifyInstance) {
       throw new AppError(400, 'placeholders_left', `The template still has ${left.map((p) => (p.length > 40 ? p.slice(0, 38) + '…]' : p)).join(', ')}. Replace ${left.length > 1 ? 'them' : 'it'} before switching on.`);
     }
     if (!a.sender) throw new AppError(400, 'no_sender', 'Choose who the email is from first');
+    if (totalSize(mergeRefs(a.template.attachments, a.attachments)) > LIMITS.emailTotalBytes) {
+      throw new AppError(400, 'attachments_too_large', 'The attachments are too large for email (over 15 MB in all). Remove some first.');
+    }
     const senderReady = a.sender.kind === 'DOMAIN' ? !!a.sender.domain && isDomainReady(a.sender.domain) : a.sender.connection?.status === 'ACTIVE';
     if (!senderReady) throw new AppError(400, 'sender_not_verified', `${a.sender.fromEmail} can’t send yet. Finish setting it up in Settings → Senders.`);
     if (a.dateField.type !== 'DATE') throw new AppError(400, 'not_a_date_field', `“${a.dateField.label}” isn’t a date field`);

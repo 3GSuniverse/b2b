@@ -3,8 +3,18 @@
  * The real implementation (Baileys, WhatsApp Web) lives in the worker process;
  * tests use the in-memory one.
  */
+export type WhatsAppMedia = {
+  kind: 'image' | 'video' | 'audio' | 'document';
+  data: Buffer;
+  mimeType: string;
+  fileName: string;
+  caption?: string;
+};
+
 export interface WhatsAppGateway {
   sendText(tenantId: string, phoneE164: string, text: string): Promise<{ id: string }>;
+  /** A photo, video, audio clip or document, with an optional caption. */
+  sendMedia(tenantId: string, phoneE164: string, media: WhatsAppMedia): Promise<{ id: string }>;
   /** Whether this number has a WhatsApp account. */
   exists(tenantId: string, phoneE164: string): Promise<boolean>;
 }
@@ -37,7 +47,7 @@ export const fromJid = (jid: string) => `+${jid.split('@')[0]!.split(':')[0]}`;
 
 /** For tests: records what would have been sent. */
 export class MemoryWhatsAppGateway implements WhatsAppGateway {
-  sent: { tenantId: string; to: string; text: string; id: string }[] = [];
+  sent: { tenantId: string; to: string; text: string; id: string; media?: Omit<WhatsAppMedia, 'data'> & { size: number } }[] = [];
   notOnWhatsApp = new Set<string>();
   failNext: WhatsAppError | null = null;
   async sendText(tenantId: string, to: string, text: string) {
@@ -48,6 +58,17 @@ export class MemoryWhatsAppGateway implements WhatsAppGateway {
     }
     const id = `wamid-${this.sent.length + 1}-${Math.random().toString(36).slice(2, 8)}`;
     this.sent.push({ tenantId, to, text, id });
+    return { id };
+  }
+  async sendMedia(tenantId: string, to: string, media: WhatsAppMedia) {
+    if (this.failNext) {
+      const e = this.failNext;
+      this.failNext = null;
+      throw e;
+    }
+    const id = `wamid-${this.sent.length + 1}-${Math.random().toString(36).slice(2, 8)}`;
+    const { data, ...rest } = media;
+    this.sent.push({ tenantId, to, text: media.caption ?? '', id, media: { ...rest, size: data.length } });
     return { id };
   }
   async exists(_tenantId: string, phone: string) {
