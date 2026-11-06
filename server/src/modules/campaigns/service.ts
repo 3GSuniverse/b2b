@@ -131,12 +131,13 @@ async function assertRefs(tenantId: string, input: { senderId?: string | null; t
 
 export const listCampaignsQuery = z.object({
   status: z.enum(['DRAFT', 'SCHEDULED', 'SENDING', 'PAUSED', 'SENT', 'CANCELLED', 'FAILED']).optional(),
+  channel: z.enum(['EMAIL', 'WHATSAPP']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export async function listCampaigns(tenantId: string, q: z.infer<typeof listCampaignsQuery>) {
-  const where = and(eq(campaigns.tenantId, tenantId), q.status ? eq(campaigns.status, q.status) : undefined);
+  const where = and(eq(campaigns.tenantId, tenantId), q.status ? eq(campaigns.status, q.status) : undefined, q.channel ? eq(campaigns.channel, q.channel) : undefined);
   const [rows, [{ total } = { total: 0 }]] = await Promise.all([
     db.query.campaigns.findMany({
       where,
@@ -144,12 +145,12 @@ export async function listCampaigns(tenantId: string, q: z.infer<typeof listCamp
       orderBy: [desc(campaigns.updatedAt)],
       limit: q.pageSize,
       offset: (q.page - 1) * q.pageSize,
-      columns: { html: false, text: false }, // lists stay light
+      columns: { html: false }, // lists stay light
     }),
     db.select({ total: count() }).from(campaigns).where(where),
   ]);
   return {
-    campaigns: rows.map((r) => campaignDto({ ...r, html: null, text: null } as CampaignRow)),
+    campaigns: rows.map((r) => campaignDto({ ...r, html: null, text: r.text ? r.text.slice(0, 200) : null } as CampaignRow)), // the first words of a WhatsApp message
     page: q.page,
     total,
     pages: Math.max(1, Math.ceil(total / q.pageSize)),

@@ -394,6 +394,12 @@ tbody > tr {
 @keyframes add-burst { 0% { box-shadow: 0 0 0 0 rgb(14 148 102 / 0.45); } 100% { box-shadow: 0 0 0 14px rgb(14 148 102 / 0); } }
 .add-burst { animation: add-burst 700ms ease-out; }
 
+/* Master tabs (Email, WhatsApp): the big icon in the band drifts; a tab's content rises in when you switch */
+@keyframes hub-drift { 0%, 100% { transform: rotate(-14deg) translateY(0); } 50% { transform: rotate(-8deg) translateY(10px); } }
+.hub-drift { animation: hub-drift 9s ease-in-out infinite; }
+@keyframes hub-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.hub-in { animation: hub-in 320ms cubic-bezier(0.22, 1, 0.36, 1); }
+
 @media (prefers-reduced-motion: reduce) {
   html .reveal { opacity: 1; transform: none; }
   *, *::before, *::after {

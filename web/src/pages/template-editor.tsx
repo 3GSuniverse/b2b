@@ -12,6 +12,7 @@ import { Panel, Skeleton } from '@/components/ui/display';
 import { Field, Input } from '@/components/ui/field';
 import { Sheet } from '@/components/ui/overlay';
 import { api, ApiError } from '@/lib/api';
+import { useNavSection } from '@/lib/section';
 import { useSession } from '@/lib/session';
 import type { Attachment, Rendered, Template } from '@/lib/types';
 
@@ -81,14 +82,15 @@ export function TemplateEditorPage() {
     },
   });
 
-  if (q.error) return <Navigate to="/templates" replace />;
+  useNavSection('email');
+  if (q.error) return <Navigate to="/email/templates" replace />;
   if (!draft) return <Skeleton className="h-[640px] rounded-[var(--radius-panel)]" />;
   const set = (p: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...p } : d));
 
   return (
     <>
       <header className="flex flex-col gap-4">
-        <Link to="/templates" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
+        <Link to="/email/templates" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
           <ArrowLeft className="h-3.5 w-3.5" /> Templates
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-4">

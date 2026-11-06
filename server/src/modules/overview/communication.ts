@@ -16,10 +16,10 @@ import { tripStats } from '../trips/service.js';
 
 export const SOURCES = ['automation', 'payment_reminder', 'trip_message', 'broadcast', 'direct'] as const;
 export type MessageSource = (typeof SOURCES)[number];
-const AUTOMATIC = sql`('automation', 'payment_reminder', 'trip_message')`;
+export const AUTOMATIC = sql`('automation', 'payment_reminder', 'trip_message')`;
 
 /** messages, each with its source, plus the names the activity feed needs */
-const classified = (tenantId: string) => sql`
+export const classified = (tenantId: string) => sql`
   select m.*,
          case
            when m.automation_id is not null then 'automation'
@@ -42,7 +42,7 @@ const FOLLOWUP_TITLE: Record<string, string> = {
   QUOTE_FOLLOWUP: 'Quote follow-up',
 };
 
-type FeedRow = {
+export type FeedRow = {
   id: string;
   source: MessageSource;
   channel: 'EMAIL' | 'WHATSAPP';
@@ -61,7 +61,7 @@ type FeedRow = {
   trip_title: string | null;
 };
 
-function feedTitle(r: FeedRow) {
+export function feedTitle(r: FeedRow) {
   switch (r.source) {
     case 'automation':
       return r.automation_name ?? 'Automatic message';

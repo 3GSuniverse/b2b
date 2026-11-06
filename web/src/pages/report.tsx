@@ -5,6 +5,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DeviceToggle, EmailPreview, type Device } from '@/components/email/email-frame';
 import { WhatsAppPreview } from '@/components/whatsapp/preview';
+import { useNavSection } from '@/lib/section';
 import { useSession } from '@/lib/session';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Panel, PanelHeader, ProgressBar, Skeleton } from '@/components/ui/display';
@@ -126,7 +127,8 @@ export function ReportPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (q.error) return <Navigate to="/campaigns" replace />;
+  useNavSection(q.data ? (q.data.campaign.channel === 'WHATSAPP' ? 'whatsapp' : 'email') : null);
+  if (q.error) return <Navigate to="/email/broadcasts" replace />;
   if (!q.data)
     return (
       <div className="flex flex-col gap-6">
@@ -166,8 +168,8 @@ export function ReportPage() {
   return (
     <>
       <header className="flex flex-col gap-4">
-        <Link to="/campaigns" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
-          <ArrowLeft className="h-3.5 w-3.5" /> Broadcasts
+        <Link to={wa ? '/whatsapp/broadcasts' : '/email/broadcasts'} className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
+          <ArrowLeft className="h-3.5 w-3.5" /> {wa ? 'WhatsApp' : 'Email'}: broadcasts
         </Link>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-2">

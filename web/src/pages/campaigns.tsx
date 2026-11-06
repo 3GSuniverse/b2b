@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Copy, MessageCircle, MoreHorizontal, Pencil, Send, Trash2, XCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, MessageCircle, MoreHorizontal, Pencil, Plus, Send, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -45,7 +45,7 @@ function Engagement({ c }: { c: Campaign }) {
   );
 }
 
-export function CampaignsPage() {
+export function CampaignsPage({ channel, embedded }: { channel?: 'EMAIL' | 'WHATSAPP'; embedded?: boolean } = {}) {
   const [params, setParams] = useSearchParams();
   const nav = useNavigate();
   const qc = useQueryClient();
@@ -55,8 +55,8 @@ export function CampaignsPage() {
   const [cancelling, setCancelling] = useState<Campaign | null>(null);
 
   const q = useQuery({
-    queryKey: ['campaigns', tab, page],
-    queryFn: () => api.get<Page>(`/api/campaigns${qs({ status: tab === 'ALL' ? undefined : tab, page, pageSize: 20 })}`),
+    queryKey: ['campaigns', channel ?? 'ALL', tab, page],
+    queryFn: () => api.get<Page>(`/api/campaigns${qs({ status: tab === 'ALL' ? undefined : tab, channel, page, pageSize: 20 })}`),
     placeholderData: keepPreviousData,
     refetchInterval: (query) => (query.state.data?.campaigns.some((c) => c.status === 'SENDING') ? 4000 : false),
   });
@@ -92,29 +92,38 @@ export function CampaignsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const newHref = channel === 'WHATSAPP' ? '/campaigns/new?channel=WHATSAPP' : '/campaigns/new';
   const setTab = (t: Tab) => setParams(t === 'ALL' ? {} : { tab: t }, { replace: true });
   const rows = q.data?.campaigns ?? [];
   const isEmptyAccount = tab === 'ALL' && q.data && q.data.total === 0;
 
   return (
     <>
-      <PageHeader
-        title="Broadcasts"
-        description="One message to many customers, by email or WhatsApp, now or at a time you pick."
-      />
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-ink-2">{channel === 'WHATSAPP' ? 'One WhatsApp message to many customers, now or at a time you pick.' : 'One email to many customers, now or at a time you pick.'}</p>
+          <LinkButton to={newHref} variant="primary">
+            <Plus className="h-4 w-4" strokeWidth={2.4} /> New {channel === 'WHATSAPP' ? 'WhatsApp' : 'email'} broadcast
+          </LinkButton>
+        </div>
+      ) : (
+        <PageHeader title="Broadcasts" description="One message to many customers, by email or WhatsApp, now or at a time you pick." />
+      )}
 
       {isEmptyAccount ? (
         <Panel>
           <EmptyState
             icon={<Send />}
-            title="Send your first broadcast"
+            title={channel === 'WHATSAPP' ? 'Send your first WhatsApp broadcast' : 'Send your first broadcast'}
             action={
-              <LinkButton to="/campaigns/new" variant="primary">
-                Start from a design
+              <LinkButton to={newHref} variant="primary">
+                {channel === 'WHATSAPP' ? 'Write the message' : 'Start from a design'}
               </LinkButton>
             }
           >
-            Pick a ready-made design, change the words, choose who gets it, and send it now or schedule it for later.
+            {channel === 'WHATSAPP'
+              ? 'Write one message, add a photo or PDF if you like, choose who gets it, and send it now or schedule it for later.'
+              : 'Pick a ready-made design, change the words, choose who gets it, and send it now or schedule it for later.'}
           </EmptyState>
         </Panel>
       ) : (

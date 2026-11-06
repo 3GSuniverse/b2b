@@ -19,8 +19,6 @@ import { TripMessagesSettings } from '@/components/trips/trip-messages-settings'
 import { ApiKeysSettings } from '@/components/api-keys';
 
 const SECTIONS = [
-  { id: 'senders', label: 'Sending addresses', icon: Send },
-  { id: 'domains', label: 'Domains', icon: Globe },
   { id: 'payments', label: 'Payments', icon: Wallet },
   { id: 'trip-messages', label: 'Trip messages', icon: Plane },
   { id: 'company', label: 'Company', icon: Building2 },
@@ -171,7 +169,7 @@ function DomainCard({ d, onDelete }: { d: Domain; onDelete: () => void }) {
   );
 }
 
-function Domains() {
+export function Domains() {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ['domains'],
@@ -349,7 +347,7 @@ function SenderRow({ s, mailbox, onEdit, onRemove }: { s: Sender; mailbox?: Mail
   );
 }
 
-function Senders() {
+export function Senders() {
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
   const senders = useQuery({ queryKey: ['senders'], queryFn: () => api.get<{ senders: Sender[] }>('/api/senders') });
@@ -447,7 +445,7 @@ function Senders() {
               Add an address
             </Button>
           ) : (
-            <NavLink to="/settings/domains" className="mt-auto self-start text-[13px] font-semibold text-accent hover:text-accent-strong">
+            <NavLink to="/email/setup?part=domains" className="mt-auto self-start text-[13px] font-semibold text-accent hover:text-accent-strong">
               {domains.data?.domains.length ? 'Finish verifying your domain first' : 'Verify your domain first'}
             </NavLink>
           )}
@@ -649,8 +647,10 @@ export function SettingsPage() {
   if (user.role === 'MEMBER') return <Navigate to="/" replace />;
   if (section === 'account') return <Navigate to="/settings/company" replace />;
   if (section === 'whatsapp') return <Navigate to="/whatsapp" replace />; // it has its own page now
-  if (!sections.some((s) => s.id === section)) return <Navigate to="/settings/senders" replace />;
-  const content: Record<Section, ReactNode> = { senders: <Senders />, domains: <Domains />, payments: <PaymentSettingsPanel />, 'trip-messages': <TripMessagesSettings />, company: <Company />, 'api-keys': <ApiKeysSettings /> };
+  if (section === 'senders') return <Navigate to="/email/setup" replace />; // email setup lives under Email now
+  if (section === 'domains') return <Navigate to="/email/setup?part=domains" replace />;
+  if (!sections.some((s) => s.id === section)) return <Navigate to="/settings/company" replace />;
+  const content: Record<Section, ReactNode> = { payments: <PaymentSettingsPanel />, 'trip-messages': <TripMessagesSettings />, company: <Company />, 'api-keys': <ApiKeysSettings /> };
   return (
     <>
       <PageHeader title="Settings" />

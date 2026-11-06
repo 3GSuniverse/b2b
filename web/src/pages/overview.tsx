@@ -11,7 +11,9 @@ import {
   Megaphone,
   MessageCircle,
   MessageSquarePlus,
+  Plane,
   PlaneTakeoff,
+  Plus,
   Repeat2,
   Send,
   ShieldCheck,
@@ -285,7 +287,7 @@ function deliveryLabel(a: Communication['activity'][number]) {
   return { text: 'Sent', cls: 'text-muted' };
 }
 
-function WorkingForYou({ items }: { items: Communication['activity'] }) {
+export function WorkingForYou({ items, title = "Working for you", note = "The latest messages Dhrona sent, newest first." }: { items: Communication["activity"]; title?: string; note?: string }) {
   return (
     <Panel className="spotlight flex flex-col">
       <div className="flex items-start justify-between gap-3 px-5 pb-3 pt-5 sm:px-6 sm:pt-6">
@@ -295,9 +297,9 @@ function WorkingForYou({ items }: { items: Communication['activity'] }) {
               <span className="dispatch-live absolute inset-0 rounded-full bg-success" />
               <span className="relative h-2 w-2 rounded-full bg-success" />
             </span>
-            Working for you
+            {title}
           </h2>
-          <p className="text-[13px] text-muted">The latest messages Dhrona sent, newest first.</p>
+          <p className="text-[13px] text-muted">{note}</p>
         </div>
       </div>
       {items.length === 0 ? (
@@ -525,7 +527,7 @@ function Setup({ o }: { o: Overview }) {
       done: o.sending.sendersReady > 0,
       title: 'Connect the address you send from',
       body: 'Verify your company domain, or connect a Gmail account in one click.',
-      to: '/settings/senders',
+      to: '/email/setup',
       cta: 'Connect',
       icon: <Mail />,
     },
@@ -610,6 +612,46 @@ function OverviewSkeleton() {
   );
 }
 
+/** The four doors of the app, big and colourful: Email, WhatsApp, Trips, Customers. */
+function Launchpad({ o }: { o: Overview }) {
+  const c = o.communication.thisMonth;
+  const tiles = [
+    { to: '/email', title: 'Email', note: 'Broadcasts, automatic emails, designs', value: c.email, unit: 'sent this month', icon: Mail, quick: { to: '/campaigns/new', label: 'Broadcast' }, cls: 'bg-[linear-gradient(135deg,#3b31b8,#4A3FD1_50%,#7a6cf5)] text-white', chip: 'bg-white/15 ring-1 ring-white/25', sub: 'text-white/75', pill: 'bg-white text-accent-strong' },
+    { to: '/whatsapp', title: 'WhatsApp', note: 'Broadcasts, automatic messages, your number', value: c.whatsapp, unit: 'sent this month', icon: MessageCircle, quick: { to: '/campaigns/new?channel=WHATSAPP', label: 'Broadcast' }, cls: 'bg-[linear-gradient(135deg,#07603f,#0e9466_50%,#25c48a)] text-white', chip: 'bg-white/15 ring-1 ring-white/25', sub: 'text-white/75', pill: 'bg-white text-success-strong' },
+    { to: '/trips', title: 'Trips', note: 'Enquiries, quotes, bookings, payments', value: o.communication.comingUp.newEnquiries, unit: 'enquiries waiting', icon: Plane, quick: { to: '/trips?new=1', label: 'Enquiry' }, cls: 'bg-surface text-ink border border-line', chip: 'bg-highlight-soft text-warm', sub: 'text-muted', pill: 'bg-highlight-soft text-warm-strong' },
+    { to: '/contacts', title: 'Customers', note: 'Your address book', value: o.audience.total, unit: 'customers', icon: Users, quick: { to: '/contacts?add=1', label: 'Customer' }, cls: 'bg-surface text-ink border border-line', chip: 'bg-blue-soft text-blue-ink', sub: 'text-muted', pill: 'bg-blue-soft text-blue-ink' },
+  ];
+  return (
+    <section aria-label="Go to" className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+      {tiles.map((t) => (
+        <div key={t.to} className={cn('group relative flex min-h-[176px] flex-col gap-3 overflow-hidden rounded-[22px] p-4 shadow-[var(--panel-shadow)] transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-lift)] sm:p-5', t.cls)}>
+          <t.icon aria-hidden className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 rotate-[-12deg] opacity-[0.08] transition-transform duration-500 group-hover:rotate-0 group-hover:scale-110" strokeWidth={1.3} />
+          <div className="flex items-start justify-between gap-2">
+            <span className={cn('grid h-11 w-11 place-items-center rounded-[14px] transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110', t.chip)}>
+              <t.icon className="h-5 w-5" />
+            </span>
+            <Link to={t.quick.to} className={cn('relative z-10 inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-bold shadow-sm transition-transform hover:scale-105 active:scale-95', t.pill)}>
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.8} /> {t.quick.label}
+            </Link>
+          </div>
+          <div className="mt-auto flex flex-col gap-0.5">
+            <Link to={t.to} className="text-[20px] font-extrabold tracking-[-0.02em] after:absolute after:inset-0 after:content-['']">
+              {t.title}
+            </Link>
+            <span className={cn('line-clamp-1 text-[13px]', t.sub)}>{t.note}</span>
+            <span className={cn('mt-1.5 text-[13px]', t.sub)}>
+              <b className={cn('tnum text-[17px]', t.cls.includes('text-white') ? 'text-white' : 'text-ink')}>
+                <CountUp value={t.value} />
+              </b>{' '}
+              {t.unit}
+            </span>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export function OverviewPage() {
   const q = useQuery({ queryKey: ['overview'], queryFn: () => api.get<Overview>('/api/overview'), refetchInterval: 60_000 });
   if (!q.data) return <OverviewSkeleton />;
@@ -639,7 +681,7 @@ export function OverviewPage() {
       </header>
 
       {domainsPending.length > 0 && o.sending.sendersReady > 0 && (
-        <Link to="/settings/domains" className="flex items-center gap-3 rounded-[14px] border border-[#f3c9a8] bg-warm-soft px-4 py-3 text-sm text-warm-strong hover:border-warm">
+        <Link to="/email/setup?part=domains" className="flex items-center gap-3 rounded-[14px] border border-[#f3c9a8] bg-warm-soft px-4 py-3 text-sm text-warm-strong hover:border-warm">
           <Clock3 className="h-4 w-4 shrink-0" aria-hidden />
           <span className="flex-1">
             <strong className="font-semibold">{domainsPending.map((d) => d.domain).join(', ')}</strong> is still waiting for DNS records. We check every few minutes.
@@ -648,6 +690,7 @@ export function OverviewPage() {
         </Link>
       )}
 
+      <Launchpad o={o} />
       <Setup o={o} />
       <Kpis c={c.thisMonth} />
 

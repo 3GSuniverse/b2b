@@ -536,6 +536,8 @@ export const automations = pgTable(
     audience: jsonb().$type<Audience>(),
     templateId: text().references(() => templates.id, { onDelete: 'set null' }),
     senderId: text().references(() => senders.id, { onDelete: 'set null' }),
+    // The WhatsApp message (WhatsApp automations only; email ones use the template)
+    text: text(),
     // Sent along with the template's own attachments
     attachments: jsonb().$type<AttachmentRef[]>().notNull().default([]),
     activatedAt: ts(), // dates before activation are never back-filled

@@ -8,6 +8,7 @@ import { notify } from '../notifications/service.js';
 import { bumpCounter } from '../sending/counters.js';
 import { DeferSend, finalizeMessage, maybeCompleteCampaign, type SendOutcome } from '../sending/send-message.js';
 import { getQr } from './bus.js';
+import { syncAutomationSend } from '../automations/engine.js';
 import { trialEnded, trialWhatsAppPerDay, whatsappWebAllowed } from '../plans/entitlements.js';
 import { getWhatsAppGateway, WhatsAppError, type WhatsAppGateway } from './gateway.js';
 import { loadFiles, whatsappKind, type AttachmentFile } from '../attachments/service.js';
@@ -268,8 +269,10 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
     return 'suppressed';
   }
 
-  const body = (own ? msg.body : msg.campaign?.text) ?? '';
-  const refs = (own ? msg.attachments : msg.campaign?.attachments) ?? [];
+  // Automatic messages carry their own text and files, like booking messages
+  const ownContent = own || !!msg.automationId;
+  const body = (ownContent ? msg.body : msg.campaign?.text) ?? '';
+  const refs = (ownContent ? msg.attachments : msg.campaign?.attachments) ?? [];
   if (!body.trim() && !refs.length) {
     await finalizeMessage(msg, 'FAILED', 'no_content');
     return 'failed';
@@ -336,6 +339,7 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
     if (updated.length) await bumpCounter(tx, msg, 'sent');
   });
   if (msg.campaignId) await maybeCompleteCampaign(msg.campaignId);
+  if (msg.automationId) await syncAutomationSend(msg.id, 'SENT');
   return 'sent';
 }
 

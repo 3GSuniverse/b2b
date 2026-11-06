@@ -16,12 +16,9 @@ const AboutPage = lazy(() => import('./pages/public/policies').then((m) => ({ de
 
 const OverviewPage = lazy(() => import('./pages/overview').then((m) => ({ default: m.OverviewPage })));
 const ContactsPage = lazy(() => import('./pages/contacts').then((m) => ({ default: m.ContactsPage })));
-const CampaignsPage = lazy(() => import('./pages/campaigns').then((m) => ({ default: m.CampaignsPage })));
 const ComposerPage = lazy(() => import('./pages/composer').then((m) => ({ default: m.ComposerPage })));
 const ReportPage = lazy(() => import('./pages/report').then((m) => ({ default: m.ReportPage })));
-const AutomationsPage = lazy(() => import('./pages/automations').then((m) => ({ default: m.AutomationsPage })));
 const AutomationEditorPage = lazy(() => import('./pages/automation-editor').then((m) => ({ default: m.AutomationEditorPage })));
-const TemplatesPage = lazy(() => import('./pages/templates').then((m) => ({ default: m.TemplatesPage })));
 const TemplateEditorPage = lazy(() => import('./pages/template-editor').then((m) => ({ default: m.TemplateEditorPage })));
 const TripsPage = lazy(() => import('./pages/trips').then((m) => ({ default: m.TripsPage })));
 const PackagesPage = lazy(() => import('./pages/packages').then((m) => ({ default: m.PackagesPage })));
@@ -31,7 +28,8 @@ const QuoteEditorPage = lazy(() => import('./pages/quote-editor').then((m) => ({
 const GroupPage = lazy(() => import('./pages/group').then((m) => ({ default: m.GroupPage })));
 const ManifestPage = lazy(() => import('./pages/manifest').then((m) => ({ default: m.ManifestPage })));
 const TripPage = lazy(() => import('./pages/trip').then((m) => ({ default: m.TripPage })));
-const WhatsAppPage = lazy(() => import('./pages/whatsapp').then((m) => ({ default: m.WhatsAppPage })));
+const EmailHubPage = lazy(() => import('./pages/channel').then((m) => ({ default: m.EmailHubPage })));
+const WhatsAppHubPage = lazy(() => import('./pages/channel').then((m) => ({ default: m.WhatsAppHubPage })));
 const SettingsPage = lazy(() => import('./pages/settings').then((m) => ({ default: m.SettingsPage })));
 const AgencyPage = lazy(() => import('./pages/agency').then((m) => ({ default: m.AgencyPage })));
 const AgencyBillingPage = lazy(() => import('./pages/agency').then((m) => ({ default: m.AgencyBillingPage })));
@@ -77,21 +75,22 @@ export function App() {
         <Route path="trips/:tripId/quotes/:quoteId" element={<Suspense fallback={<PageFallback />}><QuoteEditorPage /></Suspense>} />
         <Route path="groups/:id" element={<Suspense fallback={<PageFallback />}><GroupPage /></Suspense>} />
         <Route path="trips/:id" element={<Suspense fallback={<PageFallback />}><TripPage /></Suspense>} />
-        <Route path="campaigns" element={<Suspense fallback={<PageFallback />}><CampaignsPage /></Suspense>} />
+        <Route path="campaigns" element={<Navigate to="/email/broadcasts" replace />} />
         <Route path="campaigns/new" element={<Suspense fallback={<PageFallback />}><ComposerPage /></Suspense>} />
         <Route path="campaigns/:id/edit" element={<Suspense fallback={<PageFallback />}><ComposerPage /></Suspense>} />
         <Route path="campaigns/:id" element={<Suspense fallback={<PageFallback />}><ReportPage /></Suspense>} />
-        <Route path="automations" element={<Suspense fallback={<PageFallback />}><AutomationsPage /></Suspense>} />
+        <Route path="automations" element={<Navigate to="/email/automatic" replace />} />
         <Route path="automations/new" element={<Suspense fallback={<PageFallback />}><AutomationEditorPage /></Suspense>} />
         <Route path="automations/:id" element={<Suspense fallback={<PageFallback />}><AutomationEditorPage /></Suspense>} />
         <Route path="contacts" element={<Suspense fallback={<PageFallback />}><ContactsPage /></Suspense>} />
-        <Route path="templates" element={<Suspense fallback={<PageFallback />}><TemplatesPage /></Suspense>} />
+        <Route path="templates" element={<Navigate to="/email/templates" replace />} />
         <Route path="templates/:id" element={<Suspense fallback={<PageFallback />}><TemplateEditorPage /></Suspense>} />
-        <Route path="whatsapp" element={<Suspense fallback={<PageFallback />}><WhatsAppPage /></Suspense>} />
+        <Route path="email/:tab?" element={<Suspense fallback={<PageFallback />}><EmailHubPage /></Suspense>} />
+        <Route path="whatsapp/:tab?" element={<Suspense fallback={<PageFallback />}><WhatsAppHubPage /></Suspense>} />
         <Route path="agency" element={<Suspense fallback={<PageFallback />}><AgencyPage /></Suspense>} />
         <Route path="agency/billing" element={<Suspense fallback={<PageFallback />}><AgencyBillingPage /></Suspense>} />
         <Route path="settings/billing" element={<Navigate to="/agency/billing" replace />} />
-        <Route path="settings" element={<Navigate to="/settings/senders" replace />} />
+        <Route path="settings" element={<Navigate to="/settings/company" replace />} />
         <Route path="settings/:section" element={<Suspense fallback={<PageFallback />}><SettingsPage /></Suspense>} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

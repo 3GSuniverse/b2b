@@ -206,3 +206,40 @@ describe('automations API', () => {
     expect((await api(app, b.cookie).get('/api/templates')).json().templates).toEqual([]);
   });
 });
+
+describe('automatic WhatsApp messages', () => {
+  it('sends the WhatsApp text to customers who agreed to WhatsApp, on their date', async () => {
+    const { tenant } = await makeTenant({ whatsappWebEnabled: true });
+    const [field] = await db.insert(customFields).values({ tenantId: tenant.id, key: 'birthday', label: 'Birthday', type: 'DATE' }).returning();
+    const [auto] = await db
+      .insert(automations)
+      .values({ tenantId: tenant.id, name: 'Birthday wishes', channel: 'WHATSAPP', status: 'ACTIVE', dateFieldId: field!.id, offsetDays: 0, sendTime: '08:30', repeat: 'YEARLY', text: 'Happy birthday {first_name}!', activatedAt: T('2026-01-01T00:00:00Z') })
+      .returning();
+    await makeContact(tenant.id, { firstName: 'Asha', phone: '+919000000001', whatsappStatus: 'SUBSCRIBED', attributes: { birthday: '1990-11-06' } });
+    await makeContact(tenant.id, { firstName: 'NoWa', phone: '+919000000002', whatsappStatus: 'UNSUBSCRIBED', attributes: { birthday: '1990-11-06' } });
+    const email = fakeQueue();
+    const wa = fakeQueue();
+    // 6 Nov 08:30 IST = 03:00 UTC
+    const r = await runAutomationsTick({ now: T('2026-11-06T03:01:00Z'), enqueue: email.enqueue, enqueueWhatsApp: wa.enqueue });
+    expect(r.queued).toBe(1);
+    expect(email.queued).toHaveLength(0);
+    expect(wa.queued).toHaveLength(1);
+    const [m] = await db.select().from(messages).where(eq(messages.automationId, auto!.id));
+    expect(m).toMatchObject({ channel: 'WHATSAPP', toAddress: '+919000000001', body: 'Happy birthday {first_name}!' });
+  });
+
+  it('is created and switched on from the WhatsApp tab, and listed only there', async () => {
+    const { cookie, json } = await signup(app);
+    const c = api(app, cookie);
+    const [field] = await db.insert(customFields).values({ tenantId: json.tenant.id, key: 'birthday', label: 'Birthday', type: 'DATE' }).returning();
+    const created = await c.post('/api/automations', { name: 'Wishes', channel: 'WHATSAPP', dateFieldId: field!.id, repeat: 'YEARLY', text: '' });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().automation.id;
+    expect(created.json().automation).toMatchObject({ channel: 'WHATSAPP', template: null });
+    expect((await c.post(`/api/automations/${id}/activate`)).json().error).toBe('no_content');
+    await c.patch(`/api/automations/${id}`, { text: 'Happy birthday {first_name|friend}!' });
+    expect((await c.post(`/api/automations/${id}/activate`)).json().automation.status).toBe('ACTIVE');
+    expect((await c.get('/api/automations?channel=WHATSAPP')).json().automations).toHaveLength(1);
+    expect((await c.get('/api/automations?channel=EMAIL')).json().automations).toHaveLength(0);
+  });
+});

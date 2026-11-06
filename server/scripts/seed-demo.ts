@@ -105,7 +105,7 @@ async function main() {
 
   const [tenant] = await db
     .insert(tenants)
-    .values({ name: 'Kurukshetra Travels', slug: `kurukshetra-demo-${Date.now().toString(36)}`, loginCode: 'kurukshetra-demo', plan: 'PAID', planId: 'team10', paidUntil: new Date(Date.now() + 41 * 86_400_000), monthlyQuota: 30_000, postalAddress: 'Road No. 12, Banjara Hills, Hyderabad 500034', paymentSettings: { upiId: 'kurukshetra@okhdfcbank', contactPhone: '+919848022338' } })
+    .values({ name: 'Kurukshetra Travels', slug: `kurukshetra-demo-${Date.now().toString(36)}`, loginCode: 'kurukshetra-demo', whatsappWebEnabled: true, plan: 'PAID', planId: 'team10', paidUntil: new Date(Date.now() + 41 * 86_400_000), monthlyQuota: 30_000, postalAddress: 'Road No. 12, Banjara Hills, Hyderabad 500034', paymentSettings: { upiId: 'kurukshetra@okhdfcbank', contactPhone: '+919848022338' } })
     .returning();
   const tenantId = tenant!.id;
   const [user] = await db.insert(users).values({ tenantId, email: EMAIL, name: 'GunaSekhar', passwordHash: await hashPassword(PASSWORD), role: 'OWNER' }).returning();
@@ -349,7 +349,48 @@ async function main() {
       delivered: 22,
       clicked: 5,
     },
+    {
+      tenantId,
+      name: 'Birthday wishes on WhatsApp',
+      channel: 'WHATSAPP' as const,
+      status: 'ACTIVE' as const,
+      dateFieldId: birthdayField.id,
+      offsetDays: 0,
+      sendTime: '09:00',
+      repeat: 'YEARLY' as const,
+      text: 'Happy birthday {first_name|there}! 🎂\n\nWishing you a wonderful year full of happy journeys.\n\nWarm wishes from all of us at {company_name}.',
+      activatedAt: daysAgo(20),
+      sent: 14,
+      delivered: 14,
+    },
   ]).returning({ id: automations.id, name: automations.name });
+
+  // A WhatsApp broadcast that went out last week, and one waiting as a draft
+  const waPeople = (await db.query.contacts.findMany({ where: eq(contacts.tenantId, tenantId), limit: 120 })).filter((c) => c.phone && c.whatsappStatus === 'SUBSCRIBED');
+  const [waCamp] = await db
+    .insert(campaigns)
+    .values({
+      tenantId,
+      name: 'Kerala houseboat offer',
+      channel: 'WHATSAPP',
+      status: 'SENT',
+      text: 'Namaste {first_name|there} 🙏\n\n*Kerala houseboat, 3 nights* from ₹18,500 a person. Only 6 boats left for December.\n\nReply YES and we’ll call you.',
+      audience: null,
+      startedAt: daysAgo(6, 11),
+      completedAt: daysAgo(6, 12),
+      createdById: staff[1]!.id,
+      recipients: waPeople.length,
+      sent: waPeople.length,
+      delivered: waPeople.length,
+      opened: Math.floor((waPeople.length * 2) / 3),
+    })
+    .returning();
+  if (waPeople.length) {
+    await db.insert(messages).values(
+      waPeople.map((c, i) => ({ tenantId, campaignId: waCamp!.id, contactId: c.id, sentById: staff[1]!.id, channel: 'WHATSAPP' as const, toAddress: c.phone!, status: 'DELIVERED' as const, queuedAt: daysAgo(6, 11), sentAt: daysAgo(6, 11), deliveredAt: daysAgo(6, 11), firstOpenedAt: i % 3 ? daysAgo(6, 13) : null })),
+    );
+  }
+  await db.insert(campaigns).values({ tenantId, name: 'Char Dham 2027 dates', channel: 'WHATSAPP', status: 'DRAFT', text: 'Namaste {first_name|there} 🙏\n\nChar Dham yatra 2027 dates are out.', createdById: staff[0]!.id });
 
   // ---- Trips: a believable week at a travel desk
   const people = (await db.query.contacts.findMany({ where: eq(contacts.tenantId, tenantId), limit: 40 })).filter((c) => c.phone && c.firstName);

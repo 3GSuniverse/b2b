@@ -7,7 +7,8 @@ import { AppError, parseBody } from '../../lib/http.js';
 import { requireAuth, tenantOf } from '../auth/guard.js';
 import { PLACEHOLDER } from '../campaigns/checks.js';
 import { audienceSchema } from '../campaigns/service.js';
-import { countEmailAudience } from '../audience/resolve.js';
+import { countEmailAudience, countWhatsAppAudience } from '../audience/resolve.js';
+import { whatsappWebAllowed } from '../plans/entitlements.js';
 import { isDomainReady } from '../domains/service.js';
 import { dueContactsQuery } from './engine.js';
 import { attachmentIds, LIMITS, mergeRefs, resolveRefs, totalSize } from '../attachments/service.js';
@@ -22,7 +23,9 @@ const body = z.object({
   templateId: z.string().nullable().optional(),
   senderId: z.string().nullable().optional(),
   attachments: attachmentIds.optional(), // sent along with the template's own files
+  text: z.string().max(4000, 'Keep the WhatsApp message under 4,000 characters').nullable().optional(), // WhatsApp only
 });
+const createBody = body.extend({ channel: z.enum(['EMAIL', 'WHATSAPP']).default('EMAIL') });
 type IdParams = { Params: { id: string } };
 
 /** "3 days before Trip date · 9:00 AM · every year" — the line shown on each automation card. */
@@ -64,6 +67,8 @@ async function dto(a: Awaited<ReturnType<typeof owned>>) {
     id: a.id,
     name: a.name,
     status: a.status,
+    channel: a.channel,
+    text: a.text,
     rule: describeRule(a, a.dateField.label),
     dateField: { id: a.dateField.id, key: a.dateField.key, label: a.dateField.label },
     offsetDays: a.offsetDays,
@@ -81,10 +86,11 @@ async function dto(a: Awaited<ReturnType<typeof owned>>) {
 }
 
 export async function automationRoutes(app: FastifyInstance) {
-  app.get('/api/automations', { preHandler: requireAuth }, async (req) => {
+  app.get<{ Querystring: { channel?: string } }>('/api/automations', { preHandler: requireAuth }, async (req) => {
     const tenantId = tenantOf(req);
+    const channel = req.query.channel === 'WHATSAPP' || req.query.channel === 'EMAIL' ? req.query.channel : undefined;
     const rows = await db.query.automations.findMany({
-      where: eq(automations.tenantId, tenantId),
+      where: and(eq(automations.tenantId, tenantId), channel ? eq(automations.channel, channel) : undefined),
       with: { dateField: true, tenant: true, sender: { with: { domain: true, connection: true } }, template: true },
       orderBy: [desc(automations.createdAt)],
     });
@@ -93,11 +99,20 @@ export async function automationRoutes(app: FastifyInstance) {
 
   app.post('/api/automations', { preHandler: requireAuth }, async (req, reply) => {
     const tenantId = tenantOf(req);
-    const { attachments: ids, ...b } = parseBody(body, req.body);
+    const { attachments: ids, ...b } = parseBody(createBody, req.body);
     await assertRefs(tenantId, b);
+    const wa = b.channel === 'WHATSAPP';
     const [row] = await db
       .insert(automations)
-      .values({ tenantId, ...b, audience: b.audience ?? null, templateId: b.templateId ?? null, senderId: b.senderId ?? null, attachments: await resolveRefs(tenantId, ids) })
+      .values({
+        tenantId,
+        ...b,
+        audience: b.audience ?? null,
+        templateId: wa ? null : (b.templateId ?? null),
+        senderId: wa ? null : (b.senderId ?? null),
+        text: wa ? (b.text ?? null) : null,
+        attachments: await resolveRefs(tenantId, ids),
+      })
       .returning();
     return reply.code(201).send({ automation: await dto(await owned(tenantId, row!.id)) });
   });
@@ -121,6 +136,15 @@ export async function automationRoutes(app: FastifyInstance) {
   app.post<IdParams>('/api/automations/:id/activate', { preHandler: requireAuth }, async (req) => {
     const tenantId = tenantOf(req);
     const a = await owned(tenantId, req.params.id);
+    if (a.dateField.type !== 'DATE') throw new AppError(400, 'not_a_date_field', `“${a.dateField.label}” isn’t a date field`);
+    if (a.channel === 'WHATSAPP') {
+      if (!a.text?.trim() && !a.attachments.length) throw new AppError(400, 'no_content', 'Write the WhatsApp message first');
+      const left = [...new Set(a.text?.match(PLACEHOLDER) ?? [])];
+      if (left.length) throw new AppError(400, 'placeholders_left', `The message still has ${left.join(', ')}. Replace ${left.length > 1 ? 'them' : 'it'} before switching on.`);
+      if (!a.tenant.whatsappWebEnabled && !whatsappWebAllowed(a.tenant)) throw new AppError(400, 'whatsapp_not_enabled', 'WhatsApp isn’t switched on for your account');
+      await db.update(automations).set({ status: 'ACTIVE', activatedAt: new Date() }).where(eq(automations.id, a.id));
+      return { automation: await dto(await owned(tenantId, a.id)) };
+    }
     if (!a.template?.subject || !a.template.html) throw new AppError(400, 'no_template', 'Choose an email template with a subject and content first');
     const left = [...new Set(`${a.template.subject}\n${a.template.previewText ?? ''}\n${a.template.html}`.match(PLACEHOLDER) ?? [])];
     if (left.length) {
@@ -131,8 +155,7 @@ export async function automationRoutes(app: FastifyInstance) {
       throw new AppError(400, 'attachments_too_large', 'The attachments are too large for email (over 15 MB in all). Remove some first.');
     }
     const senderReady = a.sender.kind === 'DOMAIN' ? !!a.sender.domain && isDomainReady(a.sender.domain) : a.sender.connection?.status === 'ACTIVE';
-    if (!senderReady) throw new AppError(400, 'sender_not_verified', `${a.sender.fromEmail} can’t send yet. Finish setting it up in Settings → Senders.`);
-    if (a.dateField.type !== 'DATE') throw new AppError(400, 'not_a_date_field', `“${a.dateField.label}” isn’t a date field`);
+    if (!senderReady) throw new AppError(400, 'sender_not_verified', `${a.sender.fromEmail} can’t send yet. Finish setting it up in Email → Sending setup.`);
     // From this moment only — switching on never emails people whose dates already passed
     await db.update(automations).set({ status: 'ACTIVE', activatedAt: new Date() }).where(eq(automations.id, a.id));
     return { automation: await dto(await owned(tenantId, a.id)) };
@@ -149,7 +172,7 @@ export async function automationRoutes(app: FastifyInstance) {
     const tenantId = tenantOf(req);
     const a = await owned(tenantId, req.params.id);
     const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(automationSends).where(eq(automationSends.automationId, a.id));
-    if (n > 0) throw new AppError(409, 'has_history', 'This automation has already sent emails. Pause it instead, to keep its reports.');
+    if (n > 0) throw new AppError(409, 'has_history', 'This automation has already sent messages. Pause it instead, to keep its reports.');
     await db.delete(automations).where(eq(automations.id, a.id));
     return reply.code(204).send();
   });
@@ -174,9 +197,13 @@ export async function automationRoutes(app: FastifyInstance) {
       if (entry.people.length < 5) entry.people.push({ name: r.first_name ?? r.email, email: r.email, occurrenceDate: r.occurrence_date });
       byDay.set(day, entry);
     }
-    const matching = await countEmailAudience(db, tenantId, a.audience);
+    const wa = a.channel === 'WHATSAPP';
+    const matching = wa ? await countWhatsAppAudience(db, tenantId, a.audience) : await countEmailAudience(db, tenantId, a.audience);
     const [{ withDate } = { withDate: 0 }] = await db.execute<{ withDate: number }>(
-      sql`select count(*)::int as "withDate" from contacts where tenant_id = ${tenantId} and email_status = 'SUBSCRIBED'
+      wa
+        ? sql`select count(*)::int as "withDate" from contacts where tenant_id = ${tenantId} and whatsapp_status = 'SUBSCRIBED' and phone is not null
+          and coalesce(attributes ->> ${a.dateField.key}, '') ~ '^\\d{4}-\\d{2}-\\d{2}$'`
+        : sql`select count(*)::int as "withDate" from contacts where tenant_id = ${tenantId} and email_status = 'SUBSCRIBED'
           and coalesce(attributes ->> ${a.dateField.key}, '') ~ '^\\d{4}-\\d{2}-\\d{2}$'`,
     ).then((r) => r.rows);
     return { days: [...byDay.values()], total: rows.rows.length, audience: { matching, withDate } };

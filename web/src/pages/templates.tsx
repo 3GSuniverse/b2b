@@ -13,7 +13,7 @@ import { ago } from '@/lib/format';
 import { PrettyTags } from '@/lib/tags';
 import type { Template } from '@/lib/types';
 
-export function TemplatesPage() {
+export function TemplatesPage({ embedded }: { embedded?: boolean } = {}) {
   const nav = useNavigate();
   const qc = useQueryClient();
   const [picking, setPicking] = useState(false);
@@ -56,16 +56,26 @@ export function TemplatesPage() {
 
   return (
     <>
-      <PageHeader
-        title="Templates"
-        description="Designs you reuse. Broadcasts copy a template when they start, so editing one never changes what was already sent."
-        actions={
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-ink-2">Email designs you reuse. Editing one never changes what was already sent.</p>
           <Button variant="primary" onClick={() => setPicking(true)}>
             <Plus className="h-4 w-4" strokeWidth={2.4} />
             New template
           </Button>
-        }
-      />
+        </div>
+      ) : (
+        <PageHeader
+          title="Templates"
+          description="Designs you reuse. Broadcasts copy a template when they start, so editing one never changes what was already sent."
+          actions={
+            <Button variant="primary" onClick={() => setPicking(true)}>
+              <Plus className="h-4 w-4" strokeWidth={2.4} />
+              New template
+            </Button>
+          }
+        />
+      )}
       {q.isPending ? (
         <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 3 }, (_, i) => (

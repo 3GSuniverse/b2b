@@ -10,6 +10,8 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { date, n, pct } from '@/lib/format';
 import type { Automation } from '@/lib/types';
+import { useSession } from '@/lib/session';
+import { PrettyTags } from '@/lib/tags';
 
 export interface Upcoming {
   days: { day: string; count: number; people: { name: string; email: string; occurrenceDate: string }[] }[];
@@ -18,7 +20,7 @@ export interface Upcoming {
 }
 
 /** Next 7 days as seven small columns: how many emails go out each day. */
-function WeekStrip({ id, tz }: { id: string; tz: string }) {
+function WeekStrip({ id, tz, unit = 'email' }: { id: string; tz: string; unit?: string }) {
   const q = useQuery({ queryKey: ['automation-upcoming', id, 7], queryFn: () => api.get<Upcoming>(`/api/automations/${id}/upcoming?days=7`) });
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(Date.now() + i * 86_400_000);
@@ -32,7 +34,7 @@ function WeekStrip({ id, tz }: { id: string; tz: string }) {
       <div className="flex items-baseline justify-between text-[13px]">
         <span className="font-medium text-ink-2">Next 7 days</span>
         <span className="tnum text-muted">
-          {q.data.total ? `${n(q.data.total)} email${q.data.total === 1 ? '' : 's'}` : 'Nothing due'}
+          {q.data.total ? `${n(q.data.total)} ${unit}${q.data.total === 1 ? '' : 's'}` : 'Nothing due'}
         </span>
       </div>
       <div className="grid grid-cols-7 gap-1.5">
@@ -90,15 +92,18 @@ function AutomationCard({ a }: { a: Automation }) {
           <Switch label={on ? `Pause ${a.name}` : `Switch on ${a.name}`} checked={on} disabled={toggle.isPending} onCheckedChange={(v) => toggle.mutate(v)} />
         </div>
       </div>
-      {on ? <WeekStrip id={a.id} tz={a.timezone} /> : <p className="text-[13px] text-muted">{a.status === 'DRAFT' ? 'Finish setting it up, then switch it on.' : 'Paused. Nobody gets it until you switch it back on.'}</p>}
+      {on ? <WeekStrip id={a.id} tz={a.timezone} unit={a.channel === 'WHATSAPP' ? 'message' : 'email'} /> : <p className="text-[13px] text-muted">{a.status === 'DRAFT' ? 'Finish setting it up, then switch it on.' : 'Paused. Nobody gets it until you switch it back on.'}</p>}
       <div className="tnum flex items-center gap-5 border-t border-line-soft pt-4 text-[13px]">
         <span>
           <span className="font-semibold">{n(a.stats.sent)}</span> <span className="text-muted">sent so far</span>
         </span>
-        <span>
-          <span className="font-semibold">{pct(a.stats.clickRate)}</span> <span className="text-muted">clicked</span>
-        </span>
+        {a.channel === 'EMAIL' && (
+          <span>
+            <span className="font-semibold">{pct(a.stats.clickRate)}</span> <span className="text-muted">clicked</span>
+          </span>
+        )}
         {a.template && <span className="ml-auto hidden truncate text-muted sm:inline">{a.template.name}</span>}
+        {a.channel === 'WHATSAPP' && a.text && <span className="ml-auto hidden max-w-[60%] truncate text-muted sm:inline"><PrettyTags text={a.text.split('\n')[0]!} /></span>}
       </div>
     </Panel>
   );
@@ -117,34 +122,51 @@ function Recipe({ icon, title, body, to }: { icon: React.ReactNode; title: strin
   );
 }
 
-export function AutomationsPage() {
+export function AutomationsPage({ embedded, channel = 'EMAIL' }: { embedded?: boolean; channel?: 'EMAIL' | 'WHATSAPP' } = {}) {
   const nav = useNavigate();
-  const q = useQuery({ queryKey: ['automations'], queryFn: () => api.get<{ automations: Automation[] }>('/api/automations') });
+  const { user } = useSession();
+  const wa = channel === 'WHATSAPP';
+  const newHref = (recipe?: string) => `/automations/new?${new URLSearchParams({ ...(wa && { channel: 'WHATSAPP' }), ...(recipe && { recipe }) })}`;
+  const q = useQuery({ queryKey: ['automations', channel], queryFn: () => api.get<{ automations: Automation[] }>(`/api/automations?channel=${channel}`) });
   const list = q.data?.automations ?? [];
   const has = (key: string) => list.some((a) => a.dateField.key === key);
 
   return (
     <>
-      <PageHeader
-        title="Automations"
-        description="Messages that go out by themselves on each customer’s own date, like wishes on their birthday or anniversary, by email or WhatsApp."
-        actions={
-          <LinkButton to="/automations/new" variant="primary">
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-ink-2">{wa ? 'WhatsApp messages' : 'Emails'} that go out by themselves on each customer’s own date: birthdays, anniversaries, trip dates.</p>
+          <LinkButton to={newHref()} variant="primary">
             <Plus className="h-4 w-4" strokeWidth={2.4} />
-            New automation
+            New automatic {wa ? 'message' : 'email'}
           </LinkButton>
-        }
-      />
-      <Link to="/settings/trip-messages" className="group flex items-center gap-4 rounded-[var(--radius-panel)] border border-line bg-surface px-5 py-4 hover:bg-sunken">
+        </div>
+      ) : (
+        <PageHeader
+          title="Automations"
+          description="Messages that go out by themselves on each customer’s own date, like wishes on their birthday or anniversary."
+          actions={
+            <LinkButton to="/automations/new" variant="primary">
+              <Plus className="h-4 w-4" strokeWidth={2.4} />
+              New automation
+            </LinkButton>
+          }
+        />
+      )}
+      {user.role !== 'MEMBER' && <Link to="/settings/trip-messages" className="group flex items-center gap-4 rounded-[var(--radius-panel)] border border-line bg-surface px-5 py-4 hover:bg-sunken">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-accent-soft text-accent-strong">
           <Plane className="h-5 w-5" aria-hidden />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-sm font-semibold">Trip messages</span>
-          <span className="text-[13px] text-muted">Built in for every booked trip: “your trip starts soon”, a Google review request when they’re back, and “where next?” months later.</span>
+          <span className="text-[13px] text-muted">
+            {wa
+              ? 'Built in, and sent on WhatsApp first when the customer has it: payment reminders, “your trip starts soon”, a review request when they’re back.'
+              : 'Built in for every booked trip: “your trip starts soon”, a Google review request when they’re back, and “where next?” months later.'}
+          </span>
         </span>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
-      </Link>
+      </Link>}
       {q.isPending ? (
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
           <Skeleton className="h-56 rounded-[var(--radius-panel)]" />
@@ -163,10 +185,10 @@ export function AutomationsPage() {
             <section className="flex flex-col gap-3">
               <h2 className="text-[15px] font-semibold">{list.length ? 'Ideas' : 'Start with one of these'}</h2>
               <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
-                {!has('trip_date') && <Recipe icon={<Plane className="h-5 w-5" />} title="Trip reminder" body="3 days before each traveller’s trip date, at 9 AM: what to carry, pickup time, who to call." to="/automations/new?recipe=trip" />}
-                {!has('birthday') && <Recipe icon={<CakeSlice className="h-5 w-5" />} title="Birthday wishes" body="On each customer’s birthday, every year, at 8:30 AM. A warm note, maybe a small offer." to="/automations/new?recipe=birthday" />}
+                {!has('trip_date') && <Recipe icon={<Plane className="h-5 w-5" />} title="Trip reminder" body="3 days before each traveller’s trip date, at 9 AM: what to carry, pickup time, who to call." to={newHref('trip')} />}
+                {!has('birthday') && <Recipe icon={<CakeSlice className="h-5 w-5" />} title="Birthday wishes" body="On each customer’s birthday, every year, at 8:30 AM. A warm note, maybe a small offer." to={newHref('birthday')} />}
                 {list.length === 0 && (
-                  <button type="button" onClick={() => nav('/automations/new')} className="flex items-center gap-4 rounded-[var(--radius-panel)] border border-dashed border-[#cfcde6] p-5 text-left hover:border-accent hover:bg-accent-soft/30">
+                  <button type="button" onClick={() => nav(newHref())} className="flex items-center gap-4 rounded-[var(--radius-panel)] border border-dashed border-[#cfcde6] p-5 text-left hover:border-accent hover:bg-accent-soft/30">
                     <span className="grid h-11 w-11 place-items-center rounded-[12px] bg-line-soft text-muted">
                       <Plus className="h-5 w-5" />
                     </span>

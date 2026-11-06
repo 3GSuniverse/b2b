@@ -235,6 +235,8 @@ export interface Automation {
   id: string;
   name: string;
   status: 'DRAFT' | 'ACTIVE' | 'PAUSED';
+  channel: 'EMAIL' | 'WHATSAPP';
+  text: string | null;
   rule: string;
   dateField: { id: string; key: string; label: string };
   offsetDays: number;

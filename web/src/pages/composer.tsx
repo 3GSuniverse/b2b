@@ -22,7 +22,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AudienceEditor, describeAudience, useAudienceCount, useFieldLabel, useLists } from '@/components/campaigns/audience';
 import { DesignGallery, type Design } from '@/components/campaigns/design-picker';
@@ -38,6 +38,7 @@ import { Dialog, Popover } from '@/components/ui/overlay';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { dateTime, n } from '@/lib/format';
+import { useNavSection } from '@/lib/section';
 import { useSession } from '@/lib/session';
 import { CampaignStatusBadge } from '@/lib/status';
 import { WHATSAPP_STARTER, WhatsAppComposer } from './whatsapp-composer';
@@ -75,11 +76,13 @@ export function nextAt(daysAhead: number, hour: number, tz: string, weekday?: nu
 
 function NewCampaign() {
   const nav = useNavigate();
+  const [params] = useSearchParams();
   const qc = useQueryClient();
   const [name, setName] = useState(() => `Campaign ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`);
   const senders = useQuery({ queryKey: ['senders'], queryFn: () => api.get<{ senders: Sender[] }>('/api/senders') });
   const { tenant } = useSession();
-  const [channel, setChannel] = useState<'EMAIL' | 'WHATSAPP'>('EMAIL');
+  const [channel, setChannel] = useState<'EMAIL' | 'WHATSAPP'>(params.get('channel') === 'WHATSAPP' ? 'WHATSAPP' : 'EMAIL');
+  useNavSection(channel === 'WHATSAPP' ? 'whatsapp' : 'email');
   const createWa = useMutation({
     mutationFn: () => api.post<{ campaign: Campaign }>('/api/campaigns', { name: name.trim() || 'Untitled broadcast', channel: 'WHATSAPP', text: WHATSAPP_STARTER }),
     onSuccess: ({ campaign }) => {
@@ -107,11 +110,11 @@ function NewCampaign() {
     <>
       <PageHeader
         back={
-          <Link to="/campaigns" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted hover:text-ink">
-            <ArrowLeft className="h-3.5 w-3.5" /> Broadcasts
+          <Link to={channel === 'WHATSAPP' ? '/whatsapp/broadcasts' : '/email/broadcasts'} className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted hover:text-ink">
+            <ArrowLeft className="h-3.5 w-3.5" /> {channel === 'WHATSAPP' ? 'WhatsApp' : 'Email'}: broadcasts
           </Link>
         }
-        title="New broadcast"
+        title={channel === 'WHATSAPP' ? 'New WhatsApp broadcast' : 'New email broadcast'}
         description="Name it, then pick a design to start from. You’ll change the words next."
       />
       <Panel className="flex flex-col gap-5 p-5 sm:p-6">
@@ -421,7 +424,7 @@ function Composer({ id }: { id: string }) {
   const readySenders = senders.data?.senders.filter((s) => s.readyToSend) ?? [];
   const audienceText = useMemo(() => (draft ? describeAudience(draft.audience, lists.data?.lists ?? [], labelOf) : ''), [draft, lists.data, labelOf]);
 
-  if (q.error) return <Navigate to="/campaigns" replace />;
+  if (q.error) return <Navigate to="/email/broadcasts" replace />;
   if (!c || !draft) return <Skeleton className="h-[600px] rounded-[var(--radius-panel)]" />;
   if (c.status !== 'DRAFT' && c.status !== 'SCHEDULED') return <Navigate to={`/campaigns/${id}`} replace />;
 
@@ -435,8 +438,8 @@ function Composer({ id }: { id: string }) {
     <>
       {/* Header */}
       <header className="flex flex-col gap-4">
-        <Link to="/campaigns" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
-          <ArrowLeft className="h-3.5 w-3.5" /> Broadcasts
+        <Link to="/email/broadcasts" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
+          <ArrowLeft className="h-3.5 w-3.5" /> Email: broadcasts
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -591,7 +594,7 @@ function Composer({ id }: { id: string }) {
             {senders.data && senders.data.senders.length === 0 ? (
               <div className="flex flex-col items-start gap-3">
                 <p className="text-sm text-muted">Connect your domain or a Gmail account first, so emails come from your own address.</p>
-                <LinkButton to="/settings/senders" size="sm" variant="primary">
+                <LinkButton to="/email/setup" size="sm" variant="primary">
                   Connect an address
                 </LinkButton>
               </div>
@@ -757,8 +760,9 @@ function Composer({ id }: { id: string }) {
 export function ComposerPage() {
   const { id } = useParams();
   const q = useQuery({ queryKey: ['campaign', id], queryFn: () => api.get<{ campaign: Campaign }>(`/api/campaigns/${id}`), enabled: !!id });
+  useNavSection(q.data ? (q.data.campaign.channel === 'WHATSAPP' ? 'whatsapp' : 'email') : null);
   if (!id) return <NewCampaign />;
-  if (q.error) return <Navigate to="/campaigns" replace />;
+  if (q.error) return <Navigate to="/email/broadcasts" replace />;
   if (!q.data) return <Skeleton className="h-[600px] rounded-[var(--radius-panel)]" />;
   const c = q.data.campaign;
   if (c.status !== 'DRAFT' && c.status !== 'SCHEDULED') return <Navigate to={`/campaigns/${id}`} replace />;

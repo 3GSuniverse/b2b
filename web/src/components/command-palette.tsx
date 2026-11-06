@@ -1,7 +1,7 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
-import { Building2, Clock3, CreditCard, FileText, LayoutDashboard, Mail, Megaphone, MessageCircle, MessageSquarePlus, Plane, Repeat2, Search, Settings, Upload, UserPlus, Users } from 'lucide-react';
+import { Building2, Clock3, CreditCard, Smartphone, FileText, LayoutDashboard, Mail, Megaphone, MessageCircle, MessageSquarePlus, Plane, Repeat2, Search, Settings, Upload, UserPlus, Users } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, qs } from '@/lib/api';
@@ -86,25 +86,30 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
 
               <Command.Group heading="Actions" className={groupClass}>
                 <Item icon={<MessageSquarePlus />} onSelect={() => go('/trips?new=1')}>New enquiry</Item>
-                <Item icon={<Megaphone />} onSelect={() => go('/campaigns/new')}>New broadcast</Item>
+                <Item icon={<Mail />} onSelect={() => go('/campaigns/new')}>New email broadcast</Item>
+                <Item icon={<MessageCircle />} onSelect={() => go('/campaigns/new?channel=WHATSAPP')}>New WhatsApp broadcast</Item>
                 <Item icon={<Repeat2 />} onSelect={() => go('/automations?new=1')}>New automatic message</Item>
                 <Item icon={<UserPlus />} onSelect={() => go('/contacts?add=1')}>Add a customer</Item>
                 <Item icon={<Upload />} onSelect={() => go('/contacts?import=1')}>Import customers from a spreadsheet</Item>
-                {user.role !== 'MEMBER' && <Item icon={<Mail />} onSelect={() => go('/settings/senders')}>Connect a domain or Gmail</Item>}
+                {user.role !== 'MEMBER' && <Item icon={<Mail />} onSelect={() => go('/email/setup')}>Connect a domain or Gmail</Item>}
                 {user.role === 'OWNER' && <Item icon={<UserPlus />} onSelect={() => go('/agency')}>Add an employee login</Item>}
               </Command.Group>
 
               <Command.Group heading="Go to" className={groupClass}>
-                <Item icon={<LayoutDashboard />} onSelect={() => go('/')}>Overview</Item>
+                <Item icon={<LayoutDashboard />} onSelect={() => go('/')}>Home</Item>
+                <Item icon={<Mail />} onSelect={() => go('/email')}>Email</Item>
+                <Item icon={<MessageCircle />} onSelect={() => go('/whatsapp')}>WhatsApp</Item>
                 <Item icon={<Plane />} onSelect={() => go('/trips')}>Trips</Item>
                 <Item icon={<Users />} onSelect={() => go('/contacts')}>Customers</Item>
-                <Item icon={<Megaphone />} onSelect={() => go('/campaigns')}>Broadcasts</Item>
-                <Item icon={<Clock3 />} onSelect={() => go('/automations')}>Automations</Item>
-                <Item icon={<FileText />} onSelect={() => go('/templates')}>Templates</Item>
-                <Item icon={<MessageCircle />} onSelect={() => go('/whatsapp')}>WhatsApp</Item>
+                <Item icon={<Megaphone />} onSelect={() => go('/email/broadcasts')}>Email broadcasts</Item>
+                <Item icon={<Megaphone />} onSelect={() => go('/whatsapp/broadcasts')}>WhatsApp broadcasts</Item>
+                <Item icon={<Clock3 />} onSelect={() => go('/email/automatic')}>Automatic emails</Item>
+                <Item icon={<Clock3 />} onSelect={() => go('/whatsapp/automatic')}>Automatic WhatsApp messages</Item>
+                <Item icon={<FileText />} onSelect={() => go('/email/templates')}>Email designs</Item>
+                <Item icon={<Smartphone />} onSelect={() => go('/whatsapp/setup')}>Linked WhatsApp number</Item>
                 {user.role === 'OWNER' && <Item icon={<Building2 />} onSelect={() => go('/agency')}>Agency</Item>}
                 {user.role === 'OWNER' && <Item icon={<CreditCard />} onSelect={() => go('/agency/billing')}>Plan & billing</Item>}
-                {user.role !== 'MEMBER' && <Item icon={<Settings />} onSelect={() => go('/settings/senders')}>Settings</Item>}
+                {user.role !== 'MEMBER' && <Item icon={<Settings />} onSelect={() => go('/settings/company')}>Settings</Item>}
               </Command.Group>
 
               {!!trips.data?.trips.length && (

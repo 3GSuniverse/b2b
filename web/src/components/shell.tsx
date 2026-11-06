@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, ChevronDown, Clock3, KeyRound, FileText, LayoutDashboard, LogOut, Megaphone, Menu as MenuIcon, MessageCircle, MessageSquarePlus, Plane, Plus, Repeat2, Search, Settings, UserPlus, Users } from 'lucide-react';
+import { Building2, ChevronDown, Clock3, KeyRound, Mail, FileText, LayoutDashboard, LogOut, Megaphone, Menu as MenuIcon, MessageCircle, MessageSquarePlus, Plane, Plus, Repeat2, Search, Settings, UserPlus, Users } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -8,6 +8,7 @@ import { BRAND } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { date, n } from '@/lib/format';
 import { CountUp, play, SMOOTH, SPRING, useSlidingIndicator } from '@/lib/motion';
+import { useCurrentNavSection, type NavSection } from '@/lib/section';
 import { useSession } from '@/lib/session';
 import type { Overview } from '@/lib/types';
 import { CommandPalette } from './command-palette';
@@ -17,16 +18,16 @@ import { Field, Input } from './ui/field';
 import { Avatar, Badge, Kbd, ProgressBar } from './ui/display';
 import { Dialog, Menu, MenuItem, MenuSeparator, Sheet } from './ui/overlay';
 
-// The sidebar: the agency's day first, then everything about talking to customers
+// The sidebar: home, the two master tabs (Email, WhatsApp), the day-to-day work, then the agency
 type Role = 'OWNER' | 'ADMIN' | 'MEMBER';
-const NAV: { to: string; label: string; icon: typeof Plane; end?: boolean; group?: string; anim: string; roles?: Role[] }[] = [
-  { to: '/agency', label: 'Agency', icon: Building2, anim: 'nav-pop', roles: ['OWNER'] },
-  { to: '/', label: 'Overview', icon: LayoutDashboard, end: true, anim: 'nav-pop' },
-  { to: '/trips', label: 'Trips', icon: Plane, anim: 'nav-fly' },
+type NavDef = { to: string; label: string; icon: typeof Plane; end?: boolean; group?: string; anim: string; roles?: Role[]; also?: string[]; section?: NavSection; dot?: string };
+const NAV: NavDef[] = [
+  { to: '/', label: 'Home', icon: LayoutDashboard, end: true, anim: 'nav-pop' },
+  { to: '/email', label: 'Email', icon: Mail, group: 'Send to customers', anim: 'nav-shout', also: ['/templates'], section: 'email', dot: '#8f86ff' },
+  { to: '/whatsapp', label: 'WhatsApp', icon: MessageCircle, anim: 'nav-wiggle', section: 'whatsapp', dot: '#25c48a' },
+  { to: '/trips', label: 'Trips', icon: Plane, group: 'Your work', anim: 'nav-fly', also: ['/groups'] },
   { to: '/contacts', label: 'Customers', icon: Users, anim: 'nav-hop' },
-  { to: '/campaigns', label: 'Broadcasts', icon: Megaphone, group: 'Communication', anim: 'nav-shout' },
-  { to: '/automations', label: 'Automations', icon: Clock3, anim: 'nav-tick' },
-  { to: '/templates', label: 'Templates', icon: FileText, anim: 'nav-flip' },
+  { to: '/agency', label: 'Agency', icon: Building2, group: 'Your agency', anim: 'nav-pop', roles: ['OWNER'] },
   { to: '/settings', label: 'Settings', icon: Settings, anim: 'nav-spin', roles: ['OWNER', 'ADMIN'] },
 ];
 
@@ -57,13 +58,14 @@ export function Logo({ className }: { className?: string }) {
 }
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
-  const { tenant, user } = useSession();
-  const whatsapp = !!tenant.features?.whatsapp;
+  const { user } = useSession();
+  const section = useCurrentNavSection();
   const nav = NAV.filter((x) => !x.roles || x.roles.includes(user.role as Role));
+  // The agency group needs a heading only when it has something in it
+  const groups = nav.map((x, i) => (x.roles && !nav.slice(0, i).some((y) => y.roles) ? { ...x, group: 'Your agency' } : x));
   const { pathname } = useLocation();
-  const onWhatsapp = pathname.startsWith('/whatsapp');
-  // The green highlight slides from item to item instead of jumping
-  const { ref, box, animate } = useSlidingIndicator<HTMLElement>('[data-lit=true]', 'y', [pathname, whatsapp]);
+  // The highlight slides from item to item instead of jumping
+  const { ref, box, animate } = useSlidingIndicator<HTMLElement>('[data-lit=true]', 'y', [pathname, section]);
   const item = (lit: boolean) =>
     cn(
       'group/nav relative z-[1] flex h-10 items-center gap-3 rounded-[10px] px-3 text-sm font-medium transition-colors duration-200',
@@ -71,20 +73,11 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
       lit && !box && 'bg-nav-active',
     );
   const icon = 'h-[18px] w-[18px] shrink-0';
-  const whatsappItem = whatsapp ? (
-        <NavLink to="/whatsapp" onClick={onNavigate} data-lit={onWhatsapp} className={item(onWhatsapp)}>
-          <MessageCircle className={cn(icon, 'nav-wiggle', onWhatsapp && 'text-highlight')} aria-hidden />
-          WhatsApp
-        </NavLink>
-      ) : (
-        <span className="flex h-10 items-center justify-between rounded-[10px] px-3 text-sm font-medium text-nav-muted opacity-70" aria-disabled>
-          <span className="flex items-center gap-3">
-            <MessageCircle className="h-[18px] w-[18px]" aria-hidden />
-            WhatsApp
-          </span>
-          <Badge tone="orange" className="px-2 text-[11px]">Soon</Badge>
-        </span>
-      );
+  const isLit = (x: NavDef) => {
+    if (x.section && section) return x.section === section;
+    if (x.end) return pathname === x.to && !section;
+    return [x.to, ...(x.also ?? [])].some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  };
   return (
     <nav ref={ref} aria-label="Main" className="relative flex flex-col gap-0.5">
       {box && (
@@ -96,26 +89,20 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
           <span className="absolute bottom-2.5 left-0 top-2.5 w-[3px] rounded-r-full bg-highlight" />
         </span>
       )}
-      {nav.map(({ to, label, icon: Icon, end, group, anim }) => {
-        const active = end ? pathname === to : pathname === to || pathname.startsWith(`${to}/`);
-        const lit = active;
+      {groups.map((x) => {
+        const { to, label, icon: Icon, end, group, anim, dot } = x;
+        const lit = isLit(x);
         return (
           <Fragment key={to}>
             {group && <span className="px-3 pb-1 pt-4 text-[12px] font-semibold text-nav-muted">{group}</span>}
-            {to === '/settings' && (
-              <>
-                {whatsappItem}
-                <span className="mx-3 my-3 h-px bg-nav-line" aria-hidden />
-              </>
-            )}
             <NavLink to={to} end={end} onClick={onNavigate} data-lit={lit} className={item(lit)}>
               <Icon className={cn(icon, anim, lit && 'text-highlight')} aria-hidden />
               {label}
+              {dot && <span className="ml-auto h-2 w-2 rounded-full opacity-80" style={{ background: dot }} aria-hidden />}
             </NavLink>
           </Fragment>
         );
       })}
-      {!nav.some((x) => x.to === '/settings') && whatsappItem}
     </nav>
   );
 }
@@ -246,7 +233,8 @@ function CreateMenu() {
   const nav = useNavigate();
   const items = [
     { icon: <MessageSquarePlus />, label: 'New enquiry', note: 'A trip someone asked about', to: '/trips?new=1' },
-    { icon: <Megaphone />, label: 'Broadcast', note: 'One message to many customers', to: '/campaigns/new' },
+    { icon: <Mail />, label: 'Email broadcast', note: 'One email to many customers', to: '/campaigns/new' },
+    { icon: <MessageCircle />, label: 'WhatsApp broadcast', note: 'One WhatsApp message to many customers', to: '/campaigns/new?channel=WHATSAPP' },
     { icon: <Repeat2 />, label: 'Automatic message', note: 'Birthdays, anniversaries, any date', to: '/automations?new=1' },
     { icon: <UserPlus />, label: 'Customer', note: 'Add someone to your address book', to: '/contacts?add=1' },
   ];

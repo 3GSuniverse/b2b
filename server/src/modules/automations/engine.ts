@@ -1,10 +1,10 @@
-import { trialEnded } from '../plans/entitlements.js';
+import { trialEnded, whatsappWebAllowed } from '../plans/entitlements.js';
 import { and, count, eq, gte, inArray, sql, type SQL } from 'drizzle-orm';
 import { automations, automationSends, contacts, customFields, messages, tenants } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
-import { enqueueEmails, type EnqueueFn } from '../../queues/index.js';
-import { emailAudienceWhere } from '../audience/resolve.js';
+import { enqueueEmails, enqueueWhatsApp, type EnqueueFn } from '../../queues/index.js';
+import { emailAudienceWhere, whatsappAudienceWhere } from '../audience/resolve.js';
 import { notify, today } from '../notifications/service.js';
 import { monthStartSql } from '../sending/start-campaign.js';
 
@@ -45,11 +45,11 @@ export function dueContactsQuery(a: AutomationRow, from: Date, to: Date) {
   const occ = occurrencesSql(a.dateField.key, a.repeat, nowLocalYear);
   const due = sql`(((o.occ + ${a.offsetDays}::int)::timestamp + ${a.sendTime}::time) at time zone ${tz})`;
   return sql`
-    select ${contacts.id} as contact_id, ${contacts.email} as email, ${contacts.firstName} as first_name,
+    select ${contacts.id} as contact_id, ${a.channel === 'WHATSAPP' ? contacts.phone : contacts.email} as email, ${contacts.firstName} as first_name,
            to_char(o.occ, 'YYYY-MM-DD') as occurrence_date, ${due} as due_at
     from ${contacts}
     cross join lateral ${occ} o
-    where ${emailAudienceWhere(a.tenantId, a.audience)}
+    where ${a.channel === 'WHATSAPP' ? whatsappAudienceWhere(a.tenantId, a.audience) : emailAudienceWhere(a.tenantId, a.audience)}
       and o.occ is not null
       and ${due} > ${from.toISOString()}::timestamptz
       and ${due} <= ${to.toISOString()}::timestamptz
@@ -70,9 +70,10 @@ export interface AutomationTickResult {
  * Runs every minute. For each active automation, finds contacts whose moment has arrived,
  * records one send per contact per occurrence (unique — never twice), and queues the email.
  */
-export async function runAutomationsTick(opts: { now?: Date; enqueue?: EnqueueFn } = {}): Promise<AutomationTickResult> {
+export async function runAutomationsTick(opts: { now?: Date; enqueue?: EnqueueFn; enqueueWhatsApp?: EnqueueFn } = {}): Promise<AutomationTickResult> {
   const now = opts.now ?? new Date();
-  const enqueue = opts.enqueue ?? enqueueEmails;
+  const enqueueEmail = opts.enqueue ?? enqueueEmails;
+  const enqueueWa = opts.enqueueWhatsApp ?? enqueueWhatsApp;
   const result: AutomationTickResult = { automations: 0, queued: 0, skipped: 0 };
 
   const active = await db.query.automations.findMany({
@@ -81,7 +82,10 @@ export async function runAutomationsTick(opts: { now?: Date; enqueue?: EnqueueFn
   });
 
   for (const a of active as AutomationRow[]) {
-    if (a.tenant.status !== 'ACTIVE' || trialEnded(a.tenant) || !a.templateId || !a.senderId || a.dateField.type !== 'DATE') continue;
+    const wa = a.channel === 'WHATSAPP';
+    if (a.tenant.status !== 'ACTIVE' || trialEnded(a.tenant) || a.dateField.type !== 'DATE') continue;
+    if (wa ? !a.text?.trim() || !whatsappWebAllowed(a.tenant, now) : !a.templateId || !a.senderId) continue;
+    const enqueue = wa ? enqueueWa : enqueueEmail;
     result.automations++;
     try {
       // Never back-fill: nothing due before the automation was switched on
@@ -89,12 +93,14 @@ export async function runAutomationsTick(opts: { now?: Date; enqueue?: EnqueueFn
       const due = await db.execute<{ contact_id: string; email: string; occurrence_date: string; due_at: Date }>(dueContactsQuery(a, from, now));
       if (!due.rows.length) continue;
 
-      // Monthly quota
-      const [{ used } = { used: 0 }] = await db
-        .select({ used: count() })
-        .from(messages)
-        .where(and(eq(messages.tenantId, a.tenantId), gte(messages.queuedAt, monthStartSql(now, a.tenant.timezone))));
-      const room = Math.max(0, a.tenant.monthlyQuota - used);
+      // Monthly email quota (WhatsApp has its own daily pacing in the worker)
+      const [{ used } = { used: 0 }] = wa
+        ? [{ used: 0 }]
+        : await db
+            .select({ used: count() })
+            .from(messages)
+            .where(and(eq(messages.tenantId, a.tenantId), eq(messages.channel, 'EMAIL'), gte(messages.queuedAt, monthStartSql(now, a.tenant.timezone))));
+      const room = wa ? due.rows.length : Math.max(0, a.tenant.monthlyQuota - used);
       const allowed = due.rows.slice(0, room);
       const over = due.rows.slice(room);
 
@@ -125,7 +131,11 @@ export async function runAutomationsTick(opts: { now?: Date; enqueue?: EnqueueFn
         if (!send) continue;
         const [msg] = await db
           .insert(messages)
-          .values({ tenantId: a.tenantId, automationId: a.id, contactId: r.contact_id, senderId: a.senderId, channel: 'EMAIL', toAddress: r.email.toLowerCase() })
+          .values(
+            wa
+              ? { tenantId: a.tenantId, automationId: a.id, contactId: r.contact_id, channel: 'WHATSAPP' as const, toAddress: r.email, body: a.text, attachments: a.attachments }
+              : { tenantId: a.tenantId, automationId: a.id, contactId: r.contact_id, senderId: a.senderId, channel: 'EMAIL' as const, toAddress: r.email.toLowerCase() },
+          )
           .returning({ id: messages.id });
         await db.update(automationSends).set({ messageId: msg!.id }).where(eq(automationSends.id, send.id));
         queuedIds.push(msg!.id);

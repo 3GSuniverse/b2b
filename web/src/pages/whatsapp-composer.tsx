@@ -46,6 +46,65 @@ function wrap(el: HTMLTextAreaElement | null, value: string, mark: string, set: 
   });
 }
 
+/** The WhatsApp message box: formatting buttons, personal fields and a character count. */
+export function WhatsAppTextEditor({ value, onChange, rows = 10, placeholder = 'Namaste {first_name|there}…' }: { value: string; onChange: (v: string) => void; rows?: number; placeholder?: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const fields = useFields();
+  const draft = { text: value };
+  const set = (p: { text: string }) => onChange(p.text);
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-1 rounded-[10px] border border-line bg-sunken p-1">
+        {(
+          [
+            ['Bold', '*', Bold],
+            ['Italic', '_', Italic],
+            ['Strikethrough', '~', Strikethrough],
+          ] as const
+        ).map(([label, mark, Icon]) => (
+          <Tooltip key={label} content={`${label} (${mark}text${mark})`}>
+            <button type="button" aria-label={label} onClick={() => wrap(ref.current, draft.text, mark, (v) => set({ text: v }))} className="grid h-8 w-8 place-items-center rounded-lg text-ink-2 hover:bg-hover">
+              <Icon className="h-4 w-4" />
+            </button>
+          </Tooltip>
+        ))}
+        <span className="mx-1 h-5 w-px bg-line" aria-hidden />
+        <MergeTagMenu
+          fields={fields.data?.fields ?? []}
+          onInsert={(t) => {
+            const el = ref.current;
+            const at = el?.selectionStart ?? draft.text.length;
+            const end = el?.selectionEnd ?? at;
+            set({ text: draft.text.slice(0, at) + t + draft.text.slice(end) });
+            requestAnimationFrame(() => {
+              el?.focus();
+              el?.setSelectionRange(at + t.length, at + t.length);
+            });
+          }}
+          trigger={
+            <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold text-ink-2 hover:bg-hover">
+              <Braces className="h-4 w-4" />
+              Personalise
+            </button>
+          }
+        />
+        <span className={cn('tnum ml-auto pr-2 text-xs', draft.text.length > MAX ? 'text-danger' : 'text-muted')}>
+          {n(draft.text.length)} / {n(MAX)}
+        </span>
+      </div>
+      <Textarea
+        ref={ref}
+        aria-label="Message"
+        rows={rows}
+        value={draft.text}
+        onChange={(e) => set({ text: e.target.value })}
+        placeholder={placeholder}
+        className="min-h-[220px] text-[15px] leading-relaxed"
+      />
+    </>
+  );
+}
+
 export function WhatsAppComposer({ c }: { c: Campaign }) {
   const id = c.id;
   const nav = useNavigate();
@@ -151,8 +210,8 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
   return (
     <>
       <header className="flex flex-col gap-4">
-        <Link to="/campaigns" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
-          <ArrowLeft className="h-3.5 w-3.5" /> Broadcasts
+        <Link to="/whatsapp/broadcasts" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
+          <ArrowLeft className="h-3.5 w-3.5" /> WhatsApp: broadcasts
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -274,7 +333,7 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
             ) : (
               <div className="flex flex-col items-start gap-3">
                 <p className="text-sm text-muted">Link the WhatsApp number you want to send from. It takes a minute: scan a QR code with the phone.</p>
-                <LinkButton to="/whatsapp" variant="primary" size="sm">
+                <LinkButton to="/whatsapp/setup" variant="primary" size="sm">
                   Link WhatsApp
                 </LinkButton>
               </div>
@@ -302,53 +361,7 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
             onToggle={() => setOpen(open === 'message' ? null : 'message')}
           >
             <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-1 rounded-[10px] border border-line bg-sunken p-1">
-                {(
-                  [
-                    ['Bold', '*', Bold],
-                    ['Italic', '_', Italic],
-                    ['Strikethrough', '~', Strikethrough],
-                  ] as const
-                ).map(([label, mark, Icon]) => (
-                  <Tooltip key={label} content={`${label} (${mark}text${mark})`}>
-                    <button type="button" aria-label={label} onClick={() => wrap(ref.current, draft.text, mark, (v) => set({ text: v }))} className="grid h-8 w-8 place-items-center rounded-lg text-ink-2 hover:bg-hover">
-                      <Icon className="h-4 w-4" />
-                    </button>
-                  </Tooltip>
-                ))}
-                <span className="mx-1 h-5 w-px bg-line" aria-hidden />
-                <MergeTagMenu
-                  fields={fields.data?.fields ?? []}
-                  onInsert={(t) => {
-                    const el = ref.current;
-                    const at = el?.selectionStart ?? draft.text.length;
-                    const end = el?.selectionEnd ?? at;
-                    set({ text: draft.text.slice(0, at) + t + draft.text.slice(end) });
-                    requestAnimationFrame(() => {
-                      el?.focus();
-                      el?.setSelectionRange(at + t.length, at + t.length);
-                    });
-                  }}
-                  trigger={
-                    <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold text-ink-2 hover:bg-hover">
-                      <Braces className="h-4 w-4" />
-                      Personalise
-                    </button>
-                  }
-                />
-                <span className={cn('tnum ml-auto pr-2 text-xs', draft.text.length > MAX ? 'text-danger' : 'text-muted')}>
-                  {n(draft.text.length)} / {n(MAX)}
-                </span>
-              </div>
-              <Textarea
-                ref={ref}
-                aria-label="Message"
-                rows={10}
-                value={draft.text}
-                onChange={(e) => set({ text: e.target.value })}
-                placeholder="Namaste {first_name|there}…"
-                className="min-h-[220px] text-[15px] leading-relaxed"
-              />
+              <WhatsAppTextEditor value={draft.text} onChange={(text) => set({ text })} />
               <p className="text-xs leading-relaxed text-muted">
                 Keep it short and personal, like a message you’d type yourself. Ending with “Reply STOP to stop these messages” lowers the chance of being reported.
               </p>

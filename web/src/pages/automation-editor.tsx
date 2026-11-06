@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarClock, ChevronDown, Info, MoreHorizontal, Pause, Pencil, Play, Trash2 } from 'lucide-react';
+import { ArrowLeft, CalendarClock, ChevronDown, Info, MessageCircle, MoreHorizontal, Pause, Pencil, Play, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -17,6 +17,11 @@ import { PrettyTags } from '@/lib/tags';
 import type { Attachment, Audience, Automation, CustomField, Sender, Starter, Template } from '@/lib/types';
 import { AttachmentPicker } from '@/components/attachments/attachments';
 import type { Upcoming } from './automations';
+import { WhatsAppTextEditor } from './whatsapp-composer';
+import { WhatsAppPreview } from '@/components/whatsapp/preview';
+import { useWhatsApp } from '@/components/whatsapp/settings';
+import { useNavSection } from '@/lib/section';
+import { useSession } from '@/lib/session';
 
 type Timing = 'before' | 'on' | 'after';
 interface Draft {
@@ -30,6 +35,19 @@ interface Draft {
   repeat: 'ONCE' | 'YEARLY';
   audience: Audience | null;
   attachments: Attachment[];
+  text: string;
+}
+
+const WA_TEXT = {
+  trip: 'Namaste {first_name|there} 🙏\n\nYour trip is on *{trip_date}*. Pickup: [PICKUP TIME AND PLACE].\n\nCarry your ID and tickets. Call us on [PHONE] for anything.',
+  birthday: 'Happy birthday {first_name|there}! 🎂\n\nWishing you a wonderful year full of happy journeys.\n\nWarm wishes from all of us at {company_name}.',
+};
+
+/** The message as a customer would see it, with made-up details in the personal fields. */
+function sampleText(text: string, company: string, dateKey?: string) {
+  const sample: Record<string, string> = { first_name: 'Asha', last_name: 'Rao', full_name: 'Asha Rao', company_name: company, phone: '+91 98765 43210', email: 'asha@example.com' };
+  const date = new Date(Date.now() + 3 * 86_400_000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return text.replace(/\{\s*([a-z0-9_]+)\s*(?:\|([^}]*))?\}/gi, (_m, key: string, fallback?: string) => sample[key] ?? (key === dateKey || /date|birthday|anniversary/.test(key) ? date : (fallback ?? '')));
 }
 
 const RECIPES = {
@@ -48,11 +66,11 @@ const fromAutomation = (a: Automation): Draft => ({
   repeat: a.repeat,
   audience: a.audience,
   attachments: a.attachments ?? [],
+  text: a.text ?? '',
 });
-const toBody = (d: Draft) => ({
+const toBody = (d: Draft, wa = false) => ({
   name: d.name.trim() || 'Untitled automation',
-  templateId: d.templateId || null,
-  senderId: d.senderId || null,
+  ...(wa ? { text: d.text } : { templateId: d.templateId || null, senderId: d.senderId || null }),
   dateFieldId: d.dateFieldId,
   offsetDays: d.timing === 'on' ? 0 : d.timing === 'before' ? -d.days : d.days,
   sendTime: d.sendTime,
@@ -88,7 +106,7 @@ function Line({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function UpcomingPanel({ id, tz }: { id?: string; tz: string }) {
+function UpcomingPanel({ id, tz, unit }: { id?: string; tz: string; unit: string }) {
   const q = useQuery({ queryKey: ['automation-upcoming', id, 14], queryFn: () => api.get<Upcoming>(`/api/automations/${id}/upcoming?days=14`), enabled: !!id });
   return (
     <Panel className="flex flex-col gap-4 p-5 sm:p-6">
@@ -109,7 +127,7 @@ function UpcomingPanel({ id, tz }: { id?: string; tz: string }) {
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-sm font-semibold">{date(d.day + 'T12:00:00Z', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz })}</span>
                 <span className="tnum text-[13px] text-muted">
-                  {n(d.count)} {d.count === 1 ? 'email' : 'emails'}
+                  {n(d.count)} {d.count === 1 ? unit : `${unit}s`}
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -127,7 +145,7 @@ function UpcomingPanel({ id, tz }: { id?: string; tz: string }) {
       )}
       {q.data && q.data.audience.withDate > 0 && (
         <p className="border-t border-line-soft pt-3 text-xs text-muted">
-          {n(q.data.audience.withDate)} subscribed contacts have this date filled in.
+          {n(q.data.audience.withDate)} subscribed customers have this date filled in.
         </p>
       )}
     </Panel>
@@ -148,6 +166,12 @@ export function AutomationEditorPage() {
   const starters = useQuery({ queryKey: ['starters'], queryFn: () => api.get<{ starters: Starter[] }>('/api/templates/starters'), staleTime: Infinity });
   const existing = useQuery({ queryKey: ['automation', id], queryFn: () => api.get<{ automation: Automation }>(`/api/automations/${id}`), enabled: !!id });
   const a = existing.data?.automation;
+  const wa = (a?.channel ?? (params.get('channel') === 'WHATSAPP' ? 'WHATSAPP' : 'EMAIL')) === 'WHATSAPP';
+  const channel = wa ? 'WHATSAPP' : 'EMAIL';
+  const hub = wa ? '/whatsapp/automatic' : '/email/automatic';
+  useNavSection(id && !a ? null : wa ? 'whatsapp' : 'email');
+  const whatsapp = useWhatsApp();
+  const { tenant } = useSession();
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editingAudience, setEditingAudience] = useState(false);
@@ -175,8 +199,9 @@ export function AutomationEditorPage() {
       repeat: recipe?.repeat ?? 'ONCE',
       audience: null,
       attachments: [],
+      text: wa ? (recipe ? WA_TEXT[params.get('recipe') as keyof typeof WA_TEXT] : '') : '',
     });
-  }, [draft, id, a, fields.data, senders.data, recipe, dateFields]);
+  }, [draft, id, a, fields.data, senders.data, recipe, dateFields, wa, params]);
 
   const set = (patch: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
 
@@ -198,12 +223,12 @@ export function AutomationEditorPage() {
   });
 
   const template = useQuery({ queryKey: ['template', draft?.templateId], queryFn: () => api.get<{ template: Template }>(`/api/templates/${draft!.templateId}`), enabled: !!draft?.templateId });
-  const count = useAudienceCount(draft?.audience ?? null);
+  const count = useAudienceCount(draft?.audience ?? null, (a?.channel ?? (params.get('channel') === 'WHATSAPP' ? 'WHATSAPP' : 'EMAIL')));
 
   const save = useMutation({
     mutationFn: async (activate: boolean) => {
-      const body = toBody(draft!);
-      const saved = id ? await api.patch<{ automation: Automation }>(`/api/automations/${id}`, body) : await api.post<{ automation: Automation }>('/api/automations', body);
+      const body = toBody(draft!, wa);
+      const saved = id ? await api.patch<{ automation: Automation }>(`/api/automations/${id}`, body) : await api.post<{ automation: Automation }>('/api/automations', { ...body, channel });
       if (activate && saved.automation.status !== 'ACTIVE') return api.post<{ automation: Automation }>(`/api/automations/${saved.automation.id}/activate`).then((r) => ({ ...r, created: !id }));
       return { ...saved, created: !id };
     },
@@ -232,7 +257,7 @@ export function AutomationEditorPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['automations'] });
       toast.success('Automation deleted');
-      nav('/automations');
+      nav(hub);
     },
     onError: (e: Error) => {
       setConfirmDelete(false);
@@ -242,7 +267,7 @@ export function AutomationEditorPage() {
 
   // When a recipe asks for a starter design, create it once
   useEffect(() => {
-    if (!id && recipe && draft && !draft.templateId && templates.data && !fromStarter.isPending && !fromStarter.isSuccess) {
+    if (!wa && !id && recipe && draft && !draft.templateId && templates.data && !fromStarter.isPending && !fromStarter.isSuccess) {
       const name = starters.data?.starters.find((s) => s.id === recipe.starter)?.name;
       const already = templates.data.templates.find((t) => t.name === name);
       if (already) set({ templateId: already.id });
@@ -251,23 +276,23 @@ export function AutomationEditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, recipe, draft?.templateId, templates.data, starters.data]);
 
-  const dirty = useMemo(() => (a && draft ? JSON.stringify(toBody(fromAutomation(a))) !== JSON.stringify(toBody(draft)) : true), [a, draft]);
+  const dirty = useMemo(() => (a && draft ? JSON.stringify(toBody(fromAutomation(a), wa)) !== JSON.stringify(toBody(draft, wa)) : true), [a, draft, wa]);
 
-  if (id && existing.error) return <Navigate to="/automations" replace />;
+  if (id && existing.error) return <Navigate to={hub} replace />;
   if (!draft) return <Skeleton className="h-[520px] rounded-[var(--radius-panel)]" />;
 
   const field = dateFields.find((f) => f.id === draft.dateFieldId);
   const err = (k: string) => (save.error instanceof ApiError ? save.error.field(k) : undefined);
   const audienceText = describeAudience(draft.audience, lists.data?.lists ?? [], labelOf);
   const on = a?.status === 'ACTIVE';
-  const ready = !!draft.templateId && !!draft.senderId && !!draft.dateFieldId;
+  const ready = wa ? (!!draft.text.trim() || draft.attachments.length > 0) && !!draft.dateFieldId : !!draft.templateId && !!draft.senderId && !!draft.dateFieldId;
   const fieldIsYearly = field && /birth|anniversar/i.test(field.label);
 
   return (
     <>
       <header className="flex flex-col gap-4">
-        <Link to="/automations" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
-          <ArrowLeft className="h-3.5 w-3.5" /> Automations
+        <Link to={hub} className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
+          <ArrowLeft className="h-3.5 w-3.5" /> {wa ? 'WhatsApp' : 'Email'}: automatic {wa ? 'messages' : 'emails'}
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -328,6 +353,11 @@ export function AutomationEditorPage() {
           <Panel className="px-5 py-2 sm:px-7">
             <div className="divide-y divide-line-soft">
               <Line label="Send">
+                {wa ? (
+                  <span className="inline-flex items-center gap-2 font-semibold text-success-strong">
+                    <MessageCircle className="h-4 w-4" /> a WhatsApp message
+                  </span>
+                ) : (
                 <Pick
                   aria-label="Email to send"
                   aria-invalid={!draft.templateId || !!err('templateId') || undefined}
@@ -352,6 +382,7 @@ export function AutomationEditorPage() {
                     ))}
                   </optgroup>
                 </Pick>
+                )}
               </Line>
 
               <Line label="When">
@@ -412,6 +443,20 @@ export function AutomationEditorPage() {
               </Line>
 
               <Line label="From">
+                {wa ? (
+                  <span className="text-[15px]">
+                    {whatsapp.data?.status === 'CONNECTED' ? (
+                      <>your linked number <b>{whatsapp.data.phone}</b></>
+                    ) : (
+                      <>
+                        your linked number{' '}
+                        <Link to="/whatsapp/setup" className="font-semibold text-warm-strong underline">
+                          (not linked yet)
+                        </Link>
+                      </>
+                    )}
+                  </span>
+                ) : (
                 <Pick aria-label="Sender" aria-invalid={!draft.senderId || undefined} value={draft.senderId} onChange={(e) => set({ senderId: e.target.value })}>
                   <option value="">choose an address</option>
                   {senders.data?.senders.map((s) => (
@@ -420,6 +465,7 @@ export function AutomationEditorPage() {
                     </option>
                   ))}
                 </Pick>
+                )}
               </Line>
 
               <Line label="To">
@@ -439,6 +485,23 @@ export function AutomationEditorPage() {
             </p>
           )}
 
+          {wa ? (
+            <Panel className="grid grid-cols-[minmax(0,1fr)] gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+              <div className="flex min-w-0 flex-col gap-3">
+                <div className="flex flex-col gap-0.5">
+                  <h2 className="text-[15px] font-semibold">The message</h2>
+                  <p className="text-[13px] text-muted">Use personal fields like {field ? <PrettyTags text={`{${field.key}}`} /> : 'the date'} so each person gets their own details.</p>
+                </div>
+                <WhatsAppTextEditor value={draft.text} onChange={(text) => set({ text })} rows={7} />
+                <div className="flex flex-col gap-2 border-t border-line-soft pt-4">
+                  <span className="text-[13px] font-semibold">Photos, videos and files</span>
+                  <AttachmentPicker channel="WHATSAPP" value={draft.attachments} onChange={(attachments) => set({ attachments })} />
+                </div>
+              </div>
+              <WhatsAppPreview text={sampleText(draft.text, tenant.name, field?.key)} businessName={whatsapp.data?.displayName || tenant.name} phone={whatsapp.data?.phone ?? null} attachments={draft.attachments} />
+            </Panel>
+          ) : (
+          <>
           <Panel className="flex flex-col gap-4 p-5 sm:flex-row sm:p-6">
             <div className="w-full shrink-0 overflow-hidden rounded-[12px] border border-line sm:w-52">
               {template.data ? <EmailThumbnail html={template.data.template.html} height={180} /> : <div className="grid h-[180px] place-items-center bg-sunken text-xs text-muted">{draft.templateId ? 'Loading…' : 'No email chosen'}</div>}
@@ -478,10 +541,12 @@ export function AutomationEditorPage() {
               onChange={(attachments) => set({ attachments })}
             />
           </Panel>
+          </>
+          )}
         </div>
 
         <div className="flex flex-col gap-4 xl:sticky xl:top-6">
-          <UpcomingPanel id={id} tz={a?.timezone ?? 'Asia/Kolkata'} />
+          <UpcomingPanel id={id} tz={a?.timezone ?? 'Asia/Kolkata'} unit={wa ? 'message' : 'email'} />
           <Panel className="flex flex-col gap-2.5 p-5 text-[13px] leading-relaxed text-muted">
             <p className="font-semibold text-ink">Good to know</p>
             <p>Switching on starts from now: dates that already passed are skipped, so nobody gets a late reminder.</p>
@@ -492,7 +557,7 @@ export function AutomationEditorPage() {
       </div>
 
       <Dialog open={editingAudience} onOpenChange={setEditingAudience} title="Who gets it" description="Only people with the date filled in will get it." className="max-w-xl" footer={<Button variant="primary" onClick={() => setEditingAudience(false)}>Done</Button>}>
-        <AudienceEditor value={draft.audience} onChange={(au) => set({ audience: au })} />
+        <AudienceEditor channel={channel} value={draft.audience} onChange={(au) => set({ audience: au })} />
       </Dialog>
       <Dialog
         open={confirmDelete}
