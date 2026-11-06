@@ -4,6 +4,8 @@ import { buildApp } from '../src/app.js';
 import { automations, campaigns, customFields, messages, notifications, tenants, whatsappAuth, whatsappSessions } from '../src/db/schema.js';
 import { closeDatabase, db } from '../src/lib/db.js';
 import { closeRedis } from '../src/lib/redis.js';
+import { env } from '../src/config/env.js';
+import { readFileSync } from 'node:fs';
 import { trialActive, whatsappWebAllowed } from '../src/modules/plans/entitlements.js';
 import { runTrialLifecycle } from '../src/modules/plans/trial-lifecycle.js';
 import { processSendJob } from '../src/modules/sending/send-message.js';
@@ -34,15 +36,20 @@ async function trialCompany(endsInMs = 3 * DAY) {
   return { tenant, sender };
 }
 
-describe('a new company starts on a 5-day trial', () => {
+describe('a new company starts on a free trial of TRIAL_DAYS days', () => {
   it('with 200 emails and up to 100 WhatsApp messages a day', async () => {
     const { cookie, json } = await signup(app);
     const t = await db.query.tenants.findFirst({ where: eq(tenants.id, json.tenant.id) });
     expect(t).toMatchObject({ plan: 'TRIAL', monthlyQuota: 200 });
-    expect(t!.trialEndsAt!.getTime() - Date.now()).toBeGreaterThan(4.9 * DAY);
+    expect(t!.trialEndsAt!.getTime() - Date.now()).toBeGreaterThan((env.TRIAL_DAYS - 0.1) * DAY);
     const me = (await api(app, cookie).get('/api/auth/me')).json().tenant;
     expect(me.features.whatsapp).toBe(true);
-    expect(me.plan).toMatchObject({ plan: 'TRIAL', trialEnded: false, daysLeft: 5, whatsapp: { perDay: 100, sentToday: 0 }, emailLimit: 200 });
+    expect(me.plan).toMatchObject({ plan: 'TRIAL', trialEnded: false, daysLeft: env.TRIAL_DAYS, whatsapp: { perDay: 100, sentToday: 0 }, emailLimit: 200 });
+  });
+
+  it('the public pages promise the same trial length the server gives', () => {
+    const brand = readFileSync(new URL('../../web/src/lib/brand.ts', import.meta.url), 'utf8');
+    expect(Number(brand.match(/trialDays: (\d+)/)![1])).toBe(env.TRIAL_DAYS);
   });
 
   it('only paid companies (or the operator override) lose or keep WhatsApp Web accordingly', () => {

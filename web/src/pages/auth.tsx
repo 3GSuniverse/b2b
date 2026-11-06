@@ -207,7 +207,7 @@ export function SignUpPage() {
   return (
     <AuthLayout
       title="Set up your agency"
-      subtitle="Create the agency owner’s login. You’ll add your employees next. 5 days free, no card needed."
+      subtitle={`Create the agency owner’s login. You’ll add your employees next. ${BRAND.trialDays} days free, no card needed.`}
       footer={
         <>
           Already have an account? <Link to="/signin" className="font-semibold text-accent hover:text-accent-strong">Sign in</Link>

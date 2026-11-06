@@ -7,6 +7,8 @@ export const BRAND = {
   // Shown on Contact. Leave null to hide a line; payment providers expect a phone number and an address.
   phone: null as string | null,
   address: null as string | null,
+  // Free trial length shown on the public pages and sign-up. Keep it equal to TRIAL_DAYS on the server.
+  trialDays: 15,
   supportHours: 'Monday to Saturday, 10 AM to 7 PM India time',
   // Where disputes under the Terms are heard
   courts: 'Vijayawada, Andhra Pradesh',

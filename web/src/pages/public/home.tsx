@@ -114,7 +114,7 @@ export function HomePage() {
                 </LinkButton>
               </div>
               <ul className="auth-rise flex flex-wrap gap-x-5 gap-y-2 text-[13px] font-medium text-muted" style={step(4)}>
-                {['Free for 5 days', 'No card needed', 'Set up in minutes'].map((t) => (
+                {[`Free for ${BRAND.trialDays} days`, 'No card needed', 'Set up in minutes'].map((t) => (
                   <li key={t} className="flex items-center gap-1.5">
                     <Check className="h-4 w-4 text-success" aria-hidden />
                     {t}
@@ -251,7 +251,7 @@ export function HomePage() {
             </svg>
             <div className="relative flex max-w-[48ch] flex-col gap-3">
               <h2 className="text-balance text-[30px] font-extrabold leading-tight tracking-[-0.03em] sm:text-[38px]">Give your agency a calmer, better-organised day.</h2>
-              <p className="text-[16px] leading-[1.65] text-white/80">Try every feature free for 5 days. If it isn’t for you, simply stop. There’s nothing to cancel.</p>
+              <p className="text-[16px] leading-[1.65] text-white/80">Try every feature free for {BRAND.trialDays} days. If it isn’t for you, simply stop. There’s nothing to cancel.</p>
             </div>
             <div className="relative flex flex-wrap gap-3">
               <Link to="/signup" className="inline-flex h-12 items-center rounded-[var(--radius-button)] bg-highlight px-6 text-[15px] font-bold text-nav transition-transform duration-200 hover:-translate-y-0.5 active:scale-[0.97]">

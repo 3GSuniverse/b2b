@@ -50,7 +50,7 @@ export function PricingPage() {
 
         <section aria-label="Free trial" className="reveal flex flex-wrap items-center gap-5 rounded-[var(--radius-panel)] border border-dashed border-line bg-sunken px-6 py-5">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <h2 className="text-lg font-semibold">Free trial: ₹0 for 5 days</h2>
+            <h2 className="text-lg font-semibold">Free trial: ₹0 for {BRAND.trialDays} days</h2>
             <p className="text-sm text-ink-2">Every feature, up to 5 employee logins, 200 emails and up to 100 WhatsApp messages a day. No card needed.</p>
           </div>
           <LinkButton to="/signup">Start free trial</LinkButton>

@@ -29,7 +29,7 @@ const schema = z.object({
   // GST added to plan prices at checkout: 0 until you're registered for GST, then 18
   BILLING_GST_PERCENT: z.coerce.number().min(0).max(28).default(0),
   BILLING_RAZORPAY_WEBHOOK_SECRET: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
-  TRIAL_DAYS: z.coerce.number().int().min(1).max(60).default(5),
+  TRIAL_DAYS: z.coerce.number().int().min(1).max(60).default(15), // 15 for the first agencies; back to 5 later (and BRAND.trialDays in web/src/lib/brand.ts)
   TRIAL_WHATSAPP_PER_DAY: z.coerce.number().int().min(0).default(100), // per number, rolling 24 hours
   TRIAL_EMAILS: z.coerce.number().int().min(0).default(200),
 
