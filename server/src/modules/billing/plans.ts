@@ -4,10 +4,10 @@
  * web/src/lib/brand.ts (a test keeps them equal). Prices are before GST.
  */
 export const BILLING_PLANS = {
-  team5: { name: 'Team 5', seats: 5, month: 1_999, year: 19_990, emails: 10_000 },
-  team10: { name: 'Team 10', seats: 10, month: 3_499, year: 34_990, emails: 25_000 },
-  team20: { name: 'Team 20', seats: 20, month: 5_999, year: 59_990, emails: 50_000 },
-  team50: { name: 'Team 50', seats: 50, month: 11_999, year: 1_19_990, emails: 1_00_000 },
+  team5: { name: 'Team 5', seats: 5, month: 2_999, year: 29_990, emails: 15_000 },
+  team10: { name: 'Team 10', seats: 10, month: 4_999, year: 49_990, emails: 30_000 },
+  team20: { name: 'Team 20', seats: 20, month: 8_499, year: 84_990, emails: 60_000 },
+  team50: { name: 'Team 50', seats: 50, month: 15_999, year: 1_59_990, emails: 1_50_000 },
 } as const;
 
 export type PlanId = keyof typeof BILLING_PLANS;

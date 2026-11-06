@@ -30,10 +30,10 @@ export type Plan = {
 
 // Shown on the Pricing page. Must match server/src/modules/billing/plans.ts (a test checks).
 export const PLANS: Plan[] = [
-  { id: 'team5', name: 'Team 5', seats: 5, price: 1_999, yearly: 19_990, emails: 10_000, forWho: 'For a small agency: 1 to 5 employees.' },
-  { id: 'team10', name: 'Team 10', seats: 10, price: 3_499, yearly: 34_990, emails: 25_000, forWho: 'For a growing agency: 6 to 10 employees.', popular: true },
-  { id: 'team20', name: 'Team 20', seats: 20, price: 5_999, yearly: 59_990, emails: 50_000, forWho: 'For a busy agency: 11 to 20 employees.' },
-  { id: 'team50', name: 'Team 50', seats: 50, price: 11_999, yearly: 1_19_990, emails: 1_00_000, forWho: 'For a large agency: 21 to 50 employees.' },
+  { id: 'team5', name: 'Team 5', seats: 5, price: 2_999, yearly: 29_990, emails: 15_000, forWho: 'For a small agency: 1 to 5 employees.' },
+  { id: 'team10', name: 'Team 10', seats: 10, price: 4_999, yearly: 49_990, emails: 30_000, forWho: 'For a growing agency: 6 to 10 employees.', popular: true },
+  { id: 'team20', name: 'Team 20', seats: 20, price: 8_499, yearly: 84_990, emails: 60_000, forWho: 'For a busy agency: 11 to 20 employees.' },
+  { id: 'team50', name: 'Team 50', seats: 50, price: 15_999, yearly: 1_59_990, emails: 1_50_000, forWho: 'For a large agency: 21 to 50 employees.' },
 ];
 
 /** What every plan includes, whatever its size. */

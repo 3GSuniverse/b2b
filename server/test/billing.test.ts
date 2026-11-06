@@ -45,7 +45,7 @@ describe('paying for a plan', () => {
     const c = api(app, cookie);
     const o = await c.post('/api/billing/orders', { plan: 'team10', period: 'month', amount: 100 }); // a browser can't set the price
     expect(o.statusCode).toBe(201);
-    expect(o.json()).toMatchObject({ amount: 349_900, currency: 'INR', keyId: 'rzp_test_key', kind: 'NEW' });
+    expect(o.json()).toMatchObject({ amount: 499_900, currency: 'INR', keyId: 'rzp_test_key', kind: 'NEW' });
     expect(orders[0]!.notes).toMatchObject({ plan: 'team10', period: 'month', tenant_id: json.tenant.id });
     const { orderId } = o.json();
 
@@ -56,7 +56,7 @@ describe('paying for a plan', () => {
     const ok = await c.post('/api/billing/verify', { razorpay_order_id: orderId, razorpay_payment_id: 'pay_1', razorpay_signature: sign(orderId, 'pay_1') });
     expect(ok.statusCode).toBe(200);
     const t = (await db.query.tenants.findFirst({ where: eq(tenants.id, json.tenant.id) }))!;
-    expect(t).toMatchObject({ plan: 'PAID', planId: 'team10', monthlyQuota: 25_000 });
+    expect(t).toMatchObject({ plan: 'PAID', planId: 'team10', monthlyQuota: 30_000 });
     const days = (t.paidUntil!.getTime() - Date.now()) / 86_400_000;
     expect(days).toBeGreaterThan(27);
     expect(days).toBeLessThan(32);
@@ -70,11 +70,11 @@ describe('paying for a plan', () => {
     expect((await c.post('/api/billing/orders', { plan: 'team5', period: 'month' })).json().error).toBe('downgrade_later');
     const up = (await c.post('/api/billing/orders', { plan: 'team20', period: 'year' })).json();
     expect(up.kind).toBe('UPGRADE');
-    expect(up.amount).toBeGreaterThan(240_000); // ₹2,500 a month more, for nearly a whole month
-    expect(up.amount).toBeLessThanOrEqual(250_000);
+    expect(up.amount).toBeGreaterThan(336_000); // ₹3,500 a month more, for nearly a whole month
+    expect(up.amount).toBeLessThanOrEqual(350_000);
     await c.post('/api/billing/verify', { razorpay_order_id: up.orderId, razorpay_payment_id: 'pay_2', razorpay_signature: sign(up.orderId, 'pay_2') });
     const upgraded = (await db.query.tenants.findFirst({ where: eq(tenants.id, json.tenant.id) }))!;
-    expect(upgraded).toMatchObject({ planId: 'team20', monthlyQuota: 50_000 });
+    expect(upgraded).toMatchObject({ planId: 'team20', monthlyQuota: 60_000 });
     expect(upgraded.paidUntil!.getTime()).toBe(t.paidUntil!.getTime());
 
     const summary = (await c.get('/api/billing')).json();
@@ -104,7 +104,7 @@ describe('paying for a plan', () => {
     const sig = createHmac('sha256', WEBHOOK_SECRET).update(body).digest('hex');
     const r = await app.inject({ method: 'POST', url: '/webhooks/razorpay-billing', headers: { 'content-type': 'application/json', 'x-razorpay-signature': sig }, payload: body });
     expect(r.statusCode).toBe(200);
-    expect((await db.query.tenants.findFirst({ where: eq(tenants.id, json.tenant.id) }))).toMatchObject({ plan: 'PAID', planId: 'team5', monthlyQuota: 10_000 });
+    expect((await db.query.tenants.findFirst({ where: eq(tenants.id, json.tenant.id) }))).toMatchObject({ plan: 'PAID', planId: 'team5', monthlyQuota: 15_000 });
     const [p] = await db.select().from(billingPayments);
     expect(p).toMatchObject({ status: 'PAID', razorpayPaymentId: 'pay_9' });
   });
