@@ -122,7 +122,7 @@ export function BillingSettings() {
   const { user } = useSession();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['billing'], queryFn: () => api.get<Billing>('/api/billing') });
-  const [period, setPeriod] = useState<Period>('year');
+  const [period, setPeriod] = useState<Period>('month');
   const [paying, setPaying] = useState<string | null>(null);
   const cards = useRef<Record<string, HTMLElement | null>>({});
   const canPay = user.role === 'OWNER';
