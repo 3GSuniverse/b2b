@@ -23,6 +23,7 @@ export async function requireAuth(req: FastifyRequest, _reply: FastifyReply) {
   if (!token) throw new AppError(401, 'not_signed_in', 'Please sign in');
   const s = await findSession(token);
   if (!s) throw new AppError(401, 'session_expired', 'Your session has ended. Please sign in again');
+  if (s.user.disabledAt) throw new AppError(401, 'login_disabled', 'Your login has been switched off. Ask your agency owner.');
   req.auth = { userId: s.userId, tenantId: s.tenantId, role: s.user.role, sessionToken: token };
 }
 

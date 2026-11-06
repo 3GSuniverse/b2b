@@ -412,6 +412,7 @@ export async function broadcast(actor: Actor, groupId: string, input: z.infer<ty
         subject: channel === 'EMAIL' ? `${g.title}: an update` : null,
         body: input.text || (channel === 'EMAIL' ? `Please find ${files.length > 1 ? 'the files' : 'the file'} attached.` : ''),
         attachments: files,
+        sentById: actor.userId,
         service: true,
       })
       .returning({ id: messages.id });

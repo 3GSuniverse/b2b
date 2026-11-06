@@ -15,6 +15,7 @@ import { campaignRoutes } from './modules/campaigns/routes.js';
 import { templateRoutes } from './modules/templates/routes.js';
 import { attachmentRoutes } from './modules/attachments/routes.js';
 import { billingRoutes } from './modules/billing/routes.js';
+import { teamRoutes } from './modules/team/routes.js';
 import { tripRoutes } from './modules/trips/routes.js';
 import { tripMessageRoutes } from './modules/trips/followups.js';
 import { apiKeyRoutes } from './modules/api-keys/routes.js';
@@ -121,6 +122,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(templateRoutes);
   await app.register(attachmentRoutes);
   await app.register(billingRoutes);
+  await app.register(teamRoutes);
   await app.register(automationRoutes);
   await app.register(apiKeyRoutes);
   await app.register(quoteRoutes);

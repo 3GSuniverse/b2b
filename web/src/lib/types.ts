@@ -1,8 +1,8 @@
 // Shapes returned by the API (see server/src/modules/*).
 
 export interface Me {
-  user: { id: string; name: string; email: string; role: 'OWNER' | 'ADMIN' | 'MEMBER' };
-  tenant: { id: string; name: string; slug: string; status: 'ACTIVE' | 'PAUSED' | 'SUSPENDED'; timezone: string; monthlyQuota: number; pausedReason: string | null;
+  user: { id: string; name: string; email: string | null; username: string | null; role: 'OWNER' | 'ADMIN' | 'MEMBER' };
+  tenant: { id: string; name: string; slug: string; loginCode: string; status: 'ACTIVE' | 'PAUSED' | 'SUSPENDED'; timezone: string; monthlyQuota: number; pausedReason: string | null;
     features?: { whatsapp: boolean };
     plan?: { plan: 'TRIAL' | 'PAID'; planId: string | null; paidUntil: string | null; trialEndsAt: string | null; trialEnded: boolean; daysLeft: number | null; whatsapp: { perDay: number; sentToday: number } | null; emailLimit: number | null };
   };

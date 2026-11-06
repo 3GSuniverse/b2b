@@ -33,6 +33,8 @@ const ManifestPage = lazy(() => import('./pages/manifest').then((m) => ({ defaul
 const TripPage = lazy(() => import('./pages/trip').then((m) => ({ default: m.TripPage })));
 const WhatsAppPage = lazy(() => import('./pages/whatsapp').then((m) => ({ default: m.WhatsAppPage })));
 const SettingsPage = lazy(() => import('./pages/settings').then((m) => ({ default: m.SettingsPage })));
+const AgencyPage = lazy(() => import('./pages/agency').then((m) => ({ default: m.AgencyPage })));
+const AgencyBillingPage = lazy(() => import('./pages/agency').then((m) => ({ default: m.AgencyBillingPage })));
 
 function PageFallback() {
   return (
@@ -55,6 +57,7 @@ export function App() {
       <Route path="/about" element={<Suspense fallback={null}><AboutPage /></Suspense>} />
       <Route element={<AuthShell />}>
         <Route path="/signin" element={<SignInPage />} />
+        <Route path="/signin/:agency" element={<SignInPage />} />
         <Route path="/signup" element={<SignUpPage />} />
       </Route>
       <Route path="groups/:id/manifest" element={<RequireSession><Suspense fallback={<PageFallback />}><ManifestPage /></Suspense></RequireSession>} />
@@ -85,6 +88,9 @@ export function App() {
         <Route path="templates" element={<Suspense fallback={<PageFallback />}><TemplatesPage /></Suspense>} />
         <Route path="templates/:id" element={<Suspense fallback={<PageFallback />}><TemplateEditorPage /></Suspense>} />
         <Route path="whatsapp" element={<Suspense fallback={<PageFallback />}><WhatsAppPage /></Suspense>} />
+        <Route path="agency" element={<Suspense fallback={<PageFallback />}><AgencyPage /></Suspense>} />
+        <Route path="agency/billing" element={<Suspense fallback={<PageFallback />}><AgencyBillingPage /></Suspense>} />
+        <Route path="settings/billing" element={<Navigate to="/agency/billing" replace />} />
         <Route path="settings" element={<Navigate to="/settings/senders" replace />} />
         <Route path="settings/:section" element={<Suspense fallback={<PageFallback />}><SettingsPage /></Suspense>} />
         <Route path="*" element={<NotFoundPage />} />

@@ -105,10 +105,20 @@ async function main() {
 
   const [tenant] = await db
     .insert(tenants)
-    .values({ name: 'Kurukshetra Travels', slug: `kurukshetra-demo-${Date.now().toString(36)}`, plan: 'PAID', monthlyQuota: 5000, postalAddress: 'Road No. 12, Banjara Hills, Hyderabad 500034', paymentSettings: { upiId: 'kurukshetra@okhdfcbank', contactPhone: '+919848022338' } })
+    .values({ name: 'Kurukshetra Travels', slug: `kurukshetra-demo-${Date.now().toString(36)}`, loginCode: 'kurukshetra-demo', plan: 'PAID', planId: 'team10', paidUntil: new Date(Date.now() + 41 * 86_400_000), monthlyQuota: 25_000, postalAddress: 'Road No. 12, Banjara Hills, Hyderabad 500034', paymentSettings: { upiId: 'kurukshetra@okhdfcbank', contactPhone: '+919848022338' } })
     .returning();
   const tenantId = tenant!.id;
   const [user] = await db.insert(users).values({ tenantId, email: EMAIL, name: 'GunaSekhar', passwordHash: await hashPassword(PASSWORD), role: 'OWNER' }).returning();
+  // Employees: they sign in as Employee with agency ID kurukshetra-demo and the same demo password
+  const staffHash = await hashPassword(PASSWORD);
+  const staff = await db
+    .insert(users)
+    .values([
+      { tenantId, name: 'Ravi Kumar', username: 'ravi', role: 'MEMBER' as const, passwordHash: staffHash, lastLoginAt: daysAgo(0, 3) },
+      { tenantId, name: 'Priya Reddy', username: 'priya', role: 'ADMIN' as const, passwordHash: staffHash, lastLoginAt: daysAgo(1, 5) },
+      { tenantId, name: 'Sandeep Varma', username: 'sandeep', role: 'MEMBER' as const, passwordHash: staffHash, lastLoginAt: daysAgo(6, 2) },
+    ])
+    .returning();
 
   const [domain] = await db
     .insert(sendingDomains)
@@ -207,7 +217,8 @@ async function main() {
     { name: 'Char Dham yatra 2027 dates', ago: 5, share: 0.25, open: 0.6, click: 0.19 },
     { name: 'Andaman winter offer', ago: 1, share: 0.85, open: 0.38, click: 0.07 },
   ];
-  for (const p of plan) {
+  for (const [pi, p] of plan.entries()) {
+    const by = [staff[0]!, staff[1]!, user!, staff[0]!, staff[2]!][pi % 5]!;
     const start = daysAgo(p.ago);
     const audience = subscribed.filter(() => rand() < p.share);
     const [c] = await db
@@ -224,7 +235,7 @@ async function main() {
         audience: { listIds: [listRows[1]!.id] },
         startedAt: start,
         completedAt: new Date(start.getTime() + 25 * 60_000),
-        createdById: user!.id,
+        createdById: by.id,
         createdAt: daysAgo(p.ago + 2),
       })
       .returning();
@@ -244,6 +255,7 @@ async function main() {
         campaignId: c!.id,
         contactId: a.id,
         senderId: sender!.id,
+        sentById: by.id,
         toAddress: a.email!,
         status: (isBounce ? 'BOUNCED' : 'DELIVERED') as 'BOUNCED' | 'DELIVERED',
         queuedAt: start,
@@ -477,6 +489,14 @@ async function main() {
         minute += 90;
       }
     }
+    // WhatsApp messages each employee sent by hand this month (quotes, replies), so the agency console has numbers
+    const phones = (await db.query.contacts.findMany({ where: eq(contacts.tenantId, tenantId), columns: { id: true, phone: true }, limit: 80 })).filter((c) => c.phone);
+    const handSent = phones.flatMap((c, i) => {
+      const by = [staff[0]!, staff[0]!, staff[1]!, staff[2]!, user!][i % 5]!;
+      const when = ago(60 * (i % 20) + 30);
+      return [{ tenantId, contactId: c.id, sentById: by.id, channel: 'WHATSAPP' as const, toAddress: c.phone!, body: 'Sharing the package details', status: 'DELIVERED' as const, queuedAt: when, sentAt: when, deliveredAt: when }];
+    });
+    if (handSent.length) await db.insert(messages).values(handSent);
     // Three quotes drafted with AI this month
     await db.insert(auditLogs).values([1, 3, 6].map((d) => ({ tenantId, userId: user!.id, action: 'ai.draft', entity: 'quote', createdAt: daysAgo(d) })));
   }

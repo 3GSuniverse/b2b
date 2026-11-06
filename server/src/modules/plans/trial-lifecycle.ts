@@ -24,7 +24,7 @@ export async function runTrialLifecycle(now = new Date()) {
       level: 'WARNING',
       title: 'Your free trial ends tomorrow',
       body: 'Upgrade to keep sending email and WhatsApp campaigns. Your contacts, templates and reports stay either way.',
-      link: '/settings/billing',
+      link: '/agency/billing',
       dedupeKey: 'trial.ending',
     });
   }
@@ -60,7 +60,7 @@ export async function runTrialLifecycle(now = new Date()) {
       body: t.planId
         ? 'Sending is off until you renew. Your customers, trips, templates and reports are safe.'
         : 'Sending is off and WhatsApp has been unlinked. Upgrade to continue. Your contacts, templates and reports are safe.',
-      link: '/settings/billing',
+      link: '/agency/billing',
       dedupeKey: t.planId ? `plan.ended:${now.toISOString().slice(0, 10)}` : 'trial.ended',
     });
     logger.info({ tenantId: t.id, name: t.name }, 'trial ended');

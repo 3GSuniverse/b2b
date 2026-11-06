@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { users } from '../../db/schema.js';
@@ -63,6 +63,6 @@ export async function tripRoutes(app: FastifyInstance) {
 
   // People a trip can be assigned to
   app.get('/api/team', { preHandler: requireAuth }, async (req) => ({
-    team: await db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).where(eq(users.tenantId, tenantOf(req))).orderBy(asc(users.name)),
+    team: await db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).where(and(eq(users.tenantId, tenantOf(req)), isNull(users.disabledAt))).orderBy(asc(users.name)),
   }));
 }

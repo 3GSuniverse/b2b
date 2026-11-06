@@ -266,6 +266,7 @@ export async function sendQuote(actor: Actor, id: string, via: 'EMAIL' | 'MANUAL
         tripId: trip.id,
         contactId: c.id,
         senderId: sender.id,
+        sentById: actor.userId,
         channel: 'EMAIL',
         toAddress: c.email,
         service: true, // they asked for this quote

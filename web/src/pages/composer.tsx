@@ -366,7 +366,7 @@ function Composer({ id }: { id: string }) {
   const set = (patch: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
 
   // Actions
-  const [testTo, setTestTo] = useState(user.email);
+  const [testTo, setTestTo] = useState(user.email ?? "");
   const test = useMutation({
     mutationFn: async () => {
       await save();

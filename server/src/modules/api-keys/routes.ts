@@ -126,9 +126,21 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       trip = await create();
     } catch (err) {
       // The same call sent twice at the same moment: the other request already added it
-      const dup = b.externalId ? await db.query.trips.findFirst({ where: and(eq(trips.tenantId, key.tenantId), eq(trips.externalRef, b.externalId)), columns: { id: true, number: true } }) : null;
+      // (it may also have clashed on the new customer before its trip was saved, so look again shortly, then retry once)
+      const find = () => (b.externalId ? db.query.trips.findFirst({ where: and(eq(trips.tenantId, key.tenantId), eq(trips.externalRef, b.externalId)), columns: { id: true, number: true } }) : Promise.resolve(null));
+      let dup = await find();
+      if (!dup) {
+        await new Promise((r) => setTimeout(r, 150));
+        dup = await find();
+      }
       if (dup) return reply.code(200).send({ trip: { id: dup.id, number: dup.number }, duplicate: true });
-      throw err;
+      try {
+        trip = await create();
+      } catch {
+        const again = await find();
+        if (again) return reply.code(200).send({ trip: { id: again.id, number: again.number }, duplicate: true });
+        throw err;
+      }
     }
     await notify(key.tenantId, {
       type: 'trips.new_lead',

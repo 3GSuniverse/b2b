@@ -15,13 +15,13 @@ const verifyBody = z.object({
 export async function billingRoutes(app: FastifyInstance) {
   app.get('/api/billing', { preHandler: requireAuth }, async (req) => billingSummary(tenantOf(req)));
 
-  // Owners and admins pay; the price comes from the server, never from the browser
-  app.post('/api/billing/orders', { preHandler: [requireAuth, requireRole('ADMIN')], config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
+  // Only the agency owner pays; the price comes from the server, never from the browser
+  app.post('/api/billing/orders', { preHandler: [requireAuth, requireRole('OWNER')], config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
     const b = parseBody(orderBody, req.body);
     return reply.code(201).send(await createBillingOrder(tenantOf(req), req.auth!.userId, b.plan, b.period));
   });
 
-  app.post('/api/billing/verify', { preHandler: [requireAuth, requireRole('ADMIN')], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+  app.post('/api/billing/verify', { preHandler: [requireAuth, requireRole('OWNER')], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
     const b = parseBody(verifyBody, req.body);
     const p = await verifyCheckout(tenantOf(req), { orderId: b.razorpay_order_id, paymentId: b.razorpay_payment_id, signature: b.razorpay_signature });
     return { ok: true, paidUntil: p.periodEnd, plan: p.planId };

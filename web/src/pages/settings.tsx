@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, CreditCard, Wallet, Plane, KeyRound, CheckCircle2, Circle, Globe, Lock, Mail, MoreHorizontal, Plus, RefreshCw, Send, Star, Trash2, TriangleAlert } from 'lucide-react';
+import { Building2, Wallet, Plane, KeyRound, CheckCircle2, Circle, Globe, Lock, Mail, MoreHorizontal, Plus, RefreshCw, Send, Star, Trash2, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { BRAND } from '@/lib/brand';
@@ -17,7 +17,6 @@ import type { DnsRecord, Domain, Mailbox, Sender } from '@/lib/types';
 import { PaymentSettingsPanel } from '@/components/trips/payment-settings';
 import { TripMessagesSettings } from '@/components/trips/trip-messages-settings';
 import { ApiKeysSettings } from '@/components/api-keys';
-import { BillingSettings } from '@/components/billing';
 
 const SECTIONS = [
   { id: 'senders', label: 'Sending addresses', icon: Send },
@@ -25,7 +24,6 @@ const SECTIONS = [
   { id: 'payments', label: 'Payments', icon: Wallet },
   { id: 'trip-messages', label: 'Trip messages', icon: Plane },
   { id: 'company', label: 'Company', icon: Building2 },
-  { id: 'billing', label: 'Plan & billing', icon: CreditCard },
   { id: 'api-keys', label: 'API keys', icon: KeyRound },
 ] as const;
 type Section = (typeof SECTIONS)[number]['id'];
@@ -617,12 +615,12 @@ function Company() {
                 ? 'Free trial (ended)'
                 : `Free trial, ${tenantPlan.daysLeft === 0 ? 'ends today' : `${tenantPlan.daysLeft} days left`}`
               : tenantPlan?.planId
-                ? `${tenantPlan.planId === 'growth' ? 'Growth' : 'Starter'}${tenantPlan.paidUntil ? `, until ${new Date(tenantPlan.paidUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}`
+                ? `${tenantPlan.planId.replace('team', 'Team ')}${tenantPlan.paidUntil ? `, until ${new Date(tenantPlan.paidUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}`
                 : 'Paid'}
             {' '}
-            <Link to="/settings/billing" className="ml-1 font-semibold text-accent hover:underline">
+            {user.role === 'OWNER' && <Link to="/agency/billing" className="ml-1 font-semibold text-accent hover:underline">
               Plan & billing
-            </Link>
+            </Link>}
           </span>
         </div>
         <div className="flex flex-col gap-1">
@@ -635,7 +633,7 @@ function Company() {
         </div>
         <div className="flex flex-col gap-1 sm:col-span-3 sm:border-t sm:border-line-soft sm:pt-4">
           <span className="text-muted">Signed in as</span>
-          <span className="truncate font-semibold">{user.email}</span>
+          <span className="truncate font-semibold">{user.email ?? `@${user.username}`}</span>
         </div>
       </Panel>
     </div>
@@ -648,10 +646,11 @@ export function SettingsPage() {
   const { section } = useParams();
   const { user } = useSession();
   const sections = SECTIONS.filter((x) => x.id !== 'api-keys' || user.role !== 'MEMBER');
+  if (user.role === 'MEMBER') return <Navigate to="/" replace />;
   if (section === 'account') return <Navigate to="/settings/company" replace />;
   if (section === 'whatsapp') return <Navigate to="/whatsapp" replace />; // it has its own page now
   if (!sections.some((s) => s.id === section)) return <Navigate to="/settings/senders" replace />;
-  const content: Record<Section, ReactNode> = { senders: <Senders />, domains: <Domains />, payments: <PaymentSettingsPanel />, 'trip-messages': <TripMessagesSettings />, company: <Company />, billing: <BillingSettings />, 'api-keys': <ApiKeysSettings /> };
+  const content: Record<Section, ReactNode> = { senders: <Senders />, domains: <Domains />, payments: <PaymentSettingsPanel />, 'trip-messages': <TripMessagesSettings />, company: <Company />, 'api-keys': <ApiKeysSettings /> };
   return (
     <>
       <PageHeader title="Settings" />

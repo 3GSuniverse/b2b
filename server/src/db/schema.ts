@@ -118,6 +118,8 @@ export const tenants = pgTable('tenants', {
   id: id(),
   name: text().notNull(),
   slug: text().notNull().unique(),
+  // The agency ID employees type to sign in (like an AWS account alias); the owner can change it
+  loginCode: text().notNull().unique(),
   status: tenantStatus().notNull().default('ACTIVE'),
   timezone: text().notNull().default('Asia/Kolkata'),
   monthlyQuota: integer().notNull().default(1000),
@@ -169,16 +171,19 @@ export const users = pgTable(
   {
     id: id(),
     tenantId: tenantRef(),
-    email: text().notNull(),
+    // The agency owner signs in with an email; employees the owner creates sign in with the
+    // agency ID + a username (email optional). Both stored lower-cased.
+    email: text(),
+    username: text(),
     name: text().notNull(),
     passwordHash: text().notNull(),
     role: userRole().notNull().default('MEMBER'),
+    disabledAt: ts(), // set by the owner: can't sign in, doesn't count as a login
     lastLoginAt: ts(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  // One email = one login. Stored lower-cased.
-  (t) => [uniqueIndex().on(t.email), index().on(t.tenantId)],
+  (t) => [uniqueIndex().on(t.email), uniqueIndex().on(t.tenantId, t.username), index().on(t.tenantId)],
 );
 
 export const sessions = pgTable(
@@ -402,9 +407,11 @@ export const billingPayments = pgTable(
   {
     id: id(),
     tenantId: tenantRef(),
-    planId: text().notNull(), // 'starter' | 'growth'
+    planId: text().notNull(), // 'team5' | 'team10' | 'team20' | 'team50'
     period: text().notNull(), // 'month' | 'year'
-    amount: integer().notNull(), // paise
+    kind: text().notNull().default('NEW'), // NEW | RENEW | UPGRADE (the difference for the days left)
+    amount: integer().notNull(), // paise, GST included
+    gst: integer().notNull().default(0), // paise of GST inside amount
     currency: text().notNull().default('INR'),
     status: billingPaymentStatus().notNull().default('CREATED'),
     razorpayOrderId: text().notNull().unique(),
@@ -557,6 +564,8 @@ export const messages = pgTable(
     subject: text(),
     body: text(),
     attachments: jsonb().$type<AttachmentRef[]>().notNull().default([]),
+    // Who sent it: the employee behind a broadcast, quote or group message; null = automatic
+    sentById: text().references(() => users.id, { onDelete: 'set null' }),
     // About the customer's own booking (payment reminder, trip starting): sent even if they opted out of offers
     service: boolean().notNull().default(false),
     contactId: text().references(() => contacts.id, { onDelete: 'set null' }),

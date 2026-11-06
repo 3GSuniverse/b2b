@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Eye, EyeOff } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { DispatchPanel } from '@/components/auth/dispatch-panel';
 import { Logo } from '@/components/shell';
 import { Button } from '@/components/ui/button';
+import { Segmented } from '@/components/ui/controls';
 import { Field, Input } from '@/components/ui/field';
 import { api, ApiError } from '@/lib/api';
 import { BRAND } from '@/lib/brand';
@@ -90,16 +91,49 @@ function useAfterAuth() {
   return (me: Me) => {
     qc.setQueryData(['me'], me);
     const next = params.get('next');
-    nav(next && next.startsWith('/') && !next.startsWith('//') ? next : '/', { replace: true });
+    // The agency owner starts in the agency console; employees go straight to work
+    const home = me.user.role === 'OWNER' ? '/agency' : '/';
+    nav(next && next.startsWith('/') && !next.startsWith('//') ? next : home, { replace: true });
   };
 }
 
+type Who = 'owner' | 'employee';
+
+/**
+ * One sign-in page, two kinds of login (like AWS root and IAM users): the agency owner signs in
+ * with an email; an employee with the agency ID, a username and the password the owner gave them.
+ * /signin/<agency-id> opens the employee form with the agency ID filled in.
+ */
 export function SignInPage() {
   const done = useAfterAuth();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const { agency: fromLink } = useParams();
+  const [who, setWho] = useState<Who>(() => {
+    if (fromLink) return 'employee';
+    try {
+      return (localStorage.getItem('dhrona.signin') as Who) || 'owner';
+    } catch {
+      return 'owner';
+    }
+  });
+  const [form, setForm] = useState(() => {
+    let agency = fromLink ?? '';
+    try {
+      agency ||= localStorage.getItem('dhrona.agency') ?? '';
+    } catch {
+      /* private window */
+    }
+    return { email: '', password: '', agency, username: '' };
+  });
   const m = useMutation({
-    mutationFn: () => api.post<Me>('/api/auth/login', form),
+    mutationFn: () =>
+      api.post<Me>('/api/auth/login', who === 'owner' ? { email: form.email, password: form.password } : { agency: form.agency, username: form.username, password: form.password }),
     onSuccess: (me) => {
+      try {
+        localStorage.setItem('dhrona.signin', who);
+        if (who === 'employee') localStorage.setItem('dhrona.agency', form.agency.trim().toLowerCase());
+      } catch {
+        /* private window */
+      }
       takeoff(); // a small send-off into the app
       done(me);
     },
@@ -113,16 +147,43 @@ export function SignInPage() {
       title="Welcome back"
       subtitle={`Sign in to ${BRAND.name}.`}
       footer={
-        <>
-          New here? <Link to="/signup" className="font-semibold text-accent hover:text-accent-strong">Start a free trial</Link>
-        </>
+        who === 'owner' ? (
+          <>
+            New here? <Link to="/signup" className="font-semibold text-accent hover:text-accent-strong">Start a free trial</Link>
+          </>
+        ) : (
+          <>Forgot your password? Ask your agency owner to set a new one.</>
+        )
       }
     >
       <form onSubmit={submit} className="flex flex-col gap-5" noValidate>
+        <Segmented
+          label="Who is signing in"
+          value={who}
+          onChange={(v) => {
+            setWho(v);
+            m.reset();
+          }}
+          options={[
+            { value: 'owner', label: 'Agency owner' },
+            { value: 'employee', label: 'Employee' },
+          ]}
+        />
         <FormError error={m.error} />
-        <Field label="Work email" error={fieldErr(m.error, 'email')}>
-          {(p) => <Input {...p} type="email" autoComplete="email" autoFocus value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@company.com" />}
-        </Field>
+        {who === 'owner' ? (
+          <Field label="Email" error={fieldErr(m.error, 'email')}>
+            {(p) => <Input {...p} type="email" autoComplete="email" autoFocus value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@company.com" />}
+          </Field>
+        ) : (
+          <>
+            <Field label="Agency ID" hint="Your agency owner can tell you this." error={fieldErr(m.error, 'agency')}>
+              {(p) => <Input {...p} autoComplete="organization" autoCapitalize="none" spellCheck={false} autoFocus={!form.agency} value={form.agency} onChange={(e) => setForm({ ...form, agency: e.target.value })} placeholder="kurukshetra-travels" />}
+            </Field>
+            <Field label="Username" error={fieldErr(m.error, 'username')}>
+              {(p) => <Input {...p} autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus={!!form.agency} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="ravi" />}
+            </Field>
+          </>
+        )}
         <Field label="Password" error={fieldErr(m.error, 'password')}>
           {(p) => <PasswordInput {...p} autoComplete="current-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />}
         </Field>
@@ -145,8 +206,8 @@ export function SignUpPage() {
   };
   return (
     <AuthLayout
-      title="Start your free trial"
-      subtitle="5 days to try everything: trips, quotes, payments and messages. No card needed."
+      title="Set up your agency"
+      subtitle="Create the agency owner’s login. You’ll add your employees next. 5 days free, no card needed."
       footer={
         <>
           Already have an account? <Link to="/signin" className="font-semibold text-accent hover:text-accent-strong">Sign in</Link>
@@ -155,20 +216,20 @@ export function SignUpPage() {
     >
       <form onSubmit={submit} className="flex flex-col gap-5" noValidate>
         <FormError error={m.error} />
-        <Field label="Company name" error={fieldErr(m.error, 'companyName')}>
+        <Field label="Agency name" error={fieldErr(m.error, 'companyName')}>
           {(p) => <Input {...p} autoComplete="organization" autoFocus value={form.companyName} onChange={set('companyName')} placeholder="Kurukshetra Travels" />}
         </Field>
         <Field label="Your name" error={fieldErr(m.error, 'name')}>
           {(p) => <Input {...p} autoComplete="name" value={form.name} onChange={set('name')} />}
         </Field>
-        <Field label="Work email" error={fieldErr(m.error, 'email')}>
+        <Field label="Owner’s email" hint="You’ll sign in with this. Employees get their own usernames." error={fieldErr(m.error, 'email')}>
           {(p) => <Input {...p} type="email" autoComplete="email" value={form.email} onChange={set('email')} placeholder="you@company.com" />}
         </Field>
         <Field label="Password" hint="At least 10 characters." error={fieldErr(m.error, 'password')}>
           {(p) => <PasswordInput {...p} autoComplete="new-password" value={form.password} onChange={set('password')} />}
         </Field>
         <Button type="submit" variant="primary" size="lg" loading={m.isPending} className="mt-1 w-full">
-          Start free trial
+          Create agency
         </Button>
         <p className="-mt-1 text-center text-xs leading-relaxed text-muted">
           By starting a trial you agree to the <Link to="/terms" className="font-medium text-ink-2 underline underline-offset-2 hover:text-ink">Terms</Link> and{' '}

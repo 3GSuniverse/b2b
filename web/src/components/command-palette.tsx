@@ -1,11 +1,12 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
-import { Clock3, FileText, LayoutDashboard, Mail, Megaphone, MessageCircle, MessageSquarePlus, Plane, Repeat2, Search, Settings, Upload, UserPlus, Users } from 'lucide-react';
+import { Building2, Clock3, CreditCard, FileText, LayoutDashboard, Mail, Megaphone, MessageCircle, MessageSquarePlus, Plane, Repeat2, Search, Settings, Upload, UserPlus, Users } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, qs } from '@/lib/api';
 import type { Campaign, Contact, TripSummary } from '@/lib/types';
+import { useSession } from '@/lib/session';
 import { Avatar, Kbd } from './ui/display';
 
 function Item({ onSelect, icon, children, hint, value }: { onSelect: () => void; icon: ReactNode; children: ReactNode; hint?: ReactNode; value?: string }) {
@@ -28,6 +29,7 @@ const groupClass =
 /** ⌘K / Ctrl+K: jump anywhere, run common actions, find a customer, a trip or a broadcast. */
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const nav = useNavigate();
+  const { user } = useSession();
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
 
@@ -88,7 +90,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 <Item icon={<Repeat2 />} onSelect={() => go('/automations?new=1')}>New automatic message</Item>
                 <Item icon={<UserPlus />} onSelect={() => go('/contacts?add=1')}>Add a customer</Item>
                 <Item icon={<Upload />} onSelect={() => go('/contacts?import=1')}>Import customers from a spreadsheet</Item>
-                <Item icon={<Mail />} onSelect={() => go('/settings/senders')}>Connect a domain or Gmail</Item>
+                {user.role !== 'MEMBER' && <Item icon={<Mail />} onSelect={() => go('/settings/senders')}>Connect a domain or Gmail</Item>}
+                {user.role === 'OWNER' && <Item icon={<UserPlus />} onSelect={() => go('/agency')}>Add an employee login</Item>}
               </Command.Group>
 
               <Command.Group heading="Go to" className={groupClass}>
@@ -99,7 +102,9 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 <Item icon={<Clock3 />} onSelect={() => go('/automations')}>Automations</Item>
                 <Item icon={<FileText />} onSelect={() => go('/templates')}>Templates</Item>
                 <Item icon={<MessageCircle />} onSelect={() => go('/whatsapp')}>WhatsApp</Item>
-                <Item icon={<Settings />} onSelect={() => go('/settings/senders')}>Settings</Item>
+                {user.role === 'OWNER' && <Item icon={<Building2 />} onSelect={() => go('/agency')}>Agency</Item>}
+                {user.role === 'OWNER' && <Item icon={<CreditCard />} onSelect={() => go('/agency/billing')}>Plan & billing</Item>}
+                {user.role !== 'MEMBER' && <Item icon={<Settings />} onSelect={() => go('/settings/senders')}>Settings</Item>}
               </Command.Group>
 
               {!!trips.data?.trips.length && (

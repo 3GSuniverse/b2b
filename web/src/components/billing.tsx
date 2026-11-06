@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, Check, CreditCard, Lock, Mail, Receipt, Sparkles } from 'lucide-react';
+import { ArrowUpRight, CalendarClock, Check, CreditCard, Lock, Mail, Receipt, Sparkles, Users } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -13,14 +13,18 @@ import { CountUp, useMounted } from '@/lib/motion';
 import { useSession } from '@/lib/session';
 
 type Period = 'month' | 'year';
-type BillingPlan = { id: string; name: string; month: number; year: number; emails: number };
+type BillingPlan = { id: string; name: string; seats: number; month: number; year: number; emails: number };
+type Option = { ok: true; kind: 'NEW' | 'RENEW' | 'UPGRADE'; amount: number; gst: number; period: Period } | { ok: false; reason: 'too_small' | 'downgrade_later'; message: string };
 type Billing = {
   enabled: boolean;
+  gstPercent: number;
   plans: BillingPlan[];
+  options: Record<string, Record<Period, Option>>;
+  seats: { used: number; limit: number };
   current: { plan: 'TRIAL' | 'PAID'; planId: string | null; paidUntil: string | null; monthlyQuota: number; trialEndsAt: string | null };
-  payments: { id: string; planId: string; period: Period; amount: number; paidAt: string; periodStart: string; periodEnd: string; paymentId: string | null }[];
+  payments: { id: string; planId: string; period: Period; kind: 'NEW' | 'RENEW' | 'UPGRADE'; amount: number; gst: number; paidAt: string; periodStart: string; periodEnd: string; paymentId: string | null }[];
 };
-type Order = { orderId: string; amount: number; currency: string; keyId: string };
+type Order = { orderId: string; amount: number; currency: string; keyId: string; kind: 'NEW' | 'RENEW' | 'UPGRADE' };
 type CheckoutResponse = { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string };
 
 declare global {
@@ -74,8 +78,13 @@ function CurrentPlan({ b }: { b: Billing }) {
                 <Check className="h-3 w-3" /> Active
               </span>
             </span>
-            <span className="text-sm text-ink-2">
-              <span className="tnum font-semibold">{c.monthlyQuota.toLocaleString('en-IN')}</span> emails a month
+            <span className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
+              <span className="flex items-center gap-1.5">
+                <Users className="h-4 w-4 text-accent" /> <span className="tnum font-semibold">{b.seats.used}</span> of {b.seats.limit} employee logins
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Mail className="h-4 w-4 text-accent" /> <span className="tnum font-semibold">{c.monthlyQuota.toLocaleString('en-IN')}</span> emails a month
+              </span>
             </span>
           </div>
           <div className="flex flex-col items-end gap-1 text-right">
@@ -102,7 +111,7 @@ function CurrentPlan({ b }: { b: Billing }) {
           {c.planId ? (ended ? `${plan?.name ?? 'Your'} plan has ended` : 'Plan ending') : ended ? 'Free trial has ended' : 'Free trial'}
         </span>
         <span className={cn('text-sm', ended ? 'text-white/75' : 'text-ink-2')}>
-          {ended ? 'Sending is off. Choose a plan below to turn it back on; nothing you’ve saved is lost.' : `${daysLeft === 0 ? 'Ends today' : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left`}. Choose a plan any time; your trial data carries over.`}
+          {ended ? 'Sending is off. Choose a plan below to turn it back on; nothing you’ve saved is lost.' : `${daysLeft === 0 ? 'Ends today' : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left`}. Choose a plan any time; your trial data carries over.`} The trial has room for {b.seats.limit} employee logins ({b.seats.used} in use).
         </span>
       </div>
     </Panel>
@@ -116,16 +125,15 @@ export function BillingSettings() {
   const [period, setPeriod] = useState<Period>('year');
   const [paying, setPaying] = useState<string | null>(null);
   const cards = useRef<Record<string, HTMLElement | null>>({});
-  const canPay = user.role !== 'MEMBER';
+  const canPay = user.role === 'OWNER';
 
   const verify = useMutation({
     mutationFn: (r: CheckoutResponse) => api.post<{ ok: true; paidUntil: string; plan: string }>('/api/billing/verify', r),
-    onSuccess: (r, _v) => {
+    onSuccess: (r) => {
       burst(cards.current[r.plan]);
       setTimeout(() => burst(cards.current[r.plan], '#ff8a1f'), 220);
       toast.success('Payment received. Thank you!', { description: `Your plan is active until ${day(r.paidUntil)}.` });
-      qc.invalidateQueries({ queryKey: ['billing'] });
-      qc.invalidateQueries({ queryKey: ['me'] });
+      for (const k of ['billing', 'me', 'agency']) qc.invalidateQueries({ queryKey: [k] });
     },
     onError: (e: Error) => toast.error('We couldn’t confirm the payment', { description: e.message, duration: 15_000 }),
     onSettled: () => setPaying(null),
@@ -135,15 +143,16 @@ export function BillingSettings() {
     setPaying(plan.id);
     try {
       const [order] = await Promise.all([api.post<Order>('/api/billing/orders', { plan: plan.id, period }), loadCheckout()]);
+      const what = order.kind === 'UPGRADE' ? `Move up to ${plan.name} for the rest of this period` : `${plan.name}, ${period === 'month' ? 'monthly' : 'yearly'}`;
       const rzp = new window.Razorpay!({
         key: order.keyId,
         amount: order.amount,
         currency: order.currency,
         order_id: order.orderId,
         name: BRAND.name,
-        description: `${plan.name} plan, ${period === 'month' ? 'monthly' : 'yearly'}`,
+        description: what,
         image: `${location.origin}/brand/dhrona-mark-512.png`,
-        prefill: { name: user.name ?? '', email: user.email },
+        prefill: { name: user.name ?? '', email: user.email ?? '' },
         notes: { plan: plan.id, period },
         theme: { color: '#4A3FD1' },
         handler: (r: CheckoutResponse) => verify.mutate(r),
@@ -166,6 +175,9 @@ export function BillingSettings() {
   if (q.isError || !q.data) return <p className="text-sm text-danger">Couldn’t load your plan. Refresh to try again.</p>;
   const b = q.data;
   const activePlan = b.current.plan === 'PAID' ? b.current.planId : null;
+  // The plan that fits the logins in use: highlighted when nothing is bought yet
+  const fits = b.plans.find((p) => p.seats >= b.seats.used)?.id;
+  const suggested = activePlan ?? (b.seats.used > 5 ? fits : 'team10');
 
   return (
     <div className="flex flex-col gap-6">
@@ -174,8 +186,10 @@ export function BillingSettings() {
       <Panel className="flex flex-col gap-5 p-5 sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex flex-col gap-0.5">
-            <h2 className="text-[17px] font-semibold">{activePlan ? 'Renew your plan' : 'Choose a plan'}</h2>
-            <p className="text-[13px] text-muted">Pay by UPI, card or net banking. Renewing early adds to the time you have left.</p>
+            <h2 className="text-[17px] font-semibold">{activePlan ? 'Renew or move up' : 'Choose a plan by team size'}</h2>
+            <p className="max-w-[62ch] text-[13px] text-muted">
+              Pick the plan that fits how many employees need a login (you, the owner, are free). Every plan has every feature. Moving up mid-way costs only the difference for the days left.
+            </p>
           </div>
           <Segmented
             label="Billing period"
@@ -187,10 +201,13 @@ export function BillingSettings() {
             ]}
           />
         </div>
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {b.plans.map((p) => {
-            const price = p[period] * 100;
+            const o = b.options[p.id]?.[period];
             const current = activePlan === p.id;
+            const list = p[period] * 100;
+            const perSeat = Math.round(p.month / p.seats);
+            const tooSmall = o && !o.ok && o.reason === 'too_small';
             return (
               <article
                 key={p.id}
@@ -198,54 +215,72 @@ export function BillingSettings() {
                   cards.current[p.id] = el;
                 }}
                 className={cn(
-                  'lift relative flex flex-col gap-4 rounded-[16px] border p-5 transition-[border-color,box-shadow]',
+                  'lift relative flex flex-col gap-3.5 rounded-[16px] border p-5 transition-[border-color,box-shadow,opacity]',
                   current ? 'border-accent shadow-[0_0_0_1px_var(--color-accent)]' : 'border-line hover:border-accent/50',
+                  tooSmall && 'opacity-60',
                 )}
               >
-                {p.id === 'growth' && !current && (
+                {p.id === suggested && !current && !tooSmall && (
                   <span className="absolute -top-2.5 right-4 inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-on-primary">
-                    <Sparkles className="h-3 w-3" /> Most agencies pick this
+                    <Sparkles className="h-3 w-3" /> {b.seats.used > 5 ? 'Fits your team' : 'Most agencies pick this'}
                   </span>
                 )}
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="text-[16px] font-semibold">{p.name}</h3>
                   {current && <span className="text-xs font-semibold text-accent">Your plan</span>}
                 </div>
-                <p className="flex items-baseline gap-1.5">
-                  <span key={`${p.id}-${period}`} className="dispatch-pop tnum text-[32px] font-extrabold tracking-[-0.03em]">
-                    {rupees(price)}
+                <p className="flex items-center gap-2 text-sm">
+                  <Users className="h-4 w-4 text-accent" />
+                  <span>
+                    <b className="tnum">{p.seats === 5 ? '1 to 5' : `Up to ${p.seats}`}</b> employees
                   </span>
-                  <span className="text-sm text-muted">{period === 'month' ? 'a month' : 'a year'}</span>
                 </p>
+                <p className="flex items-baseline gap-1.5">
+                  <span key={`${p.id}-${period}`} className="dispatch-pop tnum text-[30px] font-extrabold tracking-[-0.03em]">
+                    {rupees(list)}
+                  </span>
+                  <span className="whitespace-nowrap text-sm text-muted">{period === 'month' ? 'a month' : 'a year'}</span>
+                </p>
+                <p className="-mt-2 text-xs text-muted">About ₹{perSeat.toLocaleString('en-IN')} per employee a month{b.gstPercent ? `, plus ${b.gstPercent}% GST` : ''}</p>
                 <p className="flex items-center gap-2 text-sm text-ink-2">
                   <Mail className="h-4 w-4 text-accent" /> <span className="tnum font-semibold">{p.emails.toLocaleString('en-IN')}</span> emails a month
                 </p>
-                {activePlan && !current ? (
-                  <p className="mt-auto text-xs leading-relaxed text-muted">
-                    To move to {p.name} while your plan is running, write to{' '}
-                    <a className="font-semibold text-accent" href={`mailto:${BRAND.supportEmail}?subject=${encodeURIComponent(`Change plan to ${p.name}`)}`}>
-                      {BRAND.supportEmail}
-                    </a>
-                    . You keep the days you’ve paid for.
-                  </p>
-                ) : canPay ? (
-                  <Button
-                    variant={p.id === 'growth' || current ? 'primary' : 'secondary'}
-                    loading={paying === p.id || (verify.isPending && paying === p.id)}
-                    disabled={!b.enabled || (paying !== null && paying !== p.id)}
-                    onClick={() => pay(p)}
-                    className="mt-auto"
-                  >
-                    <CreditCard className="h-4 w-4" />
-                    {current ? 'Renew' : 'Pay'} {rupees(price)}
-                  </Button>
-                ) : (
-                  <p className="mt-auto text-xs text-muted">Ask the account owner or an admin to pay.</p>
-                )}
+                <div className="mt-auto flex flex-col gap-2 pt-1">
+                  {!o ? null : !o.ok ? (
+                    <p className="text-xs leading-relaxed text-muted">{o.message}</p>
+                  ) : canPay ? (
+                    <>
+                      {o.kind === 'UPGRADE' && (
+                        <p className="flex items-start gap-1.5 text-xs leading-relaxed text-ink-2">
+                          <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" /> Pay only the difference until {b.current.paidUntil ? day(b.current.paidUntil) : 'your plan ends'}.
+                        </p>
+                      )}
+                      <Button
+                        variant={p.id === suggested || current ? 'primary' : 'secondary'}
+                        loading={paying === p.id}
+                        disabled={!b.enabled || (paying !== null && paying !== p.id)}
+                        onClick={() => pay(p)}
+                      >
+                        <CreditCard className="h-4 w-4" />
+                        {o.kind === 'RENEW' ? 'Renew' : o.kind === 'UPGRADE' ? 'Move up' : 'Pay'} {rupees(o.amount)}
+                      </Button>
+                      {o.gst > 0 && <span className="text-center text-[11px] text-muted">Includes {rupees(o.gst)} GST</span>}
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted">Only the agency owner can pay.</p>
+                  )}
+                </div>
               </article>
             );
           })}
         </div>
+        <p className="text-[13px] text-ink-2">
+          More than 50 employees? Write to{' '}
+          <a className="font-semibold text-accent" href={`mailto:${BRAND.supportEmail}?subject=${encodeURIComponent('Plan for a large team')}`}>
+            {BRAND.supportEmail}
+          </a>{' '}
+          and we’ll set up a plan for you.
+        </p>
         {!b.enabled ? (
           <p className="rounded-[12px] bg-warm-soft px-4 py-3 text-[13px] text-warm-strong">
             Online payment isn’t switched on yet. To upgrade now, write to <a className="font-semibold underline" href={`mailto:${BRAND.supportEmail}`}>{BRAND.supportEmail}</a>.
@@ -280,13 +315,17 @@ export function BillingSettings() {
                   <tr key={p.id} className="border-b border-line-soft last:border-0">
                     <td className="whitespace-nowrap px-5 py-3 font-medium sm:px-6">{day(p.paidAt)}</td>
                     <td className="whitespace-nowrap px-3 py-3">
-                      {b.plans.find((x) => x.id === p.planId)?.name ?? p.planId}, {p.period === 'month' ? 'monthly' : 'yearly'}
+                      {b.plans.find((x) => x.id === p.planId)?.name ?? p.planId}
+                      {p.kind === 'UPGRADE' ? ', move up' : `, ${p.period === 'month' ? 'monthly' : 'yearly'}`}
                     </td>
                     <td className="whitespace-nowrap px-3 py-3 text-ink-2">
                       <CalendarClock className="mr-1 inline h-3.5 w-3.5 text-muted" />
                       {day(p.periodStart)} to {day(p.periodEnd)}
                     </td>
-                    <td className="tnum whitespace-nowrap px-3 py-3 text-right font-semibold">{rupees(p.amount)}</td>
+                    <td className="tnum whitespace-nowrap px-3 py-3 text-right font-semibold">
+                      {rupees(p.amount)}
+                      {p.gst > 0 && <span className="block text-[11px] font-normal text-muted">incl. {rupees(p.gst)} GST</span>}
+                    </td>
                     <td className="whitespace-nowrap px-5 py-3 font-mono text-xs text-muted sm:px-6">{p.paymentId}</td>
                   </tr>
                 ))}

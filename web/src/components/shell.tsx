@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Clock3, FileText, LayoutDashboard, LogOut, Megaphone, Menu as MenuIcon, MessageCircle, MessageSquarePlus, Plane, Plus, Repeat2, Search, Settings, UserPlus, Users } from 'lucide-react';
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Building2, ChevronDown, Clock3, KeyRound, FileText, LayoutDashboard, LogOut, Megaphone, Menu as MenuIcon, MessageCircle, MessageSquarePlus, Plane, Plus, Repeat2, Search, Settings, UserPlus, Users } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { BRAND } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { date, n } from '@/lib/format';
@@ -11,19 +12,22 @@ import { useSession } from '@/lib/session';
 import type { Overview } from '@/lib/types';
 import { CommandPalette } from './command-palette';
 import { NotificationsButton } from './notifications';
-import { LinkButton } from './ui/button';
+import { Button, LinkButton } from './ui/button';
+import { Field, Input } from './ui/field';
 import { Avatar, Badge, Kbd, ProgressBar } from './ui/display';
-import { Menu, MenuItem, MenuSeparator, Sheet } from './ui/overlay';
+import { Dialog, Menu, MenuItem, MenuSeparator, Sheet } from './ui/overlay';
 
 // The sidebar: the agency's day first, then everything about talking to customers
-const NAV: { to: string; label: string; icon: typeof Plane; end?: boolean; group?: string; anim: string }[] = [
+type Role = 'OWNER' | 'ADMIN' | 'MEMBER';
+const NAV: { to: string; label: string; icon: typeof Plane; end?: boolean; group?: string; anim: string; roles?: Role[] }[] = [
+  { to: '/agency', label: 'Agency', icon: Building2, anim: 'nav-pop', roles: ['OWNER'] },
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true, anim: 'nav-pop' },
   { to: '/trips', label: 'Trips', icon: Plane, anim: 'nav-fly' },
   { to: '/contacts', label: 'Customers', icon: Users, anim: 'nav-hop' },
   { to: '/campaigns', label: 'Broadcasts', icon: Megaphone, group: 'Communication', anim: 'nav-shout' },
   { to: '/automations', label: 'Automations', icon: Clock3, anim: 'nav-tick' },
   { to: '/templates', label: 'Templates', icon: FileText, anim: 'nav-flip' },
-  { to: '/settings', label: 'Settings', icon: Settings, anim: 'nav-spin' },
+  { to: '/settings', label: 'Settings', icon: Settings, anim: 'nav-spin', roles: ['OWNER', 'ADMIN'] },
 ];
 
 /** The Dhrona mark: a D of target rings with an arrow in the centre. On hover the arrow strikes. */
@@ -53,7 +57,9 @@ export function Logo({ className }: { className?: string }) {
 }
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
-  const whatsapp = !!useSession().tenant.features?.whatsapp;
+  const { tenant, user } = useSession();
+  const whatsapp = !!tenant.features?.whatsapp;
+  const nav = NAV.filter((x) => !x.roles || x.roles.includes(user.role as Role));
   const { pathname } = useLocation();
   const onWhatsapp = pathname.startsWith('/whatsapp');
   // The green highlight slides from item to item instead of jumping
@@ -90,7 +96,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
           <span className="absolute bottom-2.5 left-0 top-2.5 w-[3px] rounded-r-full bg-highlight" />
         </span>
       )}
-      {NAV.map(({ to, label, icon: Icon, end, group, anim }) => {
+      {nav.map(({ to, label, icon: Icon, end, group, anim }) => {
         const active = end ? pathname === to : pathname === to || pathname.startsWith(`${to}/`);
         const lit = active;
         return (
@@ -109,6 +115,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
           </Fragment>
         );
       })}
+      {!nav.some((x) => x.to === '/settings') && whatsappItem}
     </nav>
   );
 }
@@ -137,6 +144,7 @@ function AccountMenu() {
   const { user, tenant } = useSession();
   const qc = useQueryClient();
   const nav = useNavigate();
+  const [pw, setPw] = useState(false);
   const signOut = useMutation({
     mutationFn: () => api.post('/api/auth/logout'),
     onSettled: () => {
@@ -145,6 +153,7 @@ function AccountMenu() {
     },
   });
   return (
+    <>
     <Menu
       align="start"
       trigger={
@@ -159,12 +168,61 @@ function AccountMenu() {
     >
       <div className="px-2.5 py-2">
         <p className="text-[13px] font-semibold">{user.name}</p>
-        <p className="text-xs text-muted">{user.email}</p>
+        <p className="text-xs text-muted">{user.role === 'OWNER' ? `Agency owner · ${user.email}` : `@${user.username} at ${tenant.loginCode}`}</p>
       </div>
       <MenuSeparator />
-      <MenuItem icon={<Settings />} onSelect={() => nav('/settings/account')}>Account settings</MenuItem>
+      {user.role === 'OWNER' && <MenuItem icon={<Building2 />} onSelect={() => nav('/agency')}>Agency, logins and plan</MenuItem>}
+      {user.role !== 'MEMBER' && <MenuItem icon={<Settings />} onSelect={() => nav('/settings/company')}>Settings</MenuItem>}
+      <MenuItem icon={<KeyRound />} onSelect={() => setPw(true)}>Change my password</MenuItem>
       <MenuItem icon={<LogOut />} onSelect={() => signOut.mutate()}>Sign out</MenuItem>
     </Menu>
+    <PasswordDialog open={pw} onClose={() => setPw(false)} />
+    </>
+  );
+}
+
+/** Anyone can change their own password; their other devices are signed out. */
+function PasswordDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [f, setF] = useState({ current: '', next: '' });
+  const m = useMutation({
+    mutationFn: () => api.post('/api/auth/password', f),
+    onSuccess: () => {
+      toast.success('Password changed', { description: 'Other devices were signed out.' });
+      setF({ current: '', next: '' });
+      onClose();
+    },
+  });
+  const err = (k: string) => (m.error instanceof ApiError ? (m.error.field(k) ?? (k === 'current' && m.error.code === 'wrong_password' ? m.error.message : undefined)) : undefined);
+  const submit = (e?: FormEvent) => {
+    e?.preventDefault();
+    m.mutate();
+  };
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      title="Change my password"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={m.isPending} onClick={() => submit()}>
+            Change password
+          </Button>
+        </>
+      }
+    >
+      <form className="flex flex-col gap-4" onSubmit={submit}>
+        <Field label="Current password" error={err('current')}>
+          {(p) => <Input {...p} type="password" autoComplete="current-password" autoFocus value={f.current} onChange={(e) => setF({ ...f, current: e.target.value })} />}
+        </Field>
+        <Field label="New password" hint="At least 8 characters." error={err('next')}>
+          {(p) => <Input {...p} type="password" autoComplete="new-password" value={f.next} onChange={(e) => setF({ ...f, next: e.target.value })} />}
+        </Field>
+        <button type="submit" hidden />
+      </form>
+    </Dialog>
   );
 }
 
@@ -248,10 +306,11 @@ function TopBar({ onSearch, onMenu }: { onSearch: () => void; onMenu: () => void
 
 /** Trial status: a quiet line while it runs, a clear stop once it's over. */
 export function TrialBanner() {
-  const { tenant } = useSession();
+  const { tenant, user } = useSession();
   const p = tenant.plan;
   if (!p || p.plan !== 'TRIAL') return null;
-  const upgrade = '/settings/billing';
+  const upgrade = '/agency/billing';
+  const owner = user.role === 'OWNER';
   if (p.trialEnded) {
     return (
       <div role="alert" className="flex flex-wrap items-center gap-4 rounded-[14px] bg-ink px-5 py-4 text-white">
@@ -259,12 +318,16 @@ export function TrialBanner() {
           <strong className="text-[15px] font-semibold">{p.planId ? 'Your plan has ended' : 'Your free trial has ended'}</strong>
           <span className="text-[13px] text-white/70">
             {p.planId ? 'Sending is off until you renew.' : 'Sending is off and WhatsApp has been unlinked.'} Your customers, trips, templates and reports are safe.{' '}
-            {p.planId ? 'Renew' : 'Choose a plan'} to pick up where you left off.
+            {owner ? `${p.planId ? 'Renew' : 'Choose a plan'} to pick up where you left off.` : ''}
           </span>
         </div>
-        <Link to={upgrade} className="inline-flex h-10 items-center rounded-[var(--radius-control)] bg-white px-4 text-sm font-semibold text-ink hover:bg-white/90">
-          {p.planId ? 'Renew' : 'Choose a plan'}
-        </Link>
+        {owner ? (
+          <Link to={upgrade} className="inline-flex h-10 items-center rounded-[var(--radius-control)] bg-white px-4 text-sm font-semibold text-ink hover:bg-white/90">
+            {p.planId ? 'Renew' : 'Choose a plan'}
+          </Link>
+        ) : (
+          <span className="text-[13px] font-semibold text-white/85">Ask your agency owner to {p.planId ? 'renew' : 'choose a plan'}.</span>
+        )}
       </div>
     );
   }
@@ -282,9 +345,11 @@ export function TrialBanner() {
         </span>
       )}
       {p.emailLimit !== null && <span className="tnum">{n(p.emailLimit)} emails included</span>}
-      <Link to={upgrade} className="ml-auto font-semibold text-accent hover:text-accent-strong">
-        Choose a plan
-      </Link>
+      {owner && (
+        <Link to={upgrade} className="ml-auto font-semibold text-accent hover:text-accent-strong">
+          Choose a plan
+        </Link>
+      )}
     </div>
   );
 }

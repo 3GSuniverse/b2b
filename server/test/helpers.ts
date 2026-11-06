@@ -25,6 +25,7 @@ export async function makeTenant(overrides: Partial<typeof tenants.$inferInsert>
     .values({
       name: 'Kurukshetra Travels',
       slug: `kt-${Math.random().toString(36).slice(2, 8)}`,
+      loginCode: `kt-${Math.random().toString(36).slice(2, 10)}`,
       plan: 'PAID',
       postalAddress: '12 MG Road, Vijayawada 520010',
       ...overrides,

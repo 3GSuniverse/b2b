@@ -127,6 +127,7 @@ export async function startCampaign(
           contactId: c.id,
           channel: 'EMAIL' as const,
           toAddress: c.email.toLowerCase(),
+          sentById: campaign.createdById,
         })),
       )
       .onConflictDoNothing()
@@ -188,7 +189,7 @@ export async function startWhatsAppCampaign(campaignId: string, opts: { enqueue?
   for await (const batch of iterateWhatsAppAudience(db, campaign.tenantId, campaign.audience)) {
     const inserted = await db
       .insert(messages)
-      .values(batch.map((c) => ({ tenantId: campaign.tenantId, campaignId, contactId: c.id, channel: 'WHATSAPP' as const, toAddress: c.phone })))
+      .values(batch.map((c) => ({ tenantId: campaign.tenantId, campaignId, contactId: c.id, channel: 'WHATSAPP' as const, toAddress: c.phone, sentById: campaign.createdById })))
       .onConflictDoNothing()
       .returning({ id: messages.id });
     await enqueue(inserted.map((m) => m.id));
