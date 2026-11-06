@@ -64,8 +64,11 @@ function audienceWhere(tenantId: string, audience: Audience | null | undefined, 
     ),
   ];
 
-  const listIds = audience?.listIds?.filter(Boolean) ?? [];
-  const contactIds = audience?.contactIds?.filter(Boolean) ?? [];
+  const mode = audience?.mode;
+  const listIds = mode === 'people' || mode === 'everyone' ? [] : (audience?.listIds?.filter(Boolean) ?? []);
+  const contactIds = mode === 'lists' || mode === 'everyone' ? [] : (audience?.contactIds?.filter(Boolean) ?? []);
+  // Lists or people chosen, but none ticked: nobody. Never fall back to everyone.
+  if ((mode === 'lists' || mode === 'people') && !listIds.length && !contactIds.length) conditions.push(sql`false`);
   if (listIds.length || contactIds.length) {
     conditions.push(
       or(

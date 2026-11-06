@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
-import { campaigns, messages } from '../src/db/schema.js';
+import { campaigns, contacts, messages } from '../src/db/schema.js';
 import { closeDatabase, db } from '../src/lib/db.js';
 import { closeRedis } from '../src/lib/redis.js';
 import { api, signup } from './api-helpers.js';
@@ -45,5 +45,26 @@ describe('the Email and WhatsApp master tabs', () => {
     expect((await c.get('/api/channels/sms')).statusCode).toBe(404);
     const list = (await c.get('/api/campaigns?channel=WHATSAPP')).json();
     expect(list.campaigns.map((x: { name: string }) => x.name)).toEqual(['Diwali on WhatsApp']);
+  });
+});
+
+describe('who gets a broadcast', () => {
+  it('lists or hand-picked people with nothing ticked means nobody, never everyone', async () => {
+    const { cookie, json } = await signup(app);
+    const tenantId = json.tenant.id;
+    const c = api(app, cookie);
+    const [a, b] = await db.insert(contacts).values([
+      { tenantId, email: 'a@example.com', phone: '+919000000001', whatsappStatus: 'SUBSCRIBED' },
+      { tenantId, email: 'b@example.com' },
+    ]).returning();
+    const count = async (audience: object) => (await c.post('/api/audience/count', audience)).json().count;
+    expect(await count({})).toBe(2);
+    expect(await count({ mode: 'lists', listIds: [] })).toBe(0);
+    expect(await count({ mode: 'people', contactIds: [] })).toBe(0);
+    expect(await count({ mode: 'people', contactIds: [a!.id] })).toBe(1);
+    expect(await count({ mode: 'people', contactIds: [a!.id, b!.id], channel: 'WHATSAPP' })).toBe(1);
+    expect(await count({ mode: 'everyone', contactIds: [a!.id] })).toBe(2);
+    const picked = (await c.get(`/api/contacts?ids=${a!.id},${b!.id}`)).json();
+    expect(picked.contacts).toHaveLength(2);
   });
 });

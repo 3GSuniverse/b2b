@@ -81,7 +81,7 @@ export async function startCampaign(
       throw new CampaignError(`${sender.domain?.domain ?? 'The domain'} isn’t verified yet. Finish the DNS setup first.`, 'sender_not_verified');
     }
   } else if (sender.connection?.status !== 'ACTIVE') {
-    throw new CampaignError(`${sender.fromEmail} is disconnected. Reconnect it in Settings → Senders.`, 'sender_not_verified');
+    throw new CampaignError(`${sender.fromEmail} is disconnected. Reconnect it in Email → Sending setup.`, 'sender_not_verified');
   }
 
   const subject = campaign.subject ?? campaign.template?.subject;
@@ -165,7 +165,7 @@ export async function startWhatsAppCampaign(campaignId: string, opts: { enqueue?
   if (trialEnded(campaign.tenant, now)) throw new CampaignError('Your free trial has ended. Upgrade to keep sending.', 'trial_ended');
   if (!whatsappWebAllowed(campaign.tenant, now)) throw new CampaignError('WhatsApp sending isn’t available on this account', 'whatsapp_not_ready');
   const session = await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.tenantId, campaign.tenantId) });
-  if (session?.status !== 'CONNECTED') throw new CampaignError('Link your WhatsApp number first, in Settings → WhatsApp', 'whatsapp_not_ready');
+  if (session?.status !== 'CONNECTED') throw new CampaignError('Link your WhatsApp number first, in WhatsApp → Linked number', 'whatsapp_not_ready');
   if (!campaign.text?.trim() && !campaign.attachments.length) throw new CampaignError('The message is empty', 'no_content');
   // A trial sends at most N a day; refuse a campaign that couldn't finish before the trial ends
   const cap = await whatsappTrialCapacity(campaign.tenant, now);

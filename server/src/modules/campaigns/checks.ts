@@ -75,9 +75,9 @@ export async function campaignChecks(input: CheckInput): Promise<{ checks: Check
   const s = input.sender;
   if (!s) add({ id: 'sender', level: 'error', title: 'Choose who the email is from.' });
   else if (s.kind === 'DOMAIN' && !(s.domain && isDomainReady(s.domain as Parameters<typeof isDomainReady>[0]))) {
-    add({ id: 'sender', level: 'error', title: `${s.domain?.domain ?? 'The domain'} isn’t verified yet.`, note: 'Finish the DNS setup in Settings → Domains.' });
+    add({ id: 'sender', level: 'error', title: `${s.domain?.domain ?? 'The domain'} isn’t verified yet.`, note: 'Finish the DNS setup in Email → Sending setup → Domains.' });
   } else if (s.kind !== 'DOMAIN' && s.connection?.status !== 'ACTIVE') {
-    add({ id: 'sender', level: 'error', title: `${s.fromEmail} is disconnected.`, note: 'Reconnect it in Settings → Senders.' });
+    add({ id: 'sender', level: 'error', title: `${s.fromEmail} is disconnected.`, note: 'Reconnect it in Email → Sending setup.' });
   } else add({ id: 'sender', level: 'ok', title: `Sending from ${s.fromEmail}.` });
 
   // Content
@@ -189,7 +189,7 @@ export async function whatsappChecks(input: {
 
   const session = await getSession(input.tenantId);
   if (session.status === 'CONNECTED') add({ id: 'sender', level: 'ok', title: `Sending from ${session.phone ?? 'your WhatsApp'}.` });
-  else add({ id: 'sender', level: 'error', title: 'Link your WhatsApp number first.', note: 'Settings → WhatsApp, then scan the QR code with your phone.' });
+  else add({ id: 'sender', level: 'error', title: 'Link your WhatsApp number first.', note: 'WhatsApp → Linked number, then scan the QR code with your phone.' });
 
   const text = input.text?.trim() ?? '';
   const files = input.attachments ?? [];

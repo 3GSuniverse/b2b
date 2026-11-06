@@ -75,6 +75,7 @@ export const listQuery = z.object({
   search: z.string().trim().max(100).optional(),
   status: z.enum(['SUBSCRIBED', 'UNSUBSCRIBED', 'BOUNCED', 'COMPLAINED']).optional(),
   listId: z.string().optional(),
+  ids: z.string().max(10_000).optional(), // comma-separated, for showing hand-picked people
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
@@ -86,6 +87,7 @@ export async function listContacts(tenantId: string, q: z.infer<typeof listQuery
     // Spelled out: inside relational queries Drizzle re-targets other tables' columns to the root alias
     where.push(sql`exists (select 1 from list_memberships m where m.contact_id = "contacts"."id" and m.list_id = ${q.listId})`);
   }
+  if (q.ids) where.push(inArray(contacts.id, q.ids.split(',').filter(Boolean).slice(0, 200)));
   if (q.search) {
     const term = `%${q.search.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     const digits = q.search.replace(/\D/g, '');

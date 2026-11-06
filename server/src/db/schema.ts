@@ -471,6 +471,8 @@ export type AudienceFilter = {
   value?: string;
 };
 export type Audience = {
+  // How the people were chosen. 'lists' or 'people' with nothing ticked means nobody, never everyone
+  mode?: 'everyone' | 'lists' | 'people';
   listIds?: string[];
   contactIds?: string[];
   filters?: AudienceFilter[];

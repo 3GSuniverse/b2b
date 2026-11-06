@@ -28,6 +28,7 @@ const filterSchema = z.object({
 });
 
 export const audienceSchema = z.object({
+  mode: z.enum(['everyone', 'lists', 'people']).optional(),
   listIds: z.array(z.string()).max(50).optional(),
   contactIds: z.array(z.string()).max(10_000).optional(),
   filters: z.array(filterSchema).max(10).optional(),
@@ -308,7 +309,7 @@ export async function sendTestWhatsApp(tenantId: string, id: string, phones: str
   if (!whatsappWebAllowed(c.tenant)) throw new AppError(403, 'trial_ended', 'Your free trial has ended');
   if (!c.text?.trim() && !c.attachments.length) throw new AppError(400, 'no_content', 'Write the message first');
   const session = await getSession(tenantId);
-  if (session.status !== 'CONNECTED') throw new AppError(400, 'whatsapp_not_connected', 'Link your WhatsApp number first, in Settings → WhatsApp');
+  if (session.status !== 'CONNECTED') throw new AppError(400, 'whatsapp_not_connected', 'Link your WhatsApp number first, in WhatsApp → Linked number');
   const normalized = phones.map((p) => normalizePhone(p));
   if (normalized.some((p) => !p)) throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { phones: 'Enter valid phone numbers' } });
   const [sample] = await db.select().from(contacts).where(whatsappAudienceWhere(tenantId, c.audience)).orderBy(contacts.createdAt).limit(1);

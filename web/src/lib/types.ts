@@ -35,6 +35,7 @@ export interface AudienceFilter {
   value?: string;
 }
 export interface Audience {
+  mode?: 'everyone' | 'lists' | 'people';
   listIds?: string[];
   contactIds?: string[];
   filters?: AudienceFilter[];
