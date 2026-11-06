@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Clock3, FileText, LayoutDashboard, LogOut, Megaphone, Menu as MenuIcon, MessageCircle, MessageSquarePlus, Plane, Plus, Repeat2, Search, Settings, UserPlus, Users } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { BRAND } from '@/lib/brand';
 import { cn } from '@/lib/cn';
@@ -251,17 +251,20 @@ export function TrialBanner() {
   const { tenant } = useSession();
   const p = tenant.plan;
   if (!p || p.plan !== 'TRIAL') return null;
-  const upgrade = `mailto:${BRAND.supportEmail}?subject=${encodeURIComponent(`Upgrade ${tenant.name} to the paid plan`)}`;
+  const upgrade = '/settings/billing';
   if (p.trialEnded) {
     return (
       <div role="alert" className="flex flex-wrap items-center gap-4 rounded-[14px] bg-ink px-5 py-4 text-white">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <strong className="text-[15px] font-semibold">Your free trial has ended</strong>
-          <span className="text-[13px] text-white/70">Sending is off and WhatsApp has been unlinked. Your customers, trips, templates and reports are safe. Upgrade to pick up where you left off.</span>
+          <strong className="text-[15px] font-semibold">{p.planId ? 'Your plan has ended' : 'Your free trial has ended'}</strong>
+          <span className="text-[13px] text-white/70">
+            {p.planId ? 'Sending is off until you renew.' : 'Sending is off and WhatsApp has been unlinked.'} Your customers, trips, templates and reports are safe.{' '}
+            {p.planId ? 'Renew' : 'Choose a plan'} to pick up where you left off.
+          </span>
         </div>
-        <a href={upgrade} className="inline-flex h-10 items-center rounded-[var(--radius-control)] bg-white px-4 text-sm font-semibold text-ink hover:bg-white/90">
-          Upgrade
-        </a>
+        <Link to={upgrade} className="inline-flex h-10 items-center rounded-[var(--radius-control)] bg-white px-4 text-sm font-semibold text-ink hover:bg-white/90">
+          {p.planId ? 'Renew' : 'Choose a plan'}
+        </Link>
       </div>
     );
   }
@@ -279,9 +282,9 @@ export function TrialBanner() {
         </span>
       )}
       {p.emailLimit !== null && <span className="tnum">{n(p.emailLimit)} emails included</span>}
-      <a href={upgrade} className="ml-auto font-semibold text-accent hover:text-accent-strong">
-        Upgrade
-      </a>
+      <Link to={upgrade} className="ml-auto font-semibold text-accent hover:text-accent-strong">
+        Choose a plan
+      </Link>
     </div>
   );
 }

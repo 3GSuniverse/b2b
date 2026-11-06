@@ -24,13 +24,13 @@ export async function runTrialLifecycle(now = new Date()) {
       level: 'WARNING',
       title: 'Your free trial ends tomorrow',
       body: 'Upgrade to keep sending email and WhatsApp campaigns. Your contacts, templates and reports stay either way.',
-      link: '/settings/company',
+      link: '/settings/billing',
       dedupeKey: 'trial.ending',
     });
   }
 
   const expired = await db
-    .select({ id: tenants.id, name: tenants.name })
+    .select({ id: tenants.id, name: tenants.name, planId: tenants.planId })
     .from(tenants)
     .where(and(eq(tenants.plan, 'TRIAL'), isNull(tenants.trialEndedAt), lte(tenants.trialEndsAt, now)));
   for (const t of expired) {
@@ -52,13 +52,16 @@ export async function runTrialLifecycle(now = new Date()) {
     await db.update(automations).set({ status: 'PAUSED' }).where(and(eq(automations.tenantId, t.id), eq(automations.status, 'ACTIVE')));
     await db.update(tenants).set({ trialEndedAt: now }).where(and(eq(tenants.id, t.id), isNull(tenants.trialEndedAt)));
 
+    // A paid plan that wasn't renewed ends the same way, with its own words
     await notify(t.id, {
       type: 'trial.ended',
       level: 'ERROR',
-      title: 'Your free trial has ended',
-      body: 'Sending is off and WhatsApp has been unlinked. Upgrade to continue. Your contacts, templates and reports are safe.',
-      link: '/settings/company',
-      dedupeKey: 'trial.ended',
+      title: t.planId ? 'Your plan has ended' : 'Your free trial has ended',
+      body: t.planId
+        ? 'Sending is off until you renew. Your customers, trips, templates and reports are safe.'
+        : 'Sending is off and WhatsApp has been unlinked. Upgrade to continue. Your contacts, templates and reports are safe.',
+      link: '/settings/billing',
+      dedupeKey: t.planId ? `plan.ended:${now.toISOString().slice(0, 10)}` : 'trial.ended',
     });
     logger.info({ tenantId: t.id, name: t.name }, 'trial ended');
   }

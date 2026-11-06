@@ -23,6 +23,10 @@ const schema = z.object({
 
   SEND_RATE_PER_SECOND: z.coerce.number().positive().default(1),
   // Free trial for new companies
+  // Agencies paying for Dhrona: the platform's own Razorpay account (Plan & billing). Off when unset.
+  BILLING_RAZORPAY_KEY_ID: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  BILLING_RAZORPAY_KEY_SECRET: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  BILLING_RAZORPAY_WEBHOOK_SECRET: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   TRIAL_DAYS: z.coerce.number().int().min(1).max(60).default(5),
   TRIAL_WHATSAPP_PER_DAY: z.coerce.number().int().min(0).default(100), // per number, rolling 24 hours
   TRIAL_EMAILS: z.coerce.number().int().min(0).default(200),

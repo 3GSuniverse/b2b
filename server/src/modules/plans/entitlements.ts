@@ -3,7 +3,7 @@ import { env } from '../../config/env.js';
 import { messages, type tenants } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 
-type TenantPlanFields = Pick<typeof tenants.$inferSelect, 'plan' | 'trialEndsAt' | 'whatsappWebEnabled'>;
+type TenantPlanFields = Pick<typeof tenants.$inferSelect, 'plan' | 'trialEndsAt' | 'whatsappWebEnabled'> & Partial<Pick<typeof tenants.$inferSelect, 'planId' | 'paidUntil'>>;
 
 /** In a trial whose end date hasn't passed. */
 export function trialActive(t: TenantPlanFields, now = new Date()) {
@@ -62,6 +62,8 @@ export async function planDto(t: TenantPlanFields & { id: string }) {
   const now = new Date();
   return {
     plan: t.plan,
+    planId: t.planId ?? null, // set once bought online; stays after a plan lapses, so the app says "renew"
+    paidUntil: t.paidUntil ?? null,
     trialEndsAt: t.trialEndsAt,
     trialEnded: trialEnded(t, now),
     daysLeft: daysLeft(t, now),

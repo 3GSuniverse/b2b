@@ -14,6 +14,7 @@ import { automationRoutes } from './modules/automations/routes.js';
 import { campaignRoutes } from './modules/campaigns/routes.js';
 import { templateRoutes } from './modules/templates/routes.js';
 import { attachmentRoutes } from './modules/attachments/routes.js';
+import { billingRoutes } from './modules/billing/routes.js';
 import { tripRoutes } from './modules/trips/routes.js';
 import { tripMessageRoutes } from './modules/trips/followups.js';
 import { apiKeyRoutes } from './modules/api-keys/routes.js';
@@ -66,14 +67,14 @@ export async function buildApp(opts: AppOptions = {}) {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"], // no inline or third-party scripts, anywhere
+        scriptSrc: ["'self'", 'https://checkout.razorpay.com'], // no inline scripts; the one third party is Razorpay's payment window (Plan & billing)
         // Email designs use inline styles; previews render them in sandboxed frames
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'blob:', 'https:'], // images inside email previews live on other sites; blob: = a photo being attached
         mediaSrc: ["'self'", 'blob:'], // attached videos and voice notes
         fontSrc: ["'self'"],
-        connectSrc: ["'self'"],
-        frameSrc: ["'self'"],
+        connectSrc: ["'self'", 'https://lumberjack.razorpay.com'],
+        frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com'],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'", 'https://accounts.google.com'],
@@ -119,6 +120,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(campaignRoutes);
   await app.register(templateRoutes);
   await app.register(attachmentRoutes);
+  await app.register(billingRoutes);
   await app.register(automationRoutes);
   await app.register(apiKeyRoutes);
   await app.register(quoteRoutes);

@@ -128,6 +128,9 @@ export const tenants = pgTable('tenants', {
   plan: tenantPlan().notNull().default('TRIAL'),
   trialEndsAt: ts(),
   trialEndedAt: ts(), // set once the end-of-trial clean-up has run
+  // Bought online (Plan & billing): which plan, and until when it's paid. Null for plans set by the operator.
+  planId: text(),
+  paidUntil: ts(),
   // Unofficial WhatsApp Web sending: on during an active trial. This flag is an operator override for testing.
   whatsappWebEnabled: boolean().notNull().default(false),
   // How customers pay and get reminded (UPI ID, reminder timing and wording, Razorpay keys)
@@ -387,6 +390,33 @@ export const importJobs = pgTable('import_jobs', {
 // ---------------------------------------------------------------------
 //  Content & campaigns
 // ---------------------------------------------------------------------
+
+export const billingPaymentStatus = pgEnum('billing_payment_status', ['CREATED', 'PAID', 'FAILED']);
+
+/**
+ * An agency paying for its Dhrona plan, through the platform's Razorpay account (not the agency's own).
+ * One row per Razorpay order; it becomes PAID only once Razorpay's signature checks out.
+ */
+export const billingPayments = pgTable(
+  'billing_payments',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    planId: text().notNull(), // 'starter' | 'growth'
+    period: text().notNull(), // 'month' | 'year'
+    amount: integer().notNull(), // paise
+    currency: text().notNull().default('INR'),
+    status: billingPaymentStatus().notNull().default('CREATED'),
+    razorpayOrderId: text().notNull().unique(),
+    razorpayPaymentId: text(),
+    periodStart: ts(),
+    periodEnd: ts(),
+    createdById: text().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    paidAt: ts(),
+  },
+  (t) => [index().on(t.tenantId, t.createdAt)],
+);
 
 /** A file attached to a message, as the message stores it (the bytes live in `attachments`). */
 export type AttachmentRef = { id: string; name: string; type: string; size: number };
@@ -1102,6 +1132,7 @@ export const quotesRelations = relations(quotes, ({ one }) => ({
 }));
 
 export type Attachment = typeof attachments.$inferSelect;
+export type BillingPayment = typeof billingPayments.$inferSelect;
 export type Quote = typeof quotes.$inferSelect;
 export type Package = typeof packages.$inferSelect;
 export type RateItem = typeof rateItems.$inferSelect;

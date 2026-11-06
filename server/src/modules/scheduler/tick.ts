@@ -12,6 +12,7 @@ import { completeFinishedTrips } from '../trips/service.js';
 import { runPaymentReminders } from '../payments/reminders.js';
 import { runTripFollowups } from '../trips/followups.js';
 import { removeUnusedAttachments } from '../attachments/service.js';
+import { runPlanExpiry } from '../billing/service.js';
 
 export interface TickResult {
   started: string[];
@@ -25,11 +26,12 @@ export interface TickResult {
 export async function runMaintenanceTick(now = new Date()) {
   const domains = await refreshPendingDomains();
   await deleteExpiredSessions();
+  const plans = await runPlanExpiry(now); // first, so a lapsed plan is cleaned up by the trial step below
   const trials = await runTrialLifecycle();
   const tripsCompleted = await completeFinishedTrips();
   // Once a night (around 2:30 AM India time): files uploaded but never used
   const unusedFiles = now.getUTCHours() === 21 && now.getUTCMinutes() < 5 ? await removeUnusedAttachments(now) : 0;
-  return { domains, trials, tripsCompleted, unusedFiles };
+  return { domains, plans, trials, tripsCompleted, unusedFiles };
 }
 
 /**
