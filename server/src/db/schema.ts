@@ -472,7 +472,12 @@ export type AudienceFilter = {
 };
 export type Audience = {
   // How the people were chosen. 'lists' or 'people' with nothing ticked means nobody, never everyone
-  mode?: 'everyone' | 'lists' | 'people';
+  mode?: 'everyone' | 'lists' | 'people' | 'temporary';
+  // 'temporary': numbers or emails pasted or uploaded for one send. They don't become customers,
+  // and the list is wiped 30 days after the send (the delivery log keeps only what each message needs)
+  addresses?: string[];
+  consent?: boolean; // the sender confirmed these people agreed to hear from them
+  addressCount?: number; // how many there were, kept after the list is wiped
   listIds?: string[];
   contactIds?: string[];
   filters?: AudienceFilter[];

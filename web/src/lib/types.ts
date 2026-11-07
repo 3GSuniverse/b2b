@@ -35,7 +35,10 @@ export interface AudienceFilter {
   value?: string;
 }
 export interface Audience {
-  mode?: 'everyone' | 'lists' | 'people';
+  mode?: 'everyone' | 'lists' | 'people' | 'temporary';
+  addresses?: string[];
+  consent?: boolean;
+  addressCount?: number;
   listIds?: string[];
   contactIds?: string[];
   filters?: AudienceFilter[];

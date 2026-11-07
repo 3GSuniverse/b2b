@@ -22,7 +22,8 @@ export class CampaignError extends Error {
       | 'whatsapp_not_ready'
       | 'trial_ended'
       | 'trial_limit'
-      | 'attachments_too_large',
+      | 'attachments_too_large'
+      | 'consent_needed',
   ) {
     super(message);
     this.name = 'CampaignError';
@@ -91,6 +92,7 @@ export async function startCampaign(
     throw new CampaignError('The attachments are too large for email (over 15 MB in all). Remove some first.', 'attachments_too_large');
   }
 
+  if (campaign.audience?.mode === 'temporary' && !campaign.audience.consent) throw new CampaignError('Confirm that the people in the temporary list agreed to hear from you', 'consent_needed');
   const audienceSize = await countEmailAudience(db, campaign.tenantId, campaign.audience);
   const used = await monthlyUsage(campaign.tenantId, now, campaign.tenant.timezone);
   if (used + audienceSize > campaign.tenant.monthlyQuota) {
@@ -167,6 +169,7 @@ export async function startWhatsAppCampaign(campaignId: string, opts: { enqueue?
   const session = await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.tenantId, campaign.tenantId) });
   if (session?.status !== 'CONNECTED') throw new CampaignError('Link your WhatsApp number first, in WhatsApp → Linked number', 'whatsapp_not_ready');
   if (!campaign.text?.trim() && !campaign.attachments.length) throw new CampaignError('The message is empty', 'no_content');
+  if (campaign.audience?.mode === 'temporary' && !campaign.audience.consent) throw new CampaignError('Confirm that the people in the temporary list agreed to hear from you', 'consent_needed');
   // A trial sends at most N a day; refuse a campaign that couldn't finish before the trial ends
   const cap = await whatsappTrialCapacity(campaign.tenant, now);
   if (cap !== null) {

@@ -313,7 +313,7 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
             open={open === 'to'}
             onToggle={() => setOpen(open === 'to' ? null : 'to')}
           >
-            <AudienceEditor channel="WHATSAPP" value={draft.audience} onChange={(a) => set({ audience: a })} />
+            <AudienceEditor allowTemporary channel="WHATSAPP" value={draft.audience} onChange={(a) => set({ audience: a })} />
           </Step>
 
           <Step

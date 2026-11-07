@@ -83,8 +83,10 @@ function NewCampaign() {
   const { tenant } = useSession();
   const [channel, setChannel] = useState<'EMAIL' | 'WHATSAPP'>(params.get('channel') === 'WHATSAPP' ? 'WHATSAPP' : 'EMAIL');
   useNavSection(channel === 'WHATSAPP' ? 'whatsapp' : 'email');
+  // Started from "Send to a temporary list": the To step opens on the temporary list
+  const temporary = params.get('to') === 'temporary';
   const createWa = useMutation({
-    mutationFn: () => api.post<{ campaign: Campaign }>('/api/campaigns', { name: name.trim() || 'Untitled broadcast', channel: 'WHATSAPP', text: WHATSAPP_STARTER }),
+    mutationFn: () => api.post<{ campaign: Campaign }>('/api/campaigns', { name: name.trim() || 'Untitled broadcast', channel: 'WHATSAPP', text: WHATSAPP_STARTER, ...(temporary && { audience: { mode: 'temporary', addresses: [] } }) }),
     onSuccess: ({ campaign }) => {
       qc.invalidateQueries({ queryKey: ['campaigns'] });
       nav(`/campaigns/${campaign.id}/edit`, { replace: true });
@@ -97,6 +99,7 @@ function NewCampaign() {
       return api.post<{ campaign: Campaign }>('/api/campaigns', {
         name: name.trim() || 'Untitled broadcast',
         senderId: def?.id ?? null,
+        ...(temporary && { audience: { mode: 'temporary', addresses: [] } }),
         ...(d.templateId ? { templateId: d.templateId } : { subject: d.subject, previewText: d.previewText, html: d.html }),
       });
     },
@@ -141,7 +144,10 @@ function NewCampaign() {
       ) : (
         <Panel className="flex flex-col items-start gap-4 p-5 sm:p-6">
           <p className="max-w-xl text-sm leading-relaxed text-muted">
-            A WhatsApp broadcast is one message, sent from your linked number to everyone who agreed to WhatsApp messages. We’ll start you with a short example to edit.
+            {temporary
+              ? 'One message, sent from your linked number to the numbers you paste or upload next. They won’t be saved as customers.'
+              : 'A WhatsApp broadcast is one message, sent from your linked number to everyone who agreed to WhatsApp messages.'}{' '}
+            We’ll start you with a short example to edit.
           </p>
           <Button variant="primary" loading={createWa.isPending} onClick={() => createWa.mutate()}>
             <MessageCircle className="h-4 w-4" />
@@ -579,7 +585,7 @@ function Composer({ id }: { id: string }) {
             open={open === 'to'}
             onToggle={() => setOpen(open === 'to' ? null : 'to')}
           >
-            <AudienceEditor value={draft.audience} onChange={(a) => set({ audience: a })} />
+            <AudienceEditor allowTemporary value={draft.audience} onChange={(a) => set({ audience: a })} />
           </Step>
 
           <Step

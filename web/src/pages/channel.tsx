@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CalendarClock,
   CheckCircle2,
+  ClipboardList,
   Clock3,
   FileText,
   Globe,
@@ -351,13 +352,13 @@ function OverviewTab({ h, channel }: { h: Hub | undefined; channel: Channel }) {
       ? [
           { to: '/campaigns/new', icon: Megaphone, title: 'Send a broadcast', note: 'One email to many customers, now or later', tone: 'bg-accent-soft text-accent' },
           { to: '/automations/new?recipe=birthday', icon: Clock3, title: 'Automatic email', note: 'Birthdays, anniversaries, trip dates', tone: 'bg-highlight-soft text-warm' },
+          { to: '/campaigns/new?to=temporary', icon: ClipboardList, title: 'Temporary list', note: 'Paste or upload emails. They aren’t saved.', tone: 'bg-blue-soft text-blue-ink' },
           { to: '/email/templates', icon: FileText, title: 'Email designs', note: 'Reusable templates for offers and updates', tone: 'bg-plum-soft text-plum-ink' },
-          { to: '/contacts?add=1', icon: UserPlus, title: 'Add customers', note: 'One by one or from a spreadsheet', tone: 'bg-blue-soft text-blue-ink' },
         ]
       : [
           { to: '/campaigns/new?channel=WHATSAPP', icon: Megaphone, title: 'Send a broadcast', note: 'One WhatsApp message to many customers', tone: 'bg-success-soft text-success' },
           { to: '/automations/new?channel=WHATSAPP&recipe=birthday', icon: Clock3, title: 'Automatic message', note: 'Birthday wishes and date reminders on WhatsApp', tone: 'bg-highlight-soft text-warm' },
-          { to: '/contacts?add=1', icon: UserPlus, title: 'Add customers', note: 'One by one or from a spreadsheet', tone: 'bg-blue-soft text-blue-ink' },
+          { to: '/campaigns/new?channel=WHATSAPP&to=temporary', icon: ClipboardList, title: 'Temporary list', note: 'Paste or upload numbers. They aren’t saved.', tone: 'bg-blue-soft text-blue-ink' },
           { to: '/whatsapp/setup', icon: Link2, title: 'Linked number', note: 'Link or change your agency’s WhatsApp', tone: 'bg-plum-soft text-plum-ink' },
         ];
   return (

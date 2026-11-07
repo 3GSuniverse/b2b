@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Copy, MessageCircle, MoreHorizontal, Pencil, Plus, Send, Trash2, XCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClipboardList, Copy, MessageCircle, MoreHorizontal, Pencil, Plus, Send, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -102,9 +102,14 @@ export function CampaignsPage({ channel, embedded }: { channel?: 'EMAIL' | 'WHAT
       {embedded ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-ink-2">{channel === 'WHATSAPP' ? 'One WhatsApp message to many customers, now or at a time you pick.' : 'One email to many customers, now or at a time you pick.'}</p>
-          <LinkButton to={newHref} variant="primary">
-            <Plus className="h-4 w-4" strokeWidth={2.4} /> New {channel === 'WHATSAPP' ? 'WhatsApp' : 'email'} broadcast
-          </LinkButton>
+          <span className="flex flex-wrap gap-2">
+            <LinkButton to={`${newHref}${newHref.includes('?') ? '&' : '?'}to=temporary`} variant="secondary">
+              <ClipboardList className="h-4 w-4" /> Send to a temporary list
+            </LinkButton>
+            <LinkButton to={newHref} variant="primary">
+              <Plus className="h-4 w-4" strokeWidth={2.4} /> New {channel === 'WHATSAPP' ? 'WhatsApp' : 'email'} broadcast
+            </LinkButton>
+          </span>
         </div>
       ) : (
         <PageHeader title="Broadcasts" description="One message to many customers, by email or WhatsApp, now or at a time you pick." />

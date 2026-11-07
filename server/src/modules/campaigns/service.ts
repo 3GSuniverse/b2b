@@ -28,7 +28,10 @@ const filterSchema = z.object({
 });
 
 export const audienceSchema = z.object({
-  mode: z.enum(['everyone', 'lists', 'people']).optional(),
+  mode: z.enum(['everyone', 'lists', 'people', 'temporary']).optional(),
+  addresses: z.array(z.string().max(320)).max(5000, 'A temporary list can have up to 5,000 people. Split it into two broadcasts.').optional(),
+  consent: z.boolean().optional(),
+  addressCount: z.number().int().nonnegative().optional(),
   listIds: z.array(z.string()).max(50).optional(),
   contactIds: z.array(z.string()).max(10_000).optional(),
   filters: z.array(filterSchema).max(10).optional(),
@@ -462,4 +465,21 @@ export async function campaignReport(tenantId: string, id: string) {
     topLinks: links,
     problems: bounces.map((b) => ({ email: b.email, at: b.at, detail: b.detail })),
   };
+}
+
+/**
+ * Temporary lists are for one send: 30 days after a broadcast finishes (or is cancelled), its pasted
+ * numbers / emails are wiped from the broadcast. Only how many there were is kept.
+ */
+export async function wipeTemporaryLists(now = new Date()) {
+  const rows = await db.execute<{ id: string }>(sql`
+    update campaigns
+    set audience = (audience - 'addresses') || jsonb_build_object('addresses', '[]'::jsonb, 'addressCount', jsonb_array_length(audience -> 'addresses'))
+    where audience ->> 'mode' = 'temporary'
+      and jsonb_typeof(audience -> 'addresses') = 'array'
+      and jsonb_array_length(audience -> 'addresses') > 0
+      and status in ('SENT', 'CANCELLED', 'FAILED')
+      and coalesce(completed_at, updated_at) < ${new Date(now.getTime() - 30 * 86_400_000).toISOString()}::timestamptz
+    returning id`);
+  return rows.rows.length;
 }

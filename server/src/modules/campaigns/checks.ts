@@ -2,7 +2,7 @@ import { and, count, eq, sql, type SQL } from 'drizzle-orm';
 import { contacts, customFields, type Audience, type AttachmentRef } from '../../db/schema.js';
 import { LIMITS, totalSize } from '../attachments/service.js';
 import { db } from '../../lib/db.js';
-import { emailAudienceWhere } from '../audience/resolve.js';
+import { countEmailAudience, emailAudienceWhere } from '../audience/resolve.js';
 import { isDomainReady } from '../domains/service.js';
 import { CORE_KEYS, findUnknownTags } from '../email/render.js';
 import { senderUsageLast24h } from '../mailboxes/service.js';
@@ -117,13 +117,17 @@ export async function campaignChecks(input: CheckInput): Promise<{ checks: Check
   }
 
   // Audience
+  const temporary = input.audience?.mode === 'temporary';
   const where = emailAudienceWhere(input.tenantId, input.audience);
-  const [{ n: recipients } = { n: 0 }] = await db.select({ n: count() }).from(contacts).where(where);
-  if (!recipients) add({ id: 'audience', level: 'error', title: 'Nobody matches this audience.', note: 'Choose a list or loosen the filters.' });
+  const recipients = temporary
+    ? await countEmailAudience(db, input.tenantId, input.audience)
+    : ((await db.select({ n: count() }).from(contacts).where(where))[0]?.n ?? 0);
+  if (temporary) await temporaryChecks(input.tenantId, input.audience!, 'EMAIL', all, add);
+  else if (!recipients) add({ id: 'audience', level: 'error', title: 'Nobody matches this audience.', note: 'Choose a list or loosen the filters.' });
   else add({ id: 'audience', level: 'ok', title: `${recipients.toLocaleString('en-IN')} recipient${recipients > 1 ? 's' : ''}.`, note: 'Unsubscribed and bounced contacts are left out automatically.' });
 
   // Missing personalisation
-  if (recipients) {
+  if (recipients && !temporary) {
     for (const key of tagsWithoutFallback(all).slice(0, 5)) {
       if (!known.includes(key)) continue;
       const empty = emptyExpr(key);
@@ -205,10 +209,12 @@ export async function whatsappChecks(input: {
   attachmentCheck(files, 'WHATSAPP', add);
   add({ id: 'stop', level: 'ok', title: 'People can reply STOP to stop messages.', note: 'They’re unsubscribed from WhatsApp automatically.' });
 
+  const temporary = input.audience?.mode === 'temporary';
   const recipients = await countWhatsAppAudience(db, input.tenantId, input.audience);
-  if (!recipients) add({ id: 'audience', level: 'error', title: 'Nobody in this audience agreed to WhatsApp messages.', note: 'Only contacts marked “Agreed to WhatsApp” with a phone number get WhatsApp campaigns.' });
-  else {
-    add({ id: 'audience', level: 'ok', title: `${recipients.toLocaleString('en-IN')} recipient${recipients > 1 ? 's' : ''}.`, note: 'Only contacts who agreed to WhatsApp messages.' });
+  if (temporary) await temporaryChecks(input.tenantId, input.audience!, 'WHATSAPP', text, add);
+  else if (!recipients) add({ id: 'audience', level: 'error', title: 'Nobody in this audience agreed to WhatsApp messages.', note: 'Only contacts marked “Agreed to WhatsApp” with a phone number get WhatsApp campaigns.' });
+  else add({ id: 'audience', level: 'ok', title: `${recipients.toLocaleString('en-IN')} recipient${recipients > 1 ? 's' : ''}.`, note: 'Only contacts who agreed to WhatsApp messages.' });
+  if (recipients) {
     if (cap !== null) {
       if (recipients > cap.beforeTrialEnds) {
         add({ id: 'trial_limit', level: 'error', title: `Too many for the rest of your trial.`, note: `The trial sends up to ${cap.perDay} WhatsApp messages a day, so ${cap.beforeTrialEnds} more fit before it ends. This campaign needs ${recipients.toLocaleString('en-IN')}. Choose a smaller list, or upgrade.` });
@@ -230,6 +236,27 @@ export async function whatsappChecks(input: {
   add({ id: 'risk', level: 'warning', title: 'Unofficial WhatsApp sending.', note: 'WhatsApp can block numbers that send in bulk this way. Send only to people who expect your messages.' });
 
   return { checks, canSend: !checks.some((c) => c.level === 'error'), recipients };
+}
+
+/** A temporary list: who's in it, who's left out, and the promise that they agreed. */
+async function temporaryChecks(tenantId: string, audience: Audience, channel: 'EMAIL' | 'WHATSAPP', text: string, add: (c: Check) => void) {
+  const { temporaryAddresses, temporaryRecipients } = await import('../audience/resolve.js');
+  const valid = temporaryAddresses(audience, channel).length;
+  const people = await temporaryRecipients(db, tenantId, audience, channel);
+  if (!valid) add({ id: 'audience', level: 'error', title: `The temporary list has no valid ${channel === 'EMAIL' ? 'email addresses' : 'mobile numbers'}.`, note: 'Paste or upload them in the “To” step.' });
+  else if (!people.length) add({ id: 'audience', level: 'error', title: 'Everyone in the temporary list has unsubscribed.', note: 'They asked not to get messages from you, so nothing would be sent.' });
+  else {
+    const left = valid - people.length;
+    add({
+      id: 'audience',
+      level: 'ok',
+      title: `${people.length.toLocaleString('en-IN')} people from a temporary list.`,
+      note: left ? `${left} left out: they unsubscribed${channel === 'EMAIL' ? ', bounced or complained' : ' or replied STOP'} before.` : 'They won’t be saved as customers.',
+    });
+  }
+  if (!audience.consent) add({ id: 'consent', level: 'error', title: 'Confirm these people agreed to hear from you.', note: 'Tick the box in the “To” step. Messages to strangers get numbers blocked and emails marked as spam.' });
+  const named = /\{\s*(first_name|last_name|full_name)\s*\}/.test(text);
+  if (named && people.some((p) => !p.contactId)) add({ id: 'temporary_names', level: 'warning', title: 'People in a temporary list have no names.', note: 'Add a fallback, like {first_name|there}, or they’ll see a blank.' });
 }
 
 const mb = (bytes: number) => `${Math.max(0.1, Math.round((bytes / 1048576) * 10) / 10)} MB`;

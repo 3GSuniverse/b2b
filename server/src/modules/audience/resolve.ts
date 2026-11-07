@@ -1,6 +1,7 @@
 import { and, count, eq, exists, inArray, isNotNull, notExists, or, sql, type SQL } from 'drizzle-orm';
 import type { DB, Tx } from '../../lib/db.js';
 import { contacts, listMemberships, suppressions, type Audience, type AudienceFilter } from '../../db/schema.js';
+import { normalizeEmail, normalizePhone } from '../contacts/normalize.js';
 
 const CORE_FIELDS = {
   firstName: contacts.firstName,
@@ -65,10 +66,12 @@ function audienceWhere(tenantId: string, audience: Audience | null | undefined, 
   ];
 
   const mode = audience?.mode;
-  const listIds = mode === 'people' || mode === 'everyone' ? [] : (audience?.listIds?.filter(Boolean) ?? []);
-  const contactIds = mode === 'lists' || mode === 'everyone' ? [] : (audience?.contactIds?.filter(Boolean) ?? []);
+  const listIds = mode === 'people' || mode === 'everyone' || mode === 'temporary' ? [] : (audience?.listIds?.filter(Boolean) ?? []);
+  const contactIds = mode === 'lists' || mode === 'everyone' || mode === 'temporary' ? [] : (audience?.contactIds?.filter(Boolean) ?? []);
   // Lists or people chosen, but none ticked: nobody. Never fall back to everyone.
   if ((mode === 'lists' || mode === 'people') && !listIds.length && !contactIds.length) conditions.push(sql`false`);
+  // Temporary lists aren't customers at all: they go through temporaryRecipients, never this query
+  if (mode === 'temporary') conditions.push(sql`false`);
   if (listIds.length || contactIds.length) {
     conditions.push(
       or(
@@ -89,6 +92,7 @@ function audienceWhere(tenantId: string, audience: Audience | null | undefined, 
 }
 
 export async function countEmailAudience(db: DB | Tx, tenantId: string, audience: Audience | null | undefined) {
+  if (audience?.mode === 'temporary') return (await temporaryRecipients(db, tenantId, audience, 'EMAIL')).length;
   const [row] = await db.select({ n: count() }).from(contacts).where(emailAudienceWhere(tenantId, audience));
   return row?.n ?? 0;
 }
@@ -100,6 +104,11 @@ export async function* iterateEmailAudience(
   audience: Audience | null | undefined,
   batchSize = 1000,
 ) {
+  if (audience?.mode === 'temporary') {
+    const people = await temporaryRecipients(db, tenantId, audience, 'EMAIL');
+    for (let i = 0; i < people.length; i += batchSize) yield people.slice(i, i + batchSize).map((p) => ({ id: p.contactId, email: p.address }));
+    return;
+  }
   let after = '';
   const where = emailAudienceWhere(tenantId, audience);
   for (;;) {
@@ -110,17 +119,23 @@ export async function* iterateEmailAudience(
       .orderBy(contacts.id)
       .limit(batchSize);
     if (rows.length === 0) return;
-    yield rows as { id: string; email: string }[];
+    yield rows as { id: string | null; email: string }[];
     after = rows[rows.length - 1]!.id;
   }
 }
 
 export async function countWhatsAppAudience(db: DB | Tx, tenantId: string, audience: Audience | null | undefined) {
+  if (audience?.mode === 'temporary') return (await temporaryRecipients(db, tenantId, audience, 'WHATSAPP')).length;
   const [row] = await db.select({ n: count() }).from(contacts).where(whatsappAudienceWhere(tenantId, audience));
   return row?.n ?? 0;
 }
 
 export async function* iterateWhatsAppAudience(db: DB | Tx, tenantId: string, audience: Audience | null | undefined, batchSize = 1000) {
+  if (audience?.mode === 'temporary') {
+    const people = await temporaryRecipients(db, tenantId, audience, 'WHATSAPP');
+    for (let i = 0; i < people.length; i += batchSize) yield people.slice(i, i + batchSize).map((p) => ({ id: p.contactId, phone: p.address }));
+    return;
+  }
   let after = '';
   const where = whatsappAudienceWhere(tenantId, audience);
   for (;;) {
@@ -131,7 +146,59 @@ export async function* iterateWhatsAppAudience(db: DB | Tx, tenantId: string, au
       .orderBy(contacts.id)
       .limit(batchSize);
     if (rows.length === 0) return;
-    yield rows as { id: string; phone: string }[];
+    yield rows as { id: string | null; phone: string }[];
     after = rows[rows.length - 1]!.id;
   }
+}
+
+// ---------------------------------------------------------------------------- temporary lists
+
+export const TEMPORARY_MAX = 5000;
+
+/** The pasted or uploaded numbers / emails, cleaned up (+91 added to 10-digit numbers) and without repeats. */
+export function temporaryAddresses(audience: Audience | null | undefined, channel: 'EMAIL' | 'WHATSAPP') {
+  const out = new Set<string>();
+  for (const raw of audience?.addresses ?? []) {
+    const a = channel === 'EMAIL' ? normalizeEmail(raw) : normalizePhone(raw);
+    if (a) out.add(a);
+    if (out.size >= TEMPORARY_MAX) break;
+  }
+  return [...out];
+}
+
+/**
+ * Who in a temporary list actually gets the message. Never: anyone who unsubscribed, replied STOP,
+ * bounced or complained, here or as a saved customer. Saved customers in the list are linked, so
+ * {first_name} works for them; everyone else is sent to without being saved.
+ */
+export async function temporaryRecipients(db: DB | Tx, tenantId: string, audience: Audience, channel: 'EMAIL' | 'WHATSAPP') {
+  const addresses = temporaryAddresses(audience, channel);
+  if (!addresses.length) return [];
+  const blocked = new Set(
+    (
+      await db
+        .select({ address: suppressions.address })
+        .from(suppressions)
+        .where(and(eq(suppressions.tenantId, tenantId), eq(suppressions.channel, channel), inArray(suppressions.address, addresses)))
+    ).map((r) => r.address),
+  );
+  const col = channel === 'EMAIL' ? sql<string>`lower(${contacts.email})` : sql<string>`${contacts.phone}`;
+  const known = await db
+    .select({ id: contacts.id, address: col, emailStatus: contacts.emailStatus, whatsappStatus: contacts.whatsappStatus })
+    .from(contacts)
+    .where(and(eq(contacts.tenantId, tenantId), inArray(col, addresses)));
+  const byAddress = new Map(known.map((k) => [k.address, k]));
+  const out: { contactId: string | null; address: string }[] = [];
+  for (const address of addresses) {
+    if (blocked.has(address)) continue;
+    const k = byAddress.get(address);
+    if (channel === 'EMAIL') {
+      if (k && k.emailStatus !== 'SUBSCRIBED') continue; // unsubscribed, bounced or complained as a customer
+      out.push({ contactId: k?.id ?? null, address });
+    } else {
+      // WhatsApp consent of saved customers defaults to "not yet"; STOP replies are on the suppression list
+      out.push({ contactId: k && k.whatsappStatus === 'SUBSCRIBED' ? k.id : null, address });
+    }
+  }
+  return out;
 }

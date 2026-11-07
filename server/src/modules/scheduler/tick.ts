@@ -12,6 +12,7 @@ import { completeFinishedTrips } from '../trips/service.js';
 import { runPaymentReminders } from '../payments/reminders.js';
 import { runTripFollowups } from '../trips/followups.js';
 import { removeUnusedAttachments } from '../attachments/service.js';
+import { wipeTemporaryLists } from '../campaigns/service.js';
 import { runPlanExpiry } from '../billing/service.js';
 
 export interface TickResult {
@@ -30,8 +31,10 @@ export async function runMaintenanceTick(now = new Date()) {
   const trials = await runTrialLifecycle();
   const tripsCompleted = await completeFinishedTrips();
   // Once a night (around 2:30 AM India time): files uploaded but never used
-  const unusedFiles = now.getUTCHours() === 21 && now.getUTCMinutes() < 5 ? await removeUnusedAttachments(now) : 0;
-  return { domains, plans, trials, tripsCompleted, unusedFiles };
+  const nightly = now.getUTCHours() === 21 && now.getUTCMinutes() < 5;
+  const unusedFiles = nightly ? await removeUnusedAttachments(now) : 0;
+  const temporaryListsWiped = nightly ? await wipeTemporaryLists(now) : 0;
+  return { domains, plans, trials, tripsCompleted, unusedFiles, temporaryListsWiped };
 }
 
 /**
