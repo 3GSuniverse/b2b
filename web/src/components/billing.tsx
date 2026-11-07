@@ -95,7 +95,7 @@ function CurrentPlan({ b }: { b: Billing }) {
             </span>
           </div>
           <div className="flex flex-col items-end gap-1 text-right">
-            <span className="text-[13px] text-muted">This period ends</span>
+            <span className="text-[13px] text-muted">This billing cycle ends</span>
             <span className="text-lg font-semibold">{day(new Date(end).toISOString())}</span>
             <span className={cn('text-xs font-medium', left <= 5 && !next ? 'text-warm-strong' : 'text-muted')}>
               <CountUp value={left} /> {left === 1 ? 'day' : 'days'} left
@@ -109,7 +109,7 @@ function CurrentPlan({ b }: { b: Billing }) {
           <p className="relative mt-4 flex items-center gap-2 rounded-[12px] bg-success-soft px-3.5 py-2.5 text-[13px] text-success-strong">
             <CalendarCheck className="h-4 w-4 shrink-0" />
             <span>
-              Next period paid: <b>{planName(next.planId)}, {logins(next.seats)}</b>, {day(next.periodStart)} to {day(next.periodEnd)}.
+              Next billing cycle paid: <b>{planName(next.planId)}, {logins(next.seats)}</b>, {day(next.periodStart)} to {day(next.periodEnd)}.
             </span>
           </p>
         )}
@@ -214,10 +214,10 @@ export function BillingSettings() {
 
       <Panel className="flex flex-col gap-5 p-5 sm:p-6">
         <div className="flex flex-col gap-1">
-          <h2 className="text-[17px] font-semibold">{paid ? 'Your next period' : 'Choose your plan'}</h2>
+          <h2 className="text-[17px] font-semibold">{paid ? 'Your next billing cycle' : 'Choose your plan'}</h2>
           <p className="max-w-[70ch] text-[13px] text-muted">
-            Pick a plan and exactly how many employees need a login. Your plan and logins stay the same for the whole period you pay for (30 days, or a year). You can change both when you pay for
-            the next period, from {b.limits.windowDays} days before the current one ends.
+            Pick a plan and exactly how many employees need a login. Your plan and logins stay the same for the whole billing cycle you pay for (30 days, or a year). You can change both when you pay for
+            the next cycle, from {b.limits.windowDays} days before the current one ends.
           </p>
         </div>
 
@@ -225,7 +225,7 @@ export function BillingSettings() {
           <div className="flex items-start gap-3 rounded-[14px] border border-accent/25 bg-accent-soft px-4 py-3.5 text-[13.5px] text-ink">
             <Lock className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
             <p>
-              Your plan and logins are fixed until <b>{day(w.startsAt)}</b>. From <b>{day(w.opensAt!)}</b> you can pay for the next period, with any plan and number of logins. Look around
+              Your plan and logins are fixed until <b>{day(w.startsAt)}</b>. From <b>{day(w.opensAt!)}</b> you can pay for the next billing cycle, with any plan and number of logins. Look around
               meanwhile: the prices below update as you choose.
             </p>
           </div>
@@ -234,7 +234,7 @@ export function BillingSettings() {
           <div className="flex items-start gap-3 rounded-[14px] bg-warm-soft px-4 py-3.5 text-[13.5px] text-warm-strong">
             <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
             <p>
-              Your period ends on <b>{day(w.startsAt)}</b>. Pay for the next one now; it starts on that day, with the plan and logins you choose here.
+              Your billing cycle ends on <b>{day(w.startsAt)}</b>. Pay for the next one now; it starts on that day, with the plan and logins you choose here.
             </p>
           </div>
         )}
@@ -263,7 +263,7 @@ export function BillingSettings() {
             const same = paid && b.current.planId === p.id && b.current.seats === seats;
             const dark = p.id === 'ultra';
             if (!canPay) return <p className={cn('text-xs', dark ? 'text-nav-muted' : 'text-muted')}>Only the agency owner can pay.</p>;
-            if (w.state === 'paid') return <p className={cn('text-xs', dark ? 'text-nav-muted' : 'text-muted')}>Your next period is already paid.</p>;
+            if (w.state === 'paid') return <p className={cn('text-xs', dark ? 'text-nav-muted' : 'text-muted')}>Your next billing cycle is already paid.</p>;
             if (w.state === 'locked')
               return (
                 <Button variant="secondary" disabled>
@@ -310,7 +310,7 @@ export function BillingSettings() {
         <PanelHeader title="Payments" className="px-5 pb-3 pt-5 sm:px-6 sm:pt-6" />
         {b.payments.length === 0 ? (
           <p className="flex items-center gap-2 px-5 pb-5 text-[13px] text-muted sm:px-6">
-            <Receipt className="h-4 w-4" /> Your payments will be listed here, with the period each one covers.
+            <Receipt className="h-4 w-4" /> Your payments will be listed here, with the dates each one covers.
           </p>
         ) : (
           <div className="overflow-x-auto">

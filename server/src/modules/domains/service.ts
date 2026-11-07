@@ -79,7 +79,7 @@ export async function addDomain(tenantId: string, rawDomain: string, deps: Deps 
   const tenant = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }))!;
   const { domains: allowed, plan } = entitlements(tenant);
   if ((await db.$count(sendingDomains, eq(sendingDomains.tenantId, tenantId))) >= allowed) {
-    throw new AppError(409, 'domains_full', `Your ${BILLING_PLANS[plan].name} plan has room for ${allowed} sending domain${allowed > 1 ? 's' : ''}. Remove one, or choose a bigger plan for your next period.`);
+    throw new AppError(409, 'domains_full', `Your ${BILLING_PLANS[plan].name} plan has room for ${allowed} sending domain${allowed > 1 ? 's' : ''}. Remove one, or choose a bigger plan for your next billing cycle.`);
   }
 
   let row: SendingDomain;

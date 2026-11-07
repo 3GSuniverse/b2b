@@ -112,13 +112,13 @@ export async function quote(tenantId: string, plan: PlanId, seats: number, perio
   const t = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }))!;
   const w = await changeWindow(tenantId, now);
   if (w.state === 'paid') {
-    return { ok: false as const, reason: 'already_paid', message: `You’ve already paid for your next period. It starts on ${dateIn(w.startsAt)}.` };
+    return { ok: false as const, reason: 'already_paid', message: `You’ve already paid for your next billing cycle. It starts on ${dateIn(w.startsAt)}.` };
   }
   if (w.state === 'locked') {
     return {
       ok: false as const,
       reason: 'locked',
-      message: `Your plan and logins stay as they are until ${dateIn(w.startsAt)}. From ${dateIn(w.opensAt!)} you can pay for the next period, with any plan and number of logins.`,
+      message: `Your plan and logins stay as they are until ${dateIn(w.startsAt)}. From ${dateIn(w.opensAt!)} you can pay for the next billing cycle, with any plan and number of logins.`,
     };
   }
   const employees = await seatsUsed(tenantId);
@@ -336,7 +336,7 @@ export async function runPlanExpiry(now = new Date()) {
       type: 'billing.ending',
       level: 'WARNING',
       title: `Your plan runs until ${dateIn(t.paidUntil!)}`,
-      body: 'Pay for the next period in Plan & billing. You can change your plan and number of logins now.',
+      body: 'Pay for the next billing cycle in Plan & billing. You can change your plan and number of logins now.',
       link: '/agency/billing',
       dedupeKey: `billing.ending:${t.paidUntil!.toISOString().slice(0, 10)}`,
     });

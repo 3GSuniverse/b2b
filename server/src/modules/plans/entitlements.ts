@@ -51,7 +51,7 @@ export const hasFeature = (t: TenantPlanFields, f: Feature) => entitlements(t)[f
 
 export function featureError(f: Feature) {
   const need = BILLING_PLANS[FEATURE_PLAN[f]].name;
-  return new AppError(403, 'plan_upgrade', `${FEATURE_NAMES[f]} comes with the ${need} plan. Choose ${need} for your next period in Plan & billing.`, { feature: f, plan: FEATURE_PLAN[f] });
+  return new AppError(403, 'plan_upgrade', `${FEATURE_NAMES[f]} comes with the ${need} plan. Choose ${need} for your next billing cycle in Plan & billing.`, { feature: f, plan: FEATURE_PLAN[f] });
 }
 
 /** Throws a clear "comes with the X plan" error when the agency's plan doesn't have this feature. */

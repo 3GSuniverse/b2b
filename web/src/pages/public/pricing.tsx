@@ -10,9 +10,9 @@ import { PublicFooter, PublicHeader } from './layout';
 const QUESTIONS = [
   { q: 'Do I need a card for the free trial?', a: 'No. Sign up with your agency’s name and email, and start using it straight away.' },
   { q: 'How do I pay?', a: 'By UPI, card or net banking. You get a receipt by email for every payment.' },
-  { q: 'Can I cancel?', a: <>Any time, with no fee. Your plan runs to the end of the period you paid for. See <Link to="/refunds">Cancellation and refunds</Link>.</> },
+  { q: 'Can I cancel?', a: <>Any time, with no fee. Your plan runs to the end of the billing cycle you paid for. See <Link to="/refunds">Cancellation and refunds</Link>.</> },
   { q: 'Who counts as a login?', a: 'Each login you create for someone in your agency. You, the owner, are free. A login you switch off doesn’t count, so you can switch off someone who has left and add someone new.' },
-  { q: 'Can I change my plan or logins later?', a: 'Yes. Your plan and logins stay the same for the period you’ve paid for, 30 days (or a year). From 5 days before it ends, pay for the next period with any plan and any number of logins.' },
+  { q: 'Can I change my plan or logins later?', a: 'Yes. Your plan and logins stay the same for the billing cycle you’ve paid for, 30 days (or a year). From 5 days before it ends, pay for the next cycle with any plan and any number of logins.' },
   { q: 'What counts as an email?', a: 'Each email to each customer counts once, reminders included: a broadcast to 500 people is 500 emails. WhatsApp messages aren’t counted.' },
 ];
 

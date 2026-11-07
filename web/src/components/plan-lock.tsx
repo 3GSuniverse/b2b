@@ -42,7 +42,7 @@ export function PlanLock({ feature, className }: { feature: PlanFeature; classNa
           {n.what} come{n.what.endsWith('s') && !n.what.startsWith('The') ? '' : 's'} with the {n.plan} plan.
         </b>{' '}
         <span className={ultra ? 'text-nav-muted' : 'text-ink-2'}>
-          {user.role === 'OWNER' ? 'Choose it when you pay for your next period.' : 'Ask your agency owner to choose it for the next period.'} What you’ve already made stays saved.
+          {user.role === 'OWNER' ? 'Choose it when you pay for your next billing cycle.' : 'Ask your agency owner to choose it for the next billing cycle.'} What you’ve already made stays saved.
         </span>
       </p>
       {user.role === 'OWNER' && (

@@ -74,7 +74,7 @@ export function AgencyBillingPage() {
   return (
     <OwnerOnly>
       <div className="flex flex-col gap-6">
-        <PageHeader title="Plan & billing" description="Choose a plan and exactly how many employee logins you need. Both stay fixed for the period you pay for." back={<Link to="/agency">Agency</Link>} />
+        <PageHeader title="Plan & billing" description="Choose a plan and exactly how many employee logins you need. Both stay fixed for the billing cycle you pay for." back={<Link to="/agency">Agency</Link>} />
         <BillingSettings />
       </div>
     </OwnerOnly>

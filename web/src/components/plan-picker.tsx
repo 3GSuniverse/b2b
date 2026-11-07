@@ -82,7 +82,7 @@ export function SeatPicker({ value, onChange, min = SEATS.min }: { value: number
 export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
   return (
     <Segmented
-      label="Billing period"
+      label="Pay monthly or yearly"
       value={value}
       onChange={onChange}
       options={[

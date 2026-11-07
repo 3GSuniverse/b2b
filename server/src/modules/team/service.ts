@@ -91,7 +91,7 @@ async function ensureRoom(tenantId: string) {
     throw new AppError(
       409,
       'seats_full',
-      `Your plan has ${limit} employee logins, and all are in use. Choose more logins for your next period in Plan & billing, or switch off someone who has left.`,
+      `Your plan has ${limit} employee logins, and all are in use. Choose more logins for your next billing cycle in Plan & billing, or switch off someone who has left.`,
     );
   }
 }

@@ -23,9 +23,9 @@ const refundSections: DocSection[] = [
     title: 'Cancelling your plan',
     body: (
       <ul>
-        <li>You can cancel any time by writing to {mail} from the email address on your account. There’s no notice period and no cancellation fee.</li>
-        <li>Your plan stays active until the end of the period you’ve already paid for. After that it isn’t renewed and you aren’t charged again.</li>
-        <li>Your plan and number of employee logins stay the same for each period you pay for (30 days, or a year). You can change either when you pay for the next period, from 5 days before the current one ends. Choosing fewer logins or a smaller plan doesn’t refund any part of a period already paid for.</li>
+        <li>You can cancel any time by writing to {mail} from the email address on your account. There’s no notice needed and no cancellation fee.</li>
+        <li>Your plan stays active until the end of the billing cycle you’ve already paid for. After that it isn’t renewed and you aren’t charged again.</li>
+        <li>Your plan and number of employee logins stay the same for each billing cycle you pay for (30 days, or a year). You can change either when you pay for the next cycle, from 5 days before the current one ends. Choosing fewer logins or a smaller plan doesn’t refund any part of a billing cycle already paid for.</li>
         <li>Your trips, customers and messages stay in your account after the plan ends. If you ask us to close the account, we delete its data as our <Link to="/privacy">Privacy Policy</Link> describes.</li>
       </ul>
     ),
@@ -37,11 +37,11 @@ const refundSections: DocSection[] = [
       <>
         <p>We refund the payment in full when:</p>
         <ul>
-          <li>you were charged twice for the same period, or charged by mistake;</li>
+          <li>you were charged twice for the same billing cycle, or charged by mistake;</li>
           <li>you ask within 7 days of your first ever payment, if {BRAND.name} isn’t right for your agency;</li>
-          <li>{BRAND.name} was unavailable for more than 3 days in a row in the period you paid for, because of a problem on our side.</li>
+          <li>{BRAND.name} was unavailable for more than 3 days in a row in the billing cycle you paid for, because of a problem on our side.</li>
         </ul>
-        <p>Otherwise, payments for a period that has started aren’t refunded, but you can cancel so you aren’t charged for the next one.</p>
+        <p>Otherwise, payments for a billing cycle that has started aren’t refunded, but you can cancel so you aren’t charged for the next one.</p>
       </>
     ),
   },
@@ -73,7 +73,7 @@ export function RefundsPage() {
       intro={<p>How to cancel a {BRAND.name} plan, and when you get your money back.</p>}
       summary={
         <ul>
-          <li>Cancel any time, with no fee. You keep access until the end of the period you paid for.</li>
+          <li>Cancel any time, with no fee. You keep access until the end of the billing cycle you paid for.</li>
           <li>A full refund within 7 days of your first payment, or if you were charged by mistake.</li>
           <li>Refunds reach you in 5 to 7 working days, the same way you paid.</li>
         </ul>
@@ -97,7 +97,7 @@ const deliverySections: DocSection[] = [
     body: (
       <ul>
         <li>Your free trial starts the moment you sign up.</li>
-        <li>When you pay for a plan, it’s active on your account straight away, and at the latest within 24 hours. A payment for your next period takes effect on the day that period starts. We email a receipt to the address on your account.</li>
+        <li>When you pay for a plan, it’s active on your account straight away, and at the latest within 24 hours. A payment for your next billing cycle takes effect on the day that cycle starts. We email a receipt to the address on your account.</li>
         <li>If your plan isn’t active 24 hours after paying, write to {mail} and we’ll sort it out the same working day.</li>
       </ul>
     ),
