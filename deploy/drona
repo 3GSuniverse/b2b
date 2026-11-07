@@ -4,6 +4,7 @@
 #   drona install           first time: Docker, settings, start everything, nightly backups
 #   drona deploy            get the latest code from GitHub, back up, update, restart
 #   drona status            what's running and whether it's healthy
+#   drona env               add settings that are new since install to .env (to fill in)
 #   drona logs [api|worker] follow the logs (Ctrl+C to stop)
 #   drona restart | stop    restart or stop everything
 #   drona backup            back up the database now
@@ -56,6 +57,28 @@ fix_secrets() {
   [[ -d "$DEPLOY_DIR/secrets" ]] || return 0
   chmod 711 "$DEPLOY_DIR/secrets"
   find "$DEPLOY_DIR/secrets" -type f -exec chmod 644 {} +
+}
+
+# Settings added to .env.example after this server was installed are copied into .env, so they're
+# there to fill in. Empty ones are added as they are; ones with a value are added commented out,
+# so nothing changes until you choose. Values already in .env are never touched.
+sync_env() {
+  [[ -f "$ENV_FILE" && -f "$DEPLOY_DIR/.env.example" ]] || return 0
+  local line key added=()
+  while IFS= read -r line; do
+    key="${line%%=*}"
+    grep -qE "^[#[:space:]]*${key}=" "$ENV_FILE" && continue
+    if [[ -z "${line#*=}" ]]; then added+=("$line"); else added+=("# $line"); fi
+  done < <(grep -E '^[A-Z][A-Z0-9_]*=' "$DEPLOY_DIR/.env.example")
+  ((${#added[@]})) || return 0
+  {
+    echo
+    echo "# --- New settings, added by 'drona' on $(date +%F). See .env.example for what each one does. ---"
+    printf '%s\n' "${added[@]}"
+  } >>"$ENV_FILE"
+  warn "New settings were added at the end of $ENV_FILE:"
+  printf '    %s\n' "${added[@]}"
+  warn "Fill in the ones you use (nano $ENV_FILE), then run: drona restart"
 }
 
 cmd_install() {
@@ -152,6 +175,7 @@ cmd_deploy() {
     git -C "$REPO_DIR" pull --ff-only
     ok "Code: $(git -C "$REPO_DIR" log -1 --format='%h %s')"
   fi
+  sync_env
   if compose ps --status running --services 2>/dev/null | grep -q postgres; then
     cmd_backup
   fi
@@ -298,6 +322,10 @@ case "${1:-help}" in
   move-from-hayate) cmd_move_from_hayate ;;
   install) cmd_install ;;
   deploy) cmd_deploy ;;
+  env)
+    sync_env
+    ok "Settings are up to date with .env.example"
+    ;;
   status)
     compose ps
     curl -fsS "http://127.0.0.1:$(env_value DRONA_PORT)/health" && echo
@@ -307,6 +335,7 @@ case "${1:-help}" in
     compose logs -f --tail 100 "${@:-api worker}"
     ;;
   restart)
+    sync_env
     fix_secrets
     compose up -d --force-recreate api worker
     wait_healthy

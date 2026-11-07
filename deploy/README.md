@@ -128,6 +128,7 @@ New sign-ups get the trial automatically: every feature, 200 emails, WhatsApp We
 | `drona status` | What's running, and the health check |
 | `drona logs` | Follow the logs (`drona logs worker` for sending and WhatsApp only) |
 | `drona restart` | Restart after editing `deploy/.env` |
+| `drona env` | Add settings that are new since the server was installed to `deploy/.env`, ready to fill in (deploy and restart do this too) |
 | `drona backup` | Back up the database now (also runs every night at 02:30, keeps 14 days) |
 | `drona restore <file>` | Put a backup back. Asks before replacing anything |
 | `drona plan <email> basic\|professional\|ultra <logins> [days]` | Paid plan for 30 days (or the days given), for an agency that paid offline |
