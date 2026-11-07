@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  Loader2,
   Bot,
   Check,
   CheckCheck,
@@ -13,6 +14,8 @@ import {
   MessageCircle,
   Mic,
   RotateCcw,
+  Sparkles,
+  Wand2,
   Search,
   SendHorizontal,
   Smartphone,
@@ -32,6 +35,9 @@ import { useWhatsApp } from '@/components/whatsapp/settings';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { phone as formatPhone } from '@/lib/format';
+import { useSession } from '@/lib/session';
+import { Dialog } from '@/components/ui/overlay';
+import { Button } from '@/components/ui/button';
 
 /**
  * WhatsApp inbox: every conversation on the agency's linked number in one place.
@@ -242,6 +248,8 @@ function Conversation({ id, onBack }: { id: string; onBack: () => void }) {
     }
   }, [t?.messages.length]);
 
+  const ai = { enabled: !!useQuery({ queryKey: ['ai'], queryFn: () => api.get<{ enabled: boolean }>('/api/ai'), staleTime: 300_000 }).data?.enabled };
+  const { user } = useSession();
   const send = useMutation({
     mutationFn: (body: string) => api.post(`/api/inbox/${id}/reply`, { text: body }),
     onMutate: () => setText(''),
@@ -337,6 +345,18 @@ function Conversation({ id, onBack }: { id: string; onBack: () => void }) {
             <TriangleAlert className="h-3.5 w-3.5 shrink-0" /> Your WhatsApp number isn’t linked. Replies wait until you <Link to="/whatsapp/setup" className="font-semibold underline">link it again</Link>.
           </p>
         )}
+        {ai.enabled && (
+          <DronaAiTray
+            chatId={id}
+            canTeach={user.role !== 'MEMBER'}
+            hasCustomerMessage={!!t.messages.some((m) => m.direction === 'IN')}
+            onDraft={(reply) => {
+              typeInto(reply, setText);
+              box.current?.focus();
+            }}
+            drafted={!!text.trim()}
+          />
+        )}
         <div className="flex items-end gap-2">
           <textarea
             ref={box}
@@ -425,5 +445,189 @@ function Bubble({ m, first }: { m: ThreadMessage; first: boolean }) {
         {failed && <span className="clear-both block pt-1 text-[11px] font-semibold text-danger">{m.status === 'SUPPRESSED' ? 'Not sent: they replied STOP' : 'Not sent. Check the linked number.'}</span>}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------- Drona AI
+
+type Suggestion = { reply: string; situation: string; language: string; needsHuman: boolean; note: string | null };
+
+const SITUATION: Record<string, string> = {
+  greeting: 'Greeting',
+  price_enquiry: 'Price question',
+  availability: 'Availability',
+  itinerary_details: 'Itinerary',
+  ready_to_book: 'Ready to book',
+  payment: 'Payment',
+  documents_or_travel_info: 'Travel details',
+  change_or_cancel: 'Change or cancel',
+  complaint: 'Complaint',
+  thanks_or_closing: 'Thanks',
+  not_interested: 'Not interested',
+  other: 'Other',
+};
+
+const HINTS = ['Share the price', 'Ask for dates and people', 'Ask for the advance', 'Offer to call them', 'Say sorry', 'Thank them'];
+
+/** Puts the reply in the box a few words at a time, so it reads like it's being written. */
+function typeInto(full: string, set: (v: string) => void) {
+  const words = full.split(/(\s+)/);
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || words.length < 6) return set(full);
+  let i = 0;
+  const step = Math.max(1, Math.ceil(words.length / 30));
+  const tick = () => {
+    i = Math.min(words.length, i + step);
+    set(words.slice(0, i).join(''));
+    if (i < words.length) window.setTimeout(tick, 22);
+  };
+  tick();
+}
+
+function DronaAiTray({ chatId, canTeach, hasCustomerMessage, onDraft, drafted }: { chatId: string; canTeach: boolean; hasCustomerMessage: boolean; onDraft: (reply: string) => void; drafted: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [hint, setHint] = useState('');
+  const [last, setLast] = useState<Suggestion | null>(null);
+  const [teaching, setTeaching] = useState(false);
+  const suggest = useMutation({
+    mutationFn: (h?: string) => api.post<Suggestion>(`/api/inbox/${chatId}/suggest`, h ? { hint: h } : {}),
+    onSuccess: (r) => {
+      setLast(r);
+      setOpen(false);
+      setHint('');
+      onDraft(r.reply);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const go = (h?: string) => !suggest.isPending && suggest.mutate(h?.trim() || undefined);
+
+  return (
+    <div className="mb-2 flex flex-col gap-2">
+      {last && drafted && !suggest.isPending && (
+        <div className="hub-in flex flex-wrap items-center gap-1.5 text-[12px]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-1 font-semibold text-accent-strong">
+            <Sparkles className="h-3 w-3" /> Written by Drona AI
+          </span>
+          <span className="rounded-full bg-sunken px-2.5 py-1 text-ink-2">{SITUATION[last.situation] ?? last.situation}</span>
+          <span className="rounded-full bg-sunken px-2.5 py-1 text-ink-2">{last.language}</span>
+          {last.needsHuman ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-warm-soft px-2.5 py-1 font-semibold text-warm-strong">
+              <TriangleAlert className="h-3 w-3" /> Check before sending{last.note ? `: ${last.note}` : ''}
+            </span>
+          ) : (
+            <span className="text-muted">Read it, change anything, then send.</span>
+          )}
+        </div>
+      )}
+      {open && (
+        <div className="hub-in flex flex-col gap-2.5 rounded-[16px] border border-accent/25 bg-[linear-gradient(135deg,var(--color-accent-soft),transparent_70%)] p-3">
+          <div className="flex flex-wrap gap-1.5">
+            {HINTS.map((h) => (
+              <button
+                key={h}
+                type="button"
+                disabled={suggest.isPending}
+                onClick={() => go(h)}
+                className="rounded-full border border-accent/25 bg-surface px-3 py-1.5 text-[12px] font-semibold text-accent-strong transition-[transform,background] hover:-translate-y-px hover:bg-accent-soft active:scale-95 disabled:opacity-50"
+              >
+                {h}
+              </button>
+            ))}
+          </div>
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              go(hint);
+            }}
+          >
+            <input
+              value={hint}
+              onChange={(e) => setHint(e.target.value)}
+              placeholder="Or tell Drona AI what to say, e.g. “offer the January dates”"
+              aria-label="Instruction for Drona AI"
+              className="h-10 min-w-0 flex-1 rounded-[10px] border border-line bg-surface px-3 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+            />
+            <Button type="submit" size="sm" variant="primary" loading={suggest.isPending} className="h-10">
+              <Wand2 className="h-4 w-4" /> Write
+            </Button>
+          </form>
+          {canTeach && (
+            <button type="button" onClick={() => setTeaching(true)} className="self-start text-[12px] font-semibold text-accent hover:text-accent-strong">
+              Teach Drona AI about your agency
+            </button>
+          )}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={!hasCustomerMessage || suggest.isPending}
+          onClick={() => go()}
+          title={hasCustomerMessage ? 'Drona AI reads the conversation and writes a reply' : 'Nothing from the customer to answer yet'}
+          className="ai-orb group inline-flex h-9 items-center gap-1.5 rounded-full bg-[linear-gradient(120deg,#4A3FD1,#7a6cf5)] px-3.5 text-[13px] font-bold text-white shadow-[0_6px_16px_-8px_rgb(74_63_209/0.8)] transition-transform hover:-translate-y-px active:scale-95 disabled:opacity-50"
+        >
+          {suggest.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 transition-transform group-hover:rotate-12" />}
+          {suggest.isPending ? 'Reading the chat…' : 'Suggest a reply'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          disabled={!hasCustomerMessage}
+          className={cn('h-9 rounded-full px-3 text-[13px] font-semibold transition-colors disabled:opacity-50', open ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:bg-sunken hover:text-ink')}
+        >
+          {open ? 'Close' : 'Tell it what to say'}
+        </button>
+      </div>
+      <TeachDialog open={teaching} onClose={() => setTeaching(false)} />
+    </div>
+  );
+}
+
+function TeachDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['ai', 'notes'], queryFn: () => api.get<{ aiNotes: string | null }>('/api/ai/notes'), enabled: open });
+  const [text, setText] = useState<string | null>(null);
+  const value = text ?? q.data?.aiNotes ?? '';
+  const save = useMutation({
+    mutationFn: () => api.put('/api/ai/notes', { aiNotes: value.trim() || null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ai', 'notes'] });
+      toast.success('Drona AI will use this from the next reply');
+      setText(null);
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      title="Teach Drona AI about your agency"
+      description="Everything here is used in every reply it writes. Your packages and each customer’s trips are read automatically; add what they don’t say."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <textarea
+        value={value}
+        onChange={(e) => setText(e.target.value)}
+        rows={10}
+        maxLength={4000}
+        placeholder={`Office hours: 9 am to 8 pm, Monday to Saturday.
+Payment: UPI to 98480 12345 or bank transfer. 25% advance to confirm.
+Cancellation: full refund up to 30 days before travel, 50% up to 15 days.
+Pickup for Tirupati trips is from our office at Benz Circle.
+Always offer to call the customer for group bookings.`}
+        className="w-full rounded-[12px] border border-line bg-surface px-3.5 py-3 text-[13px] leading-relaxed outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+      />
+      <p className="mt-1.5 text-right text-[11px] text-muted">{value.length} / 4,000</p>
+    </Dialog>
   );
 }

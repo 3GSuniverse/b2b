@@ -69,7 +69,7 @@ export function aiProvider(): 'anthropic' | 'openai' | null {
   return has.anthropic ? 'anthropic' : has.openai ? 'openai' : null;
 }
 export const aiEnabled = () => !!client || aiProvider() !== null;
-const getClient = () => client ?? ({ anthropic, openai, none: null } as const)[aiProvider() ?? 'none'];
+export const getClient = () => client ?? ({ anthropic, openai, none: null } as const)[aiProvider() ?? 'none'];
 
 const LANG = { en: 'English', te: 'Telugu (Telugu script)', hi: 'Hindi (Devanagari script)' } as const;
 export const draftBody = z.object({

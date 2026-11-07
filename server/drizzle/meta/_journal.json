@@ -134,6 +134,13 @@
       "when": 1794036699017,
       "tag": "0018_whatsapp_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794040539632,
+      "tag": "0019_tenant_ai_notes",
+      "breakpoints": true
     }
   ]
 }

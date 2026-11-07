@@ -126,6 +126,8 @@ export const tenants = pgTable('tenants', {
   pausedReason: text(),
   // Shown in every email footer — required by anti-spam law
   postalAddress: text(),
+  // What Drona AI should know when it writes replies: office hours, policies, how the agency talks
+  aiNotes: text(),
   // Free trial: new companies start here; the operator switches them to PAID
   plan: tenantPlan().notNull().default('TRIAL'),
   trialEndsAt: ts(),
