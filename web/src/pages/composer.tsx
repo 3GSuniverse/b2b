@@ -404,7 +404,7 @@ function Composer({ id }: { id: string }) {
     },
     onSuccess: (r) => {
       takeoff();
-      after(r, `Scheduled for ${dateTime(r.campaign.scheduledAt)}`, '/campaigns?tab=SCHEDULED');
+      after(r, `Scheduled for ${dateTime(r.campaign.scheduledAt)}`, '/email/broadcasts?tab=SCHEDULED');
     },
   });
   const unschedule = useMutation({

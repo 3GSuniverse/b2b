@@ -22,6 +22,7 @@ import { PrettyTags } from '@/lib/tags';
 import type { Attachment, Audience, Campaign, CampaignPreview } from '@/lib/types';
 import { ChecksPanel, nextAt, Step, toIso, toLocalInput } from './composer';
 import { takeoff } from '@/lib/celebrate';
+import { showWhatsAppSafetyTips } from '@/components/whatsapp/safety-tips';
 
 const MAX = 4096;
 interface Draft {
@@ -180,7 +181,8 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
     },
     onSuccess: (r) => {
       takeoff();
-      after(r, `Scheduled for ${dateTime(r.campaign.scheduledAt)}`, '/campaigns?tab=SCHEDULED');
+      showWhatsAppSafetyTips();
+      after(r, `Scheduled for ${dateTime(r.campaign.scheduledAt)}`, '/whatsapp/broadcasts?tab=SCHEDULED');
     },
   });
   const unschedule = useMutation({ mutationFn: () => api.post<{ campaign: Campaign }>(`/api/campaigns/${id}/unschedule`), onSuccess: (r) => after(r, 'Unscheduled. It’s a draft again.') });
@@ -191,6 +193,7 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
     },
     onSuccess: (r) => {
       takeoff();
+      showWhatsAppSafetyTips();
       after(r, 'Sending started', `/campaigns/${id}`);
     },
     onError: (e: Error) => {
