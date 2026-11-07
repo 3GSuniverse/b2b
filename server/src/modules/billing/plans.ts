@@ -11,7 +11,8 @@ export const BILLING_PLANS = {
     name: 'Basic',
     first: 1_499, // a month, with one employee login
     extra: 400, // a month, for each login after the first
-    emailsPerLogin: 3_000, // a month
+    emailsPerDay: 350, // per login, a day
+    whatsappPerDay: 350, // per login, a day, from the agency's linked number
     aiPerLogin: 0, // Drona AI replies and quote drafts, a day
     domains: 1,
     automations: false,
@@ -23,7 +24,8 @@ export const BILLING_PLANS = {
     name: 'Professional',
     first: 2_999,
     extra: 600,
-    emailsPerLogin: 5_000,
+    emailsPerDay: 600,
+    whatsappPerDay: 500,
     aiPerLogin: 40,
     domains: 3,
     automations: true,
@@ -35,7 +37,8 @@ export const BILLING_PLANS = {
     name: 'Ultra Premium',
     first: 4_999,
     extra: 900,
-    emailsPerLogin: 10_000,
+    emailsPerDay: 1_000,
+    whatsappPerDay: 750,
     aiPerLogin: 100,
     domains: 10,
     automations: true,
@@ -74,7 +77,12 @@ export const periodPrice = (plan: PlanId, seats: number, period: Period) => mont
 /** Rupees → paise, the unit Razorpay charges in (before GST). */
 export const pricePaise = (plan: PlanId, seats: number, period: Period) => periodPrice(plan, seats, period) * 100;
 
-export const emailsFor = (plan: PlanId, seats: number) => BILLING_PLANS[plan].emailsPerLogin * seats;
+/** Emails a day for the agency: the plan's number per login × logins. */
+export const emailsPerDayFor = (plan: PlanId, seats: number) => BILLING_PLANS[plan].emailsPerDay * seats;
+/** The monthly email allowance (30 days of the daily one). */
+export const emailsFor = (plan: PlanId, seats: number) => emailsPerDayFor(plan, seats) * 30;
+/** WhatsApp messages a day from the agency's linked number. */
+export const whatsappPerDayFor = (plan: PlanId, seats: number) => BILLING_PLANS[plan].whatsappPerDay * seats;
 export const aiPerDayFor = (plan: PlanId, seats: number) => BILLING_PLANS[plan].aiPerLogin * seats;
 
 /** The paid period a payment buys: from where the current one ends (or now), for 30 or 365 days. */

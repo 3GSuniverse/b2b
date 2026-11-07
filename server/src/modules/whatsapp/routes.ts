@@ -2,7 +2,8 @@ import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { auditLogs, tenants, whatsappSessions } from '../../db/schema.js';
-import { trialWhatsAppPerDay } from '../plans/entitlements.js';
+import { BILLING_PLANS } from '../billing/plans.js';
+import { planOf, whatsappDailyCap } from '../plans/entitlements.js';
 import { db } from '../../lib/db.js';
 import { AppError, parseBody } from '../../lib/http.js';
 import { requireAuth, requireRole, tenantOf } from '../auth/guard.js';
@@ -10,7 +11,8 @@ import { publishCommand } from './bus.js';
 import { assertEnabled, DAILY_LIMIT_RANGE, getSession, whatsappStatusDto } from './service.js';
 
 const settingsBody = z.object({
-  dailyLimit: z.number().int().min(DAILY_LIMIT_RANGE.min).max(DAILY_LIMIT_RANGE.max).optional(),
+  // null = use the plan's limit
+  dailyLimit: z.number().int().min(DAILY_LIMIT_RANGE.min).max(DAILY_LIMIT_RANGE.max).nullable().optional(),
   intervalSeconds: z.number().int().min(6, 'Keep at least 6 seconds between messages').max(120).optional(),
 });
 
@@ -47,9 +49,10 @@ export async function whatsappRoutes(app: FastifyInstance) {
     await assertEnabled(tenantId);
     const b = parseBody(settingsBody, req.body);
     const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
-    const perDay = tenant ? trialWhatsAppPerDay(tenant) : null;
-    if (perDay !== null && b.dailyLimit !== undefined && b.dailyLimit > perDay) {
-      throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { dailyLimit: `The free trial allows up to ${perDay} a day` } });
+    const perDay = tenant ? whatsappDailyCap(tenant) : null;
+    if (perDay !== null && b.dailyLimit != null && b.dailyLimit > perDay) {
+      const what = tenant!.plan === 'TRIAL' ? 'The free trial' : `Your ${BILLING_PLANS[planOf(tenant!).id].name} plan`;
+      throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { dailyLimit: `${what} allows up to ${perDay} a day` } });
     }
     await getSession(tenantId);
     const patch = Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined));

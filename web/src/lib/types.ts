@@ -20,6 +20,8 @@ export interface Entitlements {
   aiPerDay: number;
   domains: number;
   emails: number;
+  emailsPerDay: number | null;
+  whatsappPerDay: number | null;
   prioritySupport: boolean;
 }
 
@@ -307,6 +309,10 @@ export interface WhatsAppStatus {
   displayName: string | null;
   dailyLimit: number;
   trialPerDay: number | null;
+  /** The plan's daily limit for the number (trial or paid); null when set by hand */
+  planPerDay?: number | null;
+  /** The agency's own lower limit; null = the plan's */
+  ownDailyLimit?: number | null;
   intervalSeconds: number;
   sentLast24h: number;
   lastError: string | null;

@@ -148,6 +148,13 @@
       "when": 1794041415834,
       "tag": "0020_plans_by_logins",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794054551477,
+      "tag": "0021_daily_limits",
+      "breakpoints": true
     }
   ]
 }

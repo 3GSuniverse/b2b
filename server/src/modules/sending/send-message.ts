@@ -7,7 +7,8 @@ import { senderUsageLast24h } from '../mailboxes/service.js';
 import { buildMergeVars, renderEmail } from '../email/render.js';
 import { unsubscribeUrl } from '../unsubscribe/token.js';
 import { bumpCounter } from './counters.js';
-import { trialEnded } from '../plans/entitlements.js';
+import { emailDailyCap, trialEnded } from '../plans/entitlements.js';
+import { emailUsageLast24h } from './daily-cap.js';
 import { notify } from '../notifications/service.js';
 import { syncAutomationSend } from '../automations/engine.js';
 import { payPageUrl, serviceEmailHtml } from '../payments/reminders.js';
@@ -126,6 +127,16 @@ export async function processSendJob(
   const own = !msg.campaignId && !msg.automationId && msg.body !== null;
   // About the customer's own booking (payment reminder, trip starting soon): not marketing
   const service = own && msg.service;
+
+  // The plan's emails a day (350 a login on Basic). Booking emails (receipts, reminders) always go.
+  const perDay = service ? null : emailDailyCap(msg.tenant);
+  if (perDay !== null) {
+    const usage = await emailUsageLast24h(msg.tenantId);
+    if (usage.sent >= perDay) {
+      const until = new Date((usage.oldest?.getTime() ?? Date.now()) + 86_400_000 + 60_000);
+      throw new DeferSend(until, `Daily email limit of ${perDay} reached`);
+    }
+  }
 
   // 2. Re-check consent at the moment of sending — people unsubscribe between scheduling and sending
   const address = msg.toAddress.toLowerCase();

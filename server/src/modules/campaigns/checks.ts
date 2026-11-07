@@ -7,7 +7,8 @@ import { isDomainReady } from '../domains/service.js';
 import { CORE_KEYS, findUnknownTags } from '../email/render.js';
 import { senderUsageLast24h } from '../mailboxes/service.js';
 import { monthlyUsage } from '../sending/start-campaign.js';
-import { trialEnded, whatsappTrialCapacity, whatsappWebAllowed } from '../plans/entitlements.js';
+import { effectiveWhatsAppLimit, emailDailyCap, trialEnded, whatsappDailyCap, whatsappTrialCapacity, whatsappWebAllowed } from '../plans/entitlements.js';
+import { emailUsageLast24h } from '../sending/daily-cap.js';
 
 export type CheckLevel = 'ok' | 'warning' | 'error';
 export interface Check {
@@ -19,7 +20,18 @@ export interface Check {
 
 interface CheckInput {
   tenantId: string;
-  tenant: { monthlyQuota: number; status: string; pausedReason: string | null; timezone: string; postalAddress?: string | null; plan?: 'TRIAL' | 'PAID'; trialEndsAt?: Date | null; whatsappWebEnabled?: boolean };
+  tenant: {
+    monthlyQuota: number;
+    status: string;
+    pausedReason: string | null;
+    timezone: string;
+    postalAddress?: string | null;
+    plan?: 'TRIAL' | 'PAID';
+    trialEndsAt?: Date | null;
+    whatsappWebEnabled?: boolean;
+    planId?: string | null;
+    seats?: number | null;
+  };
   subject: string | null;
   html: string | null;
   previewText: string | null;
@@ -155,6 +167,14 @@ export async function campaignChecks(input: CheckInput): Promise<{ checks: Check
     if (recipients > left) {
       add({ id: 'quota', level: 'error', title: 'Not enough emails left this month.', note: `This needs ${recipients.toLocaleString('en-IN')}; ${left.toLocaleString('en-IN')} are left.` });
     }
+    const perDay = input.tenant.plan ? emailDailyCap({ plan: input.tenant.plan, trialEndsAt: null, whatsappWebEnabled: false, planId: input.tenant.planId, seats: input.tenant.seats }) : null;
+    if (perDay !== null) {
+      const today = Math.max(0, perDay - (await emailUsageLast24h(input.tenantId)).sent);
+      if (recipients > today) {
+        const days = Math.ceil((recipients - today) / perDay) + 1;
+        add({ id: 'daily_emails', level: 'warning', title: `This will take about ${days} days to send.`, note: `Your plan sends ${perDay.toLocaleString('en-IN')} emails a day; ${today.toLocaleString('en-IN')} go out today and the rest continue on their own.` });
+      }
+    }
     if (s && s.kind !== 'DOMAIN' && s.connection) {
       const usage = await senderUsageLast24h(s.id);
       const today = Math.max(0, s.connection.dailyLimit - usage.sent);
@@ -176,7 +196,7 @@ export async function campaignChecks(input: CheckInput): Promise<{ checks: Check
 /** "Before you send" for WhatsApp campaigns. */
 export async function whatsappChecks(input: {
   tenantId: string;
-  tenant: { id: string; status: string; pausedReason: string | null; whatsappWebEnabled: boolean; plan: 'TRIAL' | 'PAID'; trialEndsAt: Date | null };
+  tenant: { id: string; status: string; pausedReason: string | null; whatsappWebEnabled: boolean; plan: 'TRIAL' | 'PAID'; trialEndsAt: Date | null; planId?: string | null; seats?: number | null };
   text: string | null;
   audience: Audience | null;
   attachments?: AttachmentRef[];
@@ -223,7 +243,7 @@ export async function whatsappChecks(input: {
       }
     }
     const usage = await whatsappUsageLast24h(input.tenantId);
-    const dailyLimit = Math.min(session.dailyLimit, cap?.perDay ?? Infinity);
+    const dailyLimit = effectiveWhatsAppLimit(session.dailyLimit, whatsappDailyCap(input.tenant));
     const today = Math.max(0, dailyLimit - usage.sent);
     const minutes = Math.ceil((Math.min(recipients, today) * session.intervalSeconds) / 60);
     if (recipients > today) {

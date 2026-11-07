@@ -10,7 +10,7 @@ import { DeferSend, finalizeMessage, maybeCompleteCampaign, type SendOutcome } f
 import { getQr } from './bus.js';
 import { syncAutomationSend } from '../automations/engine.js';
 import { recordSent } from '../inbox/service.js';
-import { trialEnded, trialWhatsAppPerDay, whatsappWebAllowed } from '../plans/entitlements.js';
+import { effectiveWhatsAppLimit, trialEnded, trialWhatsAppPerDay, whatsappDailyCap, whatsappWebAllowed } from '../plans/entitlements.js';
 import { getWhatsAppGateway, WhatsAppError, type WhatsAppGateway } from './gateway.js';
 import { loadFiles, whatsappKind, type AttachmentFile } from '../attachments/service.js';
 
@@ -51,7 +51,8 @@ export async function deliverWhatsApp(gateway: WhatsAppGateway, tenantId: string
 
 /** WhatsApp's own limit for one text message. */
 export const WHATSAPP_MAX_LENGTH = 4096;
-export const DAILY_LIMIT_RANGE = { min: 20, max: 500 } as const;
+/** The agency's own daily limit setting. The plan's limit (350 a login a day on Basic, and more) caps it too. */
+export const DAILY_LIMIT_RANGE = { min: 20, max: 50 * 750 } as const;
 
 // ---------------------------------------------------------------- session state
 
@@ -83,14 +84,17 @@ export async function whatsappStatusDto(tenantId: string) {
   const s = await getSession(tenantId);
   const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
   const trialPerDay = tenant ? trialWhatsAppPerDay(tenant) : null;
+  const planPerDay = tenant ? whatsappDailyCap(tenant) : null;
   const usage = await whatsappUsageLast24h(tenantId);
   const qr = s.status === 'CONNECTING' ? await getQr(tenantId) : null;
   return {
     status: s.status,
     phone: s.phone,
     displayName: s.displayName,
-    dailyLimit: Math.min(s.dailyLimit, trialPerDay ?? Infinity),
+    dailyLimit: effectiveWhatsAppLimit(s.dailyLimit, planPerDay),
+    ownDailyLimit: s.dailyLimit,
     trialPerDay,
+    planPerDay,
     intervalSeconds: s.intervalSeconds,
     sentLast24h: usage.sent,
     lastError: s.lastError,
@@ -287,7 +291,7 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
 
   // Pacing: one message every N seconds per number, and a daily cap
   const usage = await whatsappUsageLast24h(msg.tenantId, now);
-  const dailyLimit = Math.min(session.dailyLimit, trialWhatsAppPerDay(msg.tenant) ?? Infinity);
+  const dailyLimit = effectiveWhatsAppLimit(session.dailyLimit, whatsappDailyCap(msg.tenant));
   if (usage.sent >= dailyLimit) {
     const until = new Date((usage.oldest?.getTime() ?? now.getTime()) + 86_400_000 + 60_000);
     throw new DeferSend(until, `Daily WhatsApp limit of ${dailyLimit} reached`);

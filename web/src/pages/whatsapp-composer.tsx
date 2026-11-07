@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { AudienceEditor, describeAudience, useAudienceCount, useFieldLabel, useLists } from '@/components/campaigns/audience';
 import { useFields } from '@/components/contacts/contact-sheet';
 import { MergeTagMenu } from '@/components/email/visual-editor';
+import { SendNowButton } from '@/components/campaigns/send-button';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Badge, Panel } from '@/components/ui/display';
 import { Field, Input, Textarea } from '@/components/ui/field';
@@ -286,14 +287,15 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
                     <Clock3 className="h-4 w-4" />
                     Schedule for {when ? dateTime(toIso(when, tz)) : '…'}
                   </Button>
-                  {!canSend && firstError && <p className="text-xs text-warm-strong">{firstError.title}</p>}
+                  {!canSend && firstError && (
+                    <p className="text-xs text-warm-strong">
+                      {firstError.title} {firstError.note}
+                    </p>
+                  )}
                 </div>
               </Popover>
             )}
-            <Button variant="primary" disabled={!canSend} onClick={() => setConfirmSend(true)}>
-              <Send className="h-4 w-4" />
-              Send now
-            </Button>
+            <SendNowButton canSend={canSend} checks={checks} onSend={() => setConfirmSend(true)} />
           </div>
         </div>
         {c.lastError && (

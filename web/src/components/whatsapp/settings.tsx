@@ -80,10 +80,10 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
   const trial = tenant.plan?.plan === 'TRIAL' ? tenant.plan : null;
   const q = useWhatsApp({ poll: true });
   const wa = q.data;
-  const [limits, setLimits] = useState<{ dailyLimit: number; intervalSeconds: number } | null>(null);
+  const [limits, setLimits] = useState<{ dailyLimit: number | null; intervalSeconds: number } | null>(null);
   const [confirmUnlink, setConfirmUnlink] = useState(false);
   useEffect(() => {
-    if (wa && !limits) setLimits({ dailyLimit: wa.dailyLimit, intervalSeconds: wa.intervalSeconds });
+    if (wa && !limits) setLimits({ dailyLimit: wa.ownDailyLimit ?? null, intervalSeconds: wa.intervalSeconds });
   }, [wa, limits]);
 
   const set = (r: { whatsapp: WhatsAppStatus }) => qc.setQueryData(['whatsapp'], r.whatsapp);
@@ -114,7 +114,8 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
 
   if (!wa || !limits) return <Skeleton className="h-72 rounded-[var(--radius-panel)]" />;
   const st = STATUS[wa.status];
-  const dirty = limits.dailyLimit !== wa.dailyLimit || limits.intervalSeconds !== wa.intervalSeconds;
+  const dirty = limits.dailyLimit !== (wa.ownDailyLimit ?? null) || limits.intervalSeconds !== wa.intervalSeconds;
+  const cap = wa.planPerDay ?? wa.trialPerDay ?? null;
   const errOf = (f: string) => (save.error instanceof ApiError ? save.error.field(f) : undefined);
 
   return (
@@ -181,8 +182,26 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
       <Panel className="flex flex-col gap-5 p-5 sm:p-6">
         <PanelHeader title="Sending pace" description="Slower is safer. Broadcasts bigger than the daily limit continue the next day by themselves." />
         <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="Messages per day" hint={wa.trialPerDay ? `Up to ${wa.trialPerDay} during the free trial.` : 'Between 20 and 500. New numbers: start around 100.'} error={errOf('dailyLimit')}>
-            {(p) => <Input {...p} type="number" min={20} max={wa.trialPerDay ?? 500} value={limits.dailyLimit} onChange={(e) => setLimits({ ...limits, dailyLimit: Number(e.target.value) })} />}
+          <Field
+            label="Messages per day"
+            hint={
+              cap
+                ? `${wa.trialPerDay ? 'The free trial' : 'Your plan'} allows ${n(cap)} a day. Leave it empty to use all of it, or set less: a new number is safer starting around 100.`
+                : 'Between 20 and 500. New numbers: start around 100.'
+            }
+            error={errOf('dailyLimit')}
+          >
+            {(p) => (
+              <Input
+                {...p}
+                type="number"
+                min={20}
+                max={cap ?? 500}
+                placeholder={cap ? `${n(cap)} (your plan’s limit)` : '200'}
+                value={limits.dailyLimit ?? ''}
+                onChange={(e) => setLimits({ ...limits, dailyLimit: e.target.value === '' ? null : Number(e.target.value) })}
+              />
+            )}
           </Field>
           <Field label="Seconds between messages" hint="At least 6. We recommend 10 or more." error={errOf('intervalSeconds')}>
             {(p) => <Input {...p} type="number" min={6} max={120} value={limits.intervalSeconds} onChange={(e) => setLimits({ ...limits, intervalSeconds: Number(e.target.value) })} />}

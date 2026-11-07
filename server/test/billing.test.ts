@@ -4,11 +4,11 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { env } from '../src/config/env.js';
-import { auditLogs, billingPayments, tenants, users } from '../src/db/schema.js';
+import { auditLogs, billingPayments, messages, tenants, users } from '../src/db/schema.js';
 import { closeDatabase, db } from '../src/lib/db.js';
 import { closeRedis } from '../src/lib/redis.js';
 import { BILLING_PLANS, monthlyPrice, nextPeriod } from '../src/modules/billing/plans.js';
-import { useAi } from '../src/modules/plans/entitlements.js';
+import { emailDailyCap, useAi } from '../src/modules/plans/entitlements.js';
 import { runPlanExpiry, setBillingGateway } from '../src/modules/billing/service.js';
 import { api, signup } from './api-helpers.js';
 import { resetDb } from './helpers.js';
@@ -68,7 +68,7 @@ describe('paying for a plan', () => {
     const ok = await c.post('/api/billing/verify', { razorpay_order_id: orderId, razorpay_payment_id: 'pay_1', razorpay_signature: sign(orderId, 'pay_1') });
     expect(ok.statusCode).toBe(200);
     const t = await tenantOf(json.tenant.id);
-    expect(t).toMatchObject({ plan: 'PAID', planId: 'professional', seats: 3, monthlyQuota: 15_000 });
+    expect(t).toMatchObject({ plan: 'PAID', planId: 'professional', seats: 3, monthlyQuota: 600 * 3 * 30 });
     expect(Math.round((t.paidUntil!.getTime() - Date.now()) / 86_400_000)).toBe(30);
 
     // Again (double click, or the webhook too): nothing changes
@@ -81,7 +81,7 @@ describe('paying for a plan', () => {
     expect(summary.current).toMatchObject({ plan: 'PAID', planId: 'professional', seats: 3 });
     expect(summary.seats).toEqual({ used: 0, limit: 3 });
     expect(summary.change.state).toBe('locked');
-    expect(summary.entitlements).toMatchObject({ plan: 'professional', ai: true, aiPerDay: 120, automations: true, leadApi: false });
+    expect(summary.entitlements).toMatchObject({ plan: 'professional', ai: true, aiPerDay: 120, automations: true, leadApi: false, emailsPerDay: 1_800, whatsappPerDay: 1_500 });
   });
 
   it('the plan and logins stay fixed during a period; the next period can be paid for in its last 5 days, with any plan', async () => {
@@ -109,7 +109,7 @@ describe('paying for a plan', () => {
     expect(new Date(r.startsAt).getTime()).toBe(until.getTime());
     // Paid, but the current period carries on as it was
     let t = await tenantOf(id);
-    expect(t).toMatchObject({ planId: 'basic', seats: 2, monthlyQuota: 6_000 });
+    expect(t).toMatchObject({ planId: 'basic', seats: 2, monthlyQuota: 21_000 });
     expect(Math.round((t.paidUntil!.getTime() - until.getTime()) / 86_400_000)).toBe(365);
     expect((await c.post('/api/billing/quote', { plan: 'ultra', seats: 4, period: 'year' })).json().reason).toBe('already_paid');
     const [next] = await db.select().from(billingPayments).where(eq(billingPayments.razorpayPaymentId, 'pay_b'));
@@ -120,7 +120,7 @@ describe('paying for a plan', () => {
     expect((await runPlanExpiry(new Date(until.getTime() - 60_000))).applied).toBe(0);
     expect((await runPlanExpiry(new Date(until.getTime() + 60_000))).applied).toBe(1);
     t = await tenantOf(id);
-    expect(t).toMatchObject({ planId: 'ultra', seats: 4, monthlyQuota: 40_000 });
+    expect(t).toMatchObject({ planId: 'ultra', seats: 4, monthlyQuota: 120_000 });
     expect((await runPlanExpiry(new Date(until.getTime() + 120_000))).applied).toBe(0);
   });
 
@@ -160,7 +160,7 @@ describe('paying for a plan', () => {
     const sig = createHmac('sha256', WEBHOOK_SECRET).update(body).digest('hex');
     const r = await app.inject({ method: 'POST', url: '/webhooks/razorpay-billing', headers: { 'content-type': 'application/json', 'x-razorpay-signature': sig }, payload: body });
     expect(r.statusCode).toBe(200);
-    expect(await tenantOf(json.tenant.id)).toMatchObject({ plan: 'PAID', planId: 'basic', seats: 2, monthlyQuota: 6_000 });
+    expect(await tenantOf(json.tenant.id)).toMatchObject({ plan: 'PAID', planId: 'basic', seats: 2, monthlyQuota: 21_000 });
     const [p] = await db.select().from(billingPayments);
     expect(p).toMatchObject({ status: 'PAID', razorpayPaymentId: 'pay_9' });
   });
@@ -221,20 +221,37 @@ describe('plan periods', () => {
       expect(at, id).toBeGreaterThan(-1);
       const block = web.slice(at, web.indexOf('}', at));
       const num = (k: string) => Number(block.match(new RegExp(`${k}: ([\\d_]+)`))![1]!.replace(/_/g, ''));
-      expect({ first: num('first'), extra: num('extra'), emails: num('emailsPerLogin'), ai: num('aiPerLogin'), domains: num('domains') }).toEqual({
+      expect({ first: num('first'), extra: num('extra'), emails: num('emailsPerDay'), whatsapp: num('whatsappPerDay'), ai: num('aiPerLogin'), domains: num('domains') }).toEqual({
         first: p.first,
         extra: p.extra,
-        emails: p.emailsPerLogin,
+        emails: p.emailsPerDay,
+        whatsapp: p.whatsappPerDay,
         ai: p.aiPerLogin,
         domains: p.domains,
       });
       expect(block).toContain(`name: '${p.name}'`);
     }
     // The feature table's per-login numbers too
-    expect(web).toContain('(3_000 * n)');
-    expect(web).toContain('(5_000 * n)');
-    expect(web).toContain('(10_000 * n)');
+    expect(web).toContain('(350 * n)');
+    expect(web).toContain('(600 * n)');
+    expect(web).toContain('(1_000 * n)');
+    expect(web).toContain('(500 * n)');
+    expect(web).toContain('(750 * n)');
     expect(web).toContain('`${40 * n} a day`');
     expect(web).toContain('`${100 * n} a day`');
+  });
+});
+
+describe('emails a day on paid plans', () => {
+  it('Basic sends 350 a login a day; the rest wait for the next day, booking emails don’t', async () => {
+    const { processSendJob } = await import('../src/modules/sending/send-message.js');
+    const { MemoryEmailProvider } = await import('../src/modules/email/memory-provider.js');
+    const { json } = await signup(app);
+    const tenantId = json.tenant.id;
+    await db.update(tenants).set({ plan: 'PAID', planId: 'basic', seats: 1, paidUntil: new Date(Date.now() + 20 * 86_400_000) }).where(eq(tenants.id, tenantId));
+    await db.insert(messages).values(Array.from({ length: 350 }, (_, i) => ({ tenantId, channel: 'EMAIL' as const, toAddress: `old${i}@x.in`, status: 'SENT' as const, sentAt: new Date(Date.now() - 3_600_000) })));
+    expect(emailDailyCap(await tenantOf(tenantId))).toBe(350);
+    const [m] = await db.insert(messages).values({ tenantId, channel: 'EMAIL', toAddress: 'next@x.in', status: 'QUEUED', subject: 'Offer', body: 'Hi' }).returning();
+    await expect(processSendJob(m!.id, new MemoryEmailProvider())).rejects.toMatchObject({ name: 'DeferSend' });
   });
 });

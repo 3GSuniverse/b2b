@@ -3,7 +3,7 @@ import { env } from '../../config/env.js';
 import { auditLogs, messages, tenants } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
-import { aiPerDayFor, BILLING_PLANS, emailsFor, isPlanId, MANUAL_PAID_SEATS, TRIAL_SEATS, type PlanId } from '../billing/plans.js';
+import { aiPerDayFor, BILLING_PLANS, emailsFor, emailsPerDayFor, isPlanId, MANUAL_PAID_SEATS, TRIAL_SEATS, whatsappPerDayFor, type PlanId } from '../billing/plans.js';
 
 type TenantPlanFields = Pick<typeof tenants.$inferSelect, 'plan' | 'trialEndsAt' | 'whatsappWebEnabled'> & Partial<Pick<typeof tenants.$inferSelect, 'planId' | 'paidUntil' | 'seats'>>;
 
@@ -43,9 +43,31 @@ export function entitlements(t: TenantPlanFields) {
     aiPerDay: p.source === 'trial' ? env.TRIAL_AI_PER_DAY : aiPerDayFor(p.id, p.seats),
     domains: def.domains,
     emails: emailsFor(p.id, p.seats),
+    emailsPerDay: emailDailyCap(t),
+    whatsappPerDay: whatsappDailyCap(t),
     prioritySupport: def.prioritySupport,
   };
 }
+
+/** Emails a day the plan allows (a paid plan only; the trial and hand-set plans have their monthly limit alone). */
+export function emailDailyCap(t: TenantPlanFields): number | null {
+  const p = planOf(t);
+  return p.source === 'paid' ? emailsPerDayFor(p.id, p.seats) : null;
+}
+
+/**
+ * WhatsApp messages a day from the linked number that the plan allows: the trial's limit, or the paid
+ * plan's number per login × logins. Null when the operator set it by hand (the number's own setting applies).
+ */
+export function whatsappDailyCap(t: TenantPlanFields): number | null {
+  const trial = trialWhatsAppPerDay(t);
+  if (trial !== null) return trial;
+  const p = planOf(t);
+  return p.source === 'paid' ? whatsappPerDayFor(p.id, p.seats) : null;
+}
+
+/** The number's daily limit in effect: the agency's own lower setting, else the plan's, else 200. */
+export const effectiveWhatsAppLimit = (own: number | null, cap: number | null) => Math.min(own ?? cap ?? 200, cap ?? Infinity);
 
 export const hasFeature = (t: TenantPlanFields, f: Feature) => entitlements(t)[f];
 
@@ -87,11 +109,11 @@ export function trialEnded(t: TenantPlanFields, now = new Date()) {
 }
 
 /**
- * The unofficial WhatsApp Web sending exists only as a taste during the free trial.
- * Paid companies get the official WhatsApp route instead. `whatsappWebEnabled` is an operator override for testing.
+ * Sending from the agency's own linked number (WhatsApp Web): during the trial, and on every paid plan
+ * within the plan's daily limit. `whatsappWebEnabled` is an operator override (e.g. after a trial ended).
  */
 export function whatsappWebAllowed(t: TenantPlanFields, now = new Date()) {
-  return trialActive(t, now) || t.whatsappWebEnabled;
+  return t.plan === 'PAID' || trialActive(t, now) || t.whatsappWebEnabled;
 }
 
 /** During a trial a number sends at most this many WhatsApp messages a day; otherwise null (no trial cap). */

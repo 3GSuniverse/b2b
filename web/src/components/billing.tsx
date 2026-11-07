@@ -90,7 +90,17 @@ function CurrentPlan({ b }: { b: Billing }) {
                 <Users className="h-4 w-4 text-accent" /> <span className="tnum font-semibold">{b.seats.used}</span> of {logins(b.seats.limit)} in use
               </span>
               <span className="flex items-center gap-1.5">
-                <Mail className="h-4 w-4 text-accent" /> <span className="tnum font-semibold">{c.monthlyQuota.toLocaleString('en-IN')}</span> emails a month
+                <Mail className="h-4 w-4 text-accent" />{' '}
+                {b.entitlements.emailsPerDay ? (
+                  <>
+                    <span className="tnum font-semibold">{b.entitlements.emailsPerDay.toLocaleString('en-IN')}</span> emails and{' '}
+                    <span className="tnum font-semibold">{(b.entitlements.whatsappPerDay ?? 0).toLocaleString('en-IN')}</span> WhatsApp messages a day
+                  </>
+                ) : (
+                  <>
+                    <span className="tnum font-semibold">{c.monthlyQuota.toLocaleString('en-IN')}</span> emails a month
+                  </>
+                )}
               </span>
             </span>
           </div>

@@ -37,14 +37,21 @@ async function waCampaign(tenantId: string, text = 'Namaste {first_name|there}, 
 
 const noQueue = async () => undefined;
 
-describe('WhatsApp Web is only for free trials', () => {
-  it('paid companies don’t get it (they get the official WhatsApp route)', async () => {
+describe('WhatsApp from the agency’s own number', () => {
+  it('paid plans get it, 350 a day per login on Basic; an ended trial doesn’t', async () => {
     const { cookie, json } = await signup(app);
-    await db.update(tenants).set({ plan: 'PAID' }).where(eq(tenants.id, json.tenant.id));
     const c = api(app, cookie);
+    await db.update(tenants).set({ trialEndsAt: new Date(Date.now() - 1000) }).where(eq(tenants.id, json.tenant.id));
     expect((await c.get('/api/whatsapp')).json().error).toBe('feature_not_enabled');
-    expect((await c.post('/api/campaigns', { name: 'x', channel: 'WHATSAPP', text: 'hi' })).statusCode).toBe(403);
     expect((await c.get('/api/auth/me')).json().tenant.features).toEqual({ whatsapp: false });
+
+    await db.update(tenants).set({ plan: 'PAID', planId: 'basic', seats: 2, paidUntil: new Date(Date.now() + 20 * 86_400_000) }).where(eq(tenants.id, json.tenant.id));
+    expect((await c.get('/api/auth/me')).json().tenant.features).toEqual({ whatsapp: true });
+    expect((await c.get('/api/whatsapp')).json().whatsapp).toMatchObject({ dailyLimit: 700, planPerDay: 700, ownDailyLimit: null });
+    // The agency can go lower, not above the plan
+    expect((await c.patch('/api/whatsapp', { dailyLimit: 701 })).json().details.fields.dailyLimit).toBe('Your Basic plan allows up to 700 a day');
+    expect((await c.patch('/api/whatsapp', { dailyLimit: 120 })).json().whatsapp).toMatchObject({ dailyLimit: 120, ownDailyLimit: 120 });
+    expect((await c.patch('/api/whatsapp', { dailyLimit: null })).json().whatsapp).toMatchObject({ dailyLimit: 700, ownDailyLimit: null });
   });
 
   it('when on: status, start linking, daily limit settings', async () => {

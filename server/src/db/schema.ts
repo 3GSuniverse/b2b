@@ -695,7 +695,8 @@ export const whatsappSessions = pgTable('whatsapp_sessions', {
   status: whatsappSessionStatus().notNull().default('DISCONNECTED'),
   phone: text(), // E.164 of the linked number
   displayName: text(),
-  dailyLimit: integer().notNull().default(200),
+  // The agency's own lower daily limit; null = the plan's limit (see effectiveWhatsAppLimit)
+  dailyLimit: integer(),
   intervalSeconds: integer().notNull().default(10),
   lastError: text(),
   connectedAt: ts(),

@@ -24,7 +24,10 @@ export type Plan = {
   first: number;
   /** Rupees a month for each login after the first */
   extra: number;
-  emailsPerLogin: number;
+  /** Emails a day, per login */
+  emailsPerDay: number;
+  /** WhatsApp messages a day from the linked number, per login */
+  whatsappPerDay: number;
   /** Drona AI answers a day, per login */
   aiPerLogin: number;
   domains: number;
@@ -34,9 +37,9 @@ export type Plan = {
 
 // Shown on the Pricing page and in Plan & billing. Must match server/src/modules/billing/plans.ts (a test checks).
 export const PLANS: Plan[] = [
-  { id: 'basic', name: 'Basic', first: 1_499, extra: 400, emailsPerLogin: 3_000, aiPerLogin: 0, domains: 1, forWho: 'Trips, payments and broadcasts, without the extras.' },
-  { id: 'professional', name: 'Professional', first: 2_999, extra: 600, emailsPerLogin: 5_000, aiPerLogin: 40, domains: 3, forWho: 'Drona AI, automatic messages and group departures.', popular: true },
-  { id: 'ultra', name: 'Ultra Premium', first: 4_999, extra: 900, emailsPerLogin: 10_000, aiPerLogin: 100, domains: 10, forWho: 'Everything, with the most room and help first.' },
+  { id: 'basic', name: 'Basic', first: 1_499, extra: 400, emailsPerDay: 350, whatsappPerDay: 350, aiPerLogin: 0, domains: 1, forWho: 'Trips, payments and broadcasts, without the extras.' },
+  { id: 'professional', name: 'Professional', first: 2_999, extra: 600, emailsPerDay: 600, whatsappPerDay: 500, aiPerLogin: 40, domains: 3, forWho: 'Drona AI, automatic messages and group departures.', popular: true },
+  { id: 'ultra', name: 'Ultra Premium', first: 4_999, extra: 900, emailsPerDay: 1_000, whatsappPerDay: 750, aiPerLogin: 100, domains: 10, forWho: 'Everything, with the most room and help first.' },
 ];
 
 export const SEATS = { min: 1, max: 50 };
@@ -52,7 +55,8 @@ export const PLAN_FEATURES: { label: string; values: Record<PlanId, boolean | st
   { label: 'Payment reminders and trip messages', values: { basic: true, professional: true, ultra: true } },
   { label: 'Email and WhatsApp broadcasts', values: { basic: true, professional: true, ultra: true } },
   { label: 'WhatsApp inbox: see and answer replies', values: { basic: true, professional: true, ultra: true } },
-  { label: 'Emails a month', values: { basic: (n) => (3_000 * n).toLocaleString('en-IN'), professional: (n) => (5_000 * n).toLocaleString('en-IN'), ultra: (n) => (10_000 * n).toLocaleString('en-IN') } },
+  { label: 'Emails a day', values: { basic: (n) => (350 * n).toLocaleString('en-IN'), professional: (n) => (600 * n).toLocaleString('en-IN'), ultra: (n) => (1_000 * n).toLocaleString('en-IN') } },
+  { label: 'WhatsApp messages a day', values: { basic: (n) => (350 * n).toLocaleString('en-IN'), professional: (n) => (500 * n).toLocaleString('en-IN'), ultra: (n) => (750 * n).toLocaleString('en-IN') } },
   { label: 'Your own sending domains', values: { basic: '1', professional: '3', ultra: '10' } },
   { label: 'Drona AI: replies and quote drafts', values: { basic: false, professional: (n) => `${40 * n} a day`, ultra: (n) => `${100 * n} a day` } },
   { label: 'Automatic messages on any date', values: { basic: false, professional: true, ultra: true } },

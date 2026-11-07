@@ -52,12 +52,13 @@ describe('a new company starts on a free trial of TRIAL_DAYS days', () => {
     expect(Number(brand.match(/trialDays: (\d+)/)![1])).toBe(env.TRIAL_DAYS);
   });
 
-  it('only paid companies (or the operator override) lose or keep WhatsApp Web accordingly', () => {
+  it('WhatsApp from their own number: trials and paid plans have it, an ended trial doesn’t (unless the operator allows it)', () => {
     const later = new Date(Date.now() + DAY);
     const past = new Date(Date.now() - DAY);
     expect(whatsappWebAllowed({ plan: 'TRIAL', trialEndsAt: later, whatsappWebEnabled: false })).toBe(true);
     expect(whatsappWebAllowed({ plan: 'TRIAL', trialEndsAt: past, whatsappWebEnabled: false })).toBe(false);
-    expect(whatsappWebAllowed({ plan: 'PAID', trialEndsAt: null, whatsappWebEnabled: false })).toBe(false);
+    expect(whatsappWebAllowed({ plan: 'PAID', trialEndsAt: null, whatsappWebEnabled: false })).toBe(true);
+    expect(whatsappWebAllowed({ plan: 'TRIAL', trialEndsAt: past, whatsappWebEnabled: true })).toBe(true);
     expect(whatsappWebAllowed({ plan: 'PAID', trialEndsAt: null, whatsappWebEnabled: true })).toBe(true);
     expect(trialActive({ plan: 'TRIAL', trialEndsAt: past, whatsappWebEnabled: false })).toBe(false);
   });

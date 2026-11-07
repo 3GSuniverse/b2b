@@ -32,6 +32,7 @@ import { useFields } from '@/components/contacts/contact-sheet';
 import { DeviceToggle, EmailPreview, type Device } from '@/components/email/email-frame';
 import { EmailThumbnail } from '@/components/email/thumbnail';
 import { MergeTagMenu, VisualEditor } from '@/components/email/visual-editor';
+import { SendNowButton } from '@/components/campaigns/send-button';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Badge, PageHeader, Panel, Skeleton } from '@/components/ui/display';
 import { Field, Input, NativeSelect, Textarea } from '@/components/ui/field';
@@ -590,14 +591,15 @@ function Composer({ id }: { id: string }) {
                     <Clock3 className="h-4 w-4" />
                     Schedule for {when ? dateTime(toIso(when, tz)) : '…'}
                   </Button>
-                  {!canSend && firstError && <p className="text-xs text-warm-strong">{firstError.title}</p>}
+                  {!canSend && firstError && (
+                    <p className="text-xs text-warm-strong">
+                      {firstError.title} {firstError.note}
+                    </p>
+                  )}
                 </div>
               </Popover>
             )}
-            <Button variant="primary" disabled={!canSend} onClick={() => setConfirmSend(true)}>
-              <Send className="h-4 w-4" />
-              Send now
-            </Button>
+            <SendNowButton canSend={canSend} checks={checks} onSend={() => setConfirmSend(true)} />
           </div>
         </div>
         {c.status === 'SCHEDULED' && c.scheduledAt && (
