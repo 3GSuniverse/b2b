@@ -8,6 +8,8 @@ import { setQr, subscribeCommands, type WhatsAppCommand } from './bus.js';
 import { fromJid, toJid, WhatsAppError, type WhatsAppGateway, type WhatsAppMedia } from './gateway.js';
 import type { AnyMessageContent } from 'baileys';
 import { onConnected, onEnded, onIncoming, onLinkFailed, onQr, onReceipt } from './service.js';
+import { extractContent, messageTime } from '../inbox/extract.js';
+import { recordFromPhone, recordIncoming } from '../inbox/service.js';
 
 const log = logger.child({ module: 'whatsapp' });
 
@@ -137,17 +139,29 @@ export class WhatsAppManager implements WhatsAppGateway {
 
       // Replies: "STOP" unsubscribes
       sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return;
         for (const m of messages) {
-          if (m.key.fromMe) continue;
-          const text = m.message?.conversation ?? m.message?.extendedTextMessage?.text ?? '';
+          // One-to-one chats only: no groups, status updates or channels
           const jid = [m.key.remoteJid, m.key.remoteJidAlt].find((j) => j?.endsWith('@s.whatsapp.net'));
-          if (!text || !jid) continue;
+          if (!jid) continue;
+          const content = extractContent(m.message);
+          if (!content) continue;
+          const at = messageTime(m.messageTimestamp);
+          const fresh = type === 'notify' || Date.now() - at.getTime() < 10 * 60_000; // not old history
+          if (!fresh) continue;
+          const item = { phone: fromJid(jid), waId: m.key.id ?? null, at, ...content };
           try {
-            const reply = await onIncoming(tenantId, fromJid(jid), text);
-            if (reply) await sock.sendMessage(jid, { text: reply });
+            if (m.key.fromMe) {
+              await recordFromPhone(tenantId, item);
+              continue;
+            }
+            if (type !== 'notify') continue;
+            await recordIncoming(tenantId, item);
+            if (content.text) {
+              const reply = await onIncoming(tenantId, item.phone, content.text);
+              if (reply) await sock.sendMessage(jid, { text: reply });
+            }
           } catch (err) {
-            log.error({ err, tenantId }, 'handling a reply failed');
+            log.error({ err, tenantId }, 'handling a WhatsApp message failed');
           }
         }
       });

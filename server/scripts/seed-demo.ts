@@ -9,6 +9,8 @@
 import { and, eq, sql } from 'drizzle-orm';
 import {
   automations,
+  waChatMessages,
+  waChats,
   campaigns,
   contacts,
   customFields,
@@ -389,6 +391,29 @@ async function main() {
     await db.insert(messages).values(
       waPeople.map((c, i) => ({ tenantId, campaignId: waCamp!.id, contactId: c.id, sentById: staff[1]!.id, channel: 'WHATSAPP' as const, toAddress: c.phone!, status: 'DELIVERED' as const, queuedAt: daysAgo(6, 11), sentAt: daysAgo(6, 11), deliveredAt: daysAgo(6, 11), firstOpenedAt: i % 3 ? daysAgo(6, 13) : null })),
     );
+  }
+  // A few customers replied to the houseboat offer: the WhatsApp inbox
+  {
+    const { recordIncoming } = await import('../src/modules/inbox/service.js');
+    const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000);
+    const people = waPeople.slice(0, 5);
+    const say = async (i: number, text: string, minutesAgo: number, out?: { by?: string }) => {
+      const p = people[i];
+      if (!p?.phone) return;
+      if (!out) return recordIncoming(tenantId, { phone: p.phone, text, waId: `seed-in-${i}-${minutesAgo}`, at: at(minutesAgo) });
+      const [chat] = await db.select({ id: waChats.id }).from(waChats).where(and(eq(waChats.tenantId, tenantId), eq(waChats.phone, p.phone)));
+      if (!chat) return;
+      await db.insert(waChatMessages).values({ tenantId, chatId: chat.id, direction: 'OUT', source: out.by ? 'reply' : 'phone', body: text, sentById: out.by ?? null, waId: `seed-out-${i}-${minutesAgo}`, at: at(minutesAgo) });
+      await db.update(waChats).set({ lastMessageAt: at(minutesAgo), lastPreview: text, lastDirection: 'OUT', unread: 0 }).where(eq(waChats.id, chat.id));
+    };
+    await say(0, 'Namaste 🙏 Is the houseboat available on 20 December? We are 4 adults.', 600);
+    await say(0, 'Namaste Ravi garu 🙏 Yes, 20 December is available. For 4 adults the 3-night package is ₹74,000 including breakfast and dinner. Shall I block it for you?', 590, { by: staff[0]!.id });
+    await say(0, 'Yes please. How much advance?', 35);
+    await say(1, 'Price for 2 people with a child of 6?', 180);
+    await say(2, 'Can we do it in January instead?', 1500);
+    await say(2, 'Sure, sending you January dates now.', 1490, {});
+    await say(3, 'Thank you, we will think and let you know', 2900);
+    await say(4, 'STOP', 4000);
   }
   await db.insert(campaigns).values({ tenantId, name: 'Char Dham 2027 dates', channel: 'WHATSAPP', status: 'DRAFT', text: 'Namaste {first_name|there} 🙏\n\nChar Dham yatra 2027 dates are out.', createdById: staff[0]!.id });
 

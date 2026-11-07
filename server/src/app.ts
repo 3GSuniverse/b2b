@@ -28,6 +28,7 @@ import { razorpayRoutes } from './modules/payments/razorpay.js';
 import { contactRoutes } from './modules/contacts/routes.js';
 import { notificationRoutes } from './modules/notifications/service.js';
 import { channelRoutes } from './modules/overview/channel.js';
+import { inboxRoutes } from './modules/inbox/routes.js';
 import { overviewRoutes } from './modules/overview/service.js';
 import { importRoutes } from './modules/imports/routes.js';
 import { fieldRoutes } from './modules/contacts/fields.js';
@@ -136,6 +137,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(razorpayRoutes);
   await app.register(overviewRoutes);
   await app.register(channelRoutes);
+  await app.register(inboxRoutes);
   await app.register(whatsappRoutes);
   await app.register(notificationRoutes);
   await app.register(unsubscribeRoutes);

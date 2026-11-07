@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Clock3,
   FileText,
+  Inbox,
   Globe,
   LayoutDashboard,
   Link2,
@@ -32,6 +33,7 @@ import { CountUp, useMounted } from '@/lib/motion';
 import { useSession } from '@/lib/session';
 import type { Communication } from '@/lib/types';
 import { AutomationsPage } from './automations';
+import { InboxTab, useInboxUnread } from './inbox';
 import { CampaignsPage } from './campaigns';
 import { WorkingForYou } from './overview';
 import { Domains, Senders } from './settings';
@@ -89,7 +91,7 @@ const THEME = {
   },
 } as const;
 
-type TabDef = { id: string; label: string; icon: LucideIcon; show?: boolean; count?: number };
+type TabDef = { id: string; label: string; icon: LucideIcon; show?: boolean; count?: number; hot?: boolean };
 
 function useHub(channel: Channel) {
   return useQuery({ queryKey: ['channel', channel], queryFn: () => api.get<Hub>(`/api/channels/${channel.toLowerCase()}`), refetchInterval: 60_000 });
@@ -101,29 +103,31 @@ function HubFrame({ channel, tabs, tab, action, stats, children }: { channel: Ch
   const t = THEME[channel];
   const Icon = t.icon;
   const base = channel === 'EMAIL' ? '/email' : '/whatsapp';
+  // The inbox needs the room: the band shrinks to a slim title bar there
+  const compact = tab === 'inbox';
   return (
-    <div className="flex flex-col gap-5">
-      <section className={cn('relative overflow-hidden rounded-[24px] px-5 pb-5 pt-6 text-white shadow-[0_18px_40px_-24px_rgb(20_10_80/0.6)] sm:px-7 sm:pt-7', t.band)}>
+    <div className={cn('flex flex-col', compact ? 'gap-3' : 'gap-5')}>
+      <section className={cn('relative overflow-hidden text-white shadow-[0_18px_40px_-24px_rgb(20_10_80/0.6)] transition-[padding] duration-300', compact ? 'rounded-[18px] px-4 py-3 sm:px-5' : 'rounded-[24px] px-5 pb-5 pt-6 sm:px-7 sm:pt-7', t.band)}>
         <Icon aria-hidden className="hub-drift pointer-events-none absolute -right-6 -top-8 h-48 w-48 rotate-[-14deg] text-white/[0.09] sm:h-60 sm:w-60" strokeWidth={1.2} />
-        <div className="relative flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-4">
-            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[18px] bg-white/15 ring-1 ring-white/25 backdrop-blur-sm">
-              <Icon className="h-7 w-7" />
+        <div className={cn('relative flex flex-wrap justify-between gap-4', compact ? 'items-center' : 'items-start')}>
+          <div className={cn('flex min-w-0 items-center', compact ? 'gap-3' : 'gap-4')}>
+            <span className={cn('grid shrink-0 place-items-center bg-white/15 ring-1 ring-white/25 backdrop-blur-sm', compact ? 'h-10 w-10 rounded-[13px]' : 'h-14 w-14 rounded-[18px]')}>
+              <Icon className={compact ? 'h-5 w-5' : 'h-7 w-7'} />
             </span>
             <div className="flex min-w-0 flex-col gap-1">
-              <h1 className="text-[28px] font-extrabold leading-none tracking-[-0.03em]">{t.name}</h1>
-              <p className="max-w-[56ch] text-[14px] leading-snug text-white/80">{t.blurb}</p>
+              <h1 className={cn('font-extrabold leading-none tracking-[-0.03em]', compact ? 'text-[22px]' : 'text-[28px]')}>{t.name}</h1>
+              {!compact && <p className="max-w-[56ch] text-[14px] leading-snug text-white/80">{t.blurb}</p>}
             </div>
           </div>
-          {action}
+          {!compact && action}
         </div>
-        <div className="relative mt-6 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">{stats}</div>
+        {!compact && <div className="relative mt-6 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">{stats}</div>}
       </section>
 
       <nav aria-label={`${t.name} sections`} className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
         {tabs
           .filter((x) => x.show !== false)
-          .map(({ id, label, icon: TabIcon, count }) => {
+          .map(({ id, label, icon: TabIcon, count, hot }) => {
             const active = tab === id;
             return (
               <NavLink
@@ -137,7 +141,7 @@ function HubFrame({ channel, tabs, tab, action, stats, children }: { channel: Ch
               >
                 <TabIcon className={cn('h-4 w-4 transition-transform duration-300 group-hover:-rotate-6', active ? '' : 'text-muted')} />
                 {label}
-                {!!count && <span className={cn('tnum rounded-full px-1.5 text-[11px]', active ? 'bg-white/70' : 'bg-line-soft text-ink-2')}>{count}</span>}
+                {!!count && <span className={cn('tnum rounded-full px-1.5 text-[11px]', hot ? 'bg-success font-bold text-white' : active ? 'bg-white/70' : 'bg-line-soft text-ink-2')}>{count}</span>}
               </NavLink>
             );
           })}
@@ -346,6 +350,7 @@ function WhatsAppReady() {
 }
 
 function OverviewTab({ h, channel }: { h: Hub | undefined; channel: Channel }) {
+  const unreadChats = useInboxUnread().data?.chats ?? 0;
   const base = channel === 'EMAIL' ? '/email' : '/whatsapp';
   const actions =
     channel === 'EMAIL'
@@ -359,7 +364,7 @@ function OverviewTab({ h, channel }: { h: Hub | undefined; channel: Channel }) {
           { to: '/campaigns/new?channel=WHATSAPP', icon: Megaphone, title: 'Send a broadcast', note: 'One WhatsApp message to many customers', tone: 'bg-success-soft text-success' },
           { to: '/automations/new?channel=WHATSAPP&recipe=birthday', icon: Clock3, title: 'Automatic message', note: 'Birthday wishes and date reminders on WhatsApp', tone: 'bg-highlight-soft text-warm' },
           { to: '/campaigns/new?channel=WHATSAPP&to=temporary', icon: ClipboardList, title: 'Temporary list', note: 'Paste or upload numbers. They aren’t saved.', tone: 'bg-blue-soft text-blue-ink' },
-          { to: '/whatsapp/setup', icon: Link2, title: 'Linked number', note: 'Link or change your agency’s WhatsApp', tone: 'bg-plum-soft text-plum-ink' },
+          { to: '/whatsapp/inbox', icon: Inbox, title: 'Inbox', note: unreadChats ? `${unreadChats} ${unreadChats === 1 ? 'person is' : 'people are'} waiting for a reply` : 'Replies from customers, in one place', tone: 'bg-plum-soft text-plum-ink' },
         ];
   return (
     <>
@@ -439,8 +444,10 @@ export function WhatsAppHubPage() {
   const { tab = 'home' } = useParams();
   const { tenant } = useSession();
   const h = useHub('WHATSAPP');
+  const unread = useInboxUnread();
   const tabs: TabDef[] = [
     { id: 'home', label: 'Overview', icon: LayoutDashboard },
+    { id: 'inbox', label: 'Inbox', icon: Inbox, count: unread.data?.chats, hot: true },
     { id: 'broadcasts', label: 'Broadcasts', icon: Megaphone, count: h.data ? h.data.broadcasts.drafts + h.data.broadcasts.scheduled : undefined },
     { id: 'automatic', label: 'Automatic messages', icon: Clock3, count: h.data?.automations.on },
     { id: 'setup', label: 'Linked number', icon: Smartphone },
@@ -468,6 +475,7 @@ export function WhatsAppHubPage() {
   return (
     <HubFrame channel="WHATSAPP" tab={tab} tabs={tabs} action={<BandButton to="/campaigns/new?channel=WHATSAPP">New WhatsApp broadcast</BandButton>} stats={bandStats(h.data, 'WHATSAPP')}>
       {tab === 'home' && <OverviewTab h={h.data} channel="WHATSAPP" />}
+      {tab === 'inbox' && <InboxTab />}
       {tab === 'broadcasts' && <CampaignsPage channel="WHATSAPP" embedded />}
       {tab === 'automatic' && <AutomationsPage channel="WHATSAPP" embedded />}
       {tab === 'setup' && <WhatsAppSettings heading={false} />}

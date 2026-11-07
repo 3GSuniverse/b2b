@@ -1096,6 +1096,49 @@ export const listMembershipsRelations = relations(listMemberships, ({ one }) => 
   contact: one(contacts, { fields: [listMemberships.contactId], references: [contacts.id] }),
 }));
 
+// ---------------------------------------------------------------------
+// WhatsApp inbox: conversations with customers on the agency's linked number.
+// A chat starts when a customer writes (or an employee messages someone from the phone);
+// the broadcast or reminder they replied to is copied in so the thread reads in order.
+export const waChats = pgTable(
+  'wa_chats',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    phone: text().notNull(), // E.164
+    lastMessageAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    lastPreview: text(),
+    lastDirection: text().$type<'IN' | 'OUT'>(),
+    unread: integer().notNull().default(0),
+    doneAt: timestamp({ withTimezone: true }), // marked as handled; a new message reopens it
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex().on(t.tenantId, t.phone), index().on(t.tenantId, t.lastMessageAt)],
+);
+
+export const waChatMessages = pgTable(
+  'wa_chat_messages',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    chatId: text()
+      .notNull()
+      .references(() => waChats.id, { onDelete: 'cascade' }),
+    direction: text().$type<'IN' | 'OUT'>().notNull(),
+    // customer: they wrote; reply: an employee answered from Dhrona; phone: sent from the phone itself
+    source: text().$type<'customer' | 'reply' | 'broadcast' | 'automatic' | 'phone'>().notNull(),
+    body: text(),
+    mediaKind: text(), // image, video, document, audio, sticker, location, contact
+    mediaName: text(),
+    waId: text(), // WhatsApp's id for the message, to avoid recording it twice
+    messageId: text().references(() => messages.id, { onDelete: 'set null' }), // sent through Dhrona
+    sentById: text().references(() => users.id, { onDelete: 'set null' }),
+    at: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex().on(t.tenantId, t.waId), index().on(t.chatId, t.at)],
+);
+
 export const campaignsRelations = relations(campaigns, ({ one, many }) => ({
   tenant: one(tenants, { fields: [campaigns.tenantId], references: [tenants.id] }),
   sender: one(senders, { fields: [campaigns.senderId], references: [senders.id] }),

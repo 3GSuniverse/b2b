@@ -9,6 +9,7 @@ import { bumpCounter } from '../sending/counters.js';
 import { DeferSend, finalizeMessage, maybeCompleteCampaign, type SendOutcome } from '../sending/send-message.js';
 import { getQr } from './bus.js';
 import { syncAutomationSend } from '../automations/engine.js';
+import { recordSent } from '../inbox/service.js';
 import { trialEnded, trialWhatsAppPerDay, whatsappWebAllowed } from '../plans/entitlements.js';
 import { getWhatsAppGateway, WhatsAppError, type WhatsAppGateway } from './gateway.js';
 import { loadFiles, whatsappKind, type AttachmentFile } from '../attachments/service.js';
@@ -340,6 +341,8 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
   });
   if (msg.campaignId) await maybeCompleteCampaign(msg.campaignId);
   if (msg.automationId) await syncAutomationSend(msg.id, 'SENT');
+  // Into the customer's conversation in the inbox, if they have one (never fails the send)
+  await recordSent(msg, text, id).catch(() => undefined);
   return 'sent';
 }
 

@@ -43,9 +43,15 @@ export function getWhatsAppQueue(): Queue<WhatsAppJob> {
   return whatsappQueue;
 }
 
-export async function enqueueWhatsApp(messageIds: string[]): Promise<void> {
+/**
+ * Bulk sends (broadcasts, reminders) wait behind replies to customers: BullMQ runs jobs without a
+ * priority first, so replies go without one and everything else gets a low priority.
+ */
+export async function enqueueWhatsApp(messageIds: string[], opts: { urgent?: boolean } = {}): Promise<void> {
   if (messageIds.length === 0) return;
-  await getWhatsAppQueue().addBulk(messageIds.map((messageId) => ({ name: 'send', data: { kind: 'message' as const, messageId }, opts: { jobId: messageId } })));
+  await getWhatsAppQueue().addBulk(
+    messageIds.map((messageId) => ({ name: 'send', data: { kind: 'message' as const, messageId }, opts: { jobId: messageId, ...(opts.urgent ? {} : { priority: 10 }) } })),
+  );
 }
 
 export async function enqueueWhatsAppTest(tenantId: string, to: string, text: string, attachments: AttachmentRef[] = []) {

@@ -58,8 +58,15 @@ export function Logo({ className }: { className?: string }) {
 }
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
-  const { user } = useSession();
+  const { user, tenant } = useSession();
   const section = useCurrentNavSection();
+  // Customers waiting for a reply on WhatsApp
+  const waUnread = useQuery({
+    queryKey: ['inbox', 'unread'],
+    queryFn: () => api.get<{ chats: number; messages: number }>('/api/inbox/unread'),
+    refetchInterval: 15_000,
+    enabled: !!tenant.features?.whatsapp,
+  }).data?.chats;
   const nav = NAV.filter((x) => !x.roles || x.roles.includes(user.role as Role));
   // The agency group needs a heading only when it has something in it
   const groups = nav.map((x, i) => (x.roles && !nav.slice(0, i).some((y) => y.roles) ? { ...x, group: 'Your agency' } : x));
@@ -98,7 +105,13 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
             <NavLink to={to} end={end} onClick={onNavigate} data-lit={lit} className={item(lit)}>
               <Icon className={cn(icon, anim, lit && 'text-highlight')} aria-hidden />
               {label}
-              {dot && <span className="ml-auto h-2 w-2 rounded-full opacity-80" style={{ background: dot }} aria-hidden />}
+              {to === '/whatsapp' && waUnread ? (
+                <span className="tnum ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-[#25c48a] px-1.5 text-[11px] font-bold text-white" aria-label={`${waUnread} unread`}>
+                  {waUnread}
+                </span>
+              ) : (
+                dot && <span className="ml-auto h-2 w-2 rounded-full opacity-80" style={{ background: dot }} aria-hidden />
+              )}
             </NavLink>
           </Fragment>
         );

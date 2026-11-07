@@ -19,6 +19,7 @@ export function AddContactSheet({
   onCreated,
   defaultListIds,
   forChannel,
+  prefill,
 }: {
   open: boolean;
   onClose: () => void;
@@ -28,11 +29,13 @@ export function AddContactSheet({
   defaultListIds?: string[];
   /** Opened from a broadcast: say what this customer needs to get it */
   forChannel?: 'EMAIL' | 'WHATSAPP';
+  /** Opened from a WhatsApp chat: their number is already known */
+  prefill?: { phone?: string };
 }) {
   const [f, setF] = useState(EMPTY);
   const fields = useFields();
   useEffect(() => {
-    if (open) setF({ ...EMPTY, listIds: defaultListIds ?? [] });
+    if (open) setF({ ...EMPTY, ...(prefill?.phone ? { phone: prefill.phone } : {}), listIds: defaultListIds ?? [] });
     // Only when it opens: the lists picked at that moment
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
