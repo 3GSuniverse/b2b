@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Bold, Braces, CalendarClock, Check, Clock3, FlaskConical, Italic, Loader2, MessageCircle, Send, Strikethrough, TriangleAlert, Users } from 'lucide-react';
+import { ArrowLeft, Bold, Braces, CalendarClock, Check, Clock3, FlaskConical, Italic, Loader2, MessageCircle, Paperclip, Send, Strikethrough, TriangleAlert, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -122,7 +122,10 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
   const saved = useRef<Draft>(draft);
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved');
   const [version, setVersion] = useState(0);
-  const [open, setOpen] = useState<'to' | 'from' | 'message' | null>(!c.text || /\[[A-Z]/.test(c.text) ? 'message' : null);
+  // Opens the first part that still needs something, in letter order: From, To, Message, Attachments
+  const [open, setOpen] = useState<'to' | 'from' | 'message' | 'files' | null>(
+    c.audience?.mode === 'temporary' && !c.audience.addresses?.length ? 'to' : !c.text || /\[[A-Z]/.test(c.text) ? 'message' : null,
+  );
   const [confirmSend, setConfirmSend] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const set = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }));
@@ -304,7 +307,35 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
         <div className="flex flex-col gap-3">
           <Step
+            icon={<MessageCircle className="h-4 w-4" />}
+            number={1}
+            next={{ label: 'Next: To', onClick: () => setOpen('to') }}
+            title="From"
+            summary={linked ? `${wa.data?.displayName ? `${wa.data.displayName}, ` : ''}${formatPhone(wa.data?.phone)}` : 'Link your WhatsApp number'}
+            done={linked}
+            error={!linked}
+            open={open === 'from'}
+            onToggle={() => setOpen(open === 'from' ? null : 'from')}
+          >
+            {linked ? (
+              <p className="text-sm leading-relaxed text-muted">
+                Sends from your linked number, one message every {wa.data?.intervalSeconds} seconds, up to {n(wa.data?.dailyLimit)} a day.
+                {recipients > 0 && ` This campaign takes about ${hours < 1 ? `${Math.max(1, Math.round(hours * 60))} minutes` : `${Math.round(hours * 10) / 10} hours`}${recipients > (wa.data?.dailyLimit ?? 0) ? ' a day, over several days' : ''}.`}
+              </p>
+            ) : (
+              <div className="flex flex-col items-start gap-3">
+                <p className="text-sm text-muted">Link the WhatsApp number you want to send from. It takes a minute: scan a QR code with the phone.</p>
+                <LinkButton to="/whatsapp/setup" variant="primary" size="sm">
+                  Link WhatsApp
+                </LinkButton>
+              </div>
+            )}
+          </Step>
+
+          <Step
             icon={<Users className="h-4 w-4" />}
+            number={2}
+            next={{ label: 'Next: Message', onClick: () => setOpen('message') }}
             title="To"
             summary={
               <>
@@ -320,43 +351,12 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
           </Step>
 
           <Step
-            icon={<MessageCircle className="h-4 w-4" />}
-            title="From"
-            summary={linked ? `${wa.data?.displayName ? `${wa.data.displayName}, ` : ''}${formatPhone(wa.data?.phone)}` : 'Link your WhatsApp number'}
-            done={linked}
-            error={!linked}
-            open={open === 'from'}
-            onToggle={() => setOpen(open === 'from' ? null : 'from')}
-          >
-            {linked ? (
-              <p className="text-sm leading-relaxed text-muted">
-                Sends from the number linked in Settings, one message every {wa.data?.intervalSeconds} seconds, up to {n(wa.data?.dailyLimit)} a day.
-                {recipients > 0 && ` This campaign takes about ${hours < 1 ? `${Math.max(1, Math.round(hours * 60))} minutes` : `${Math.round(hours * 10) / 10} hours`}${recipients > (wa.data?.dailyLimit ?? 0) ? ' a day, over several days' : ''}.`}
-              </p>
-            ) : (
-              <div className="flex flex-col items-start gap-3">
-                <p className="text-sm text-muted">Link the WhatsApp number you want to send from. It takes a minute: scan a QR code with the phone.</p>
-                <LinkButton to="/whatsapp/setup" variant="primary" size="sm">
-                  Link WhatsApp
-                </LinkButton>
-              </div>
-            )}
-          </Step>
-
-          <Step
             icon={<Braces className="h-4 w-4" />}
+            number={3}
+            next={{ label: 'Next: Attachments', onClick: () => setOpen('files') }}
             title="Message"
             summary={
-              draft.text ? (
-                <>
-                  <PrettyTags text={draft.text.split('\n')[0]!.slice(0, 80)} />
-                  {draft.attachments.length > 0 && <span className="font-normal text-muted"> · {describeFiles(draft.attachments)}</span>}
-                </>
-              ) : draft.attachments.length ? (
-                describeFiles(draft.attachments)
-              ) : (
-                'Write the message'
-              )
+              draft.text ? <PrettyTags text={draft.text.split('\n')[0]!.slice(0, 80)} /> : draft.attachments.length ? 'Only files, no words' : 'Write the message'
             }
             done={(!!draft.text.trim() || draft.attachments.length > 0) && !errorFor(['content', 'placeholders', 'unknown_tags'])}
             error={errorFor(['content', 'placeholders', 'unknown_tags'])}
@@ -368,11 +368,21 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
               <p className="text-xs leading-relaxed text-muted">
                 Keep it short and personal, like a message you’d type yourself. Ending with “Reply STOP to stop these messages” lowers the chance of being reported.
               </p>
-              <div className="flex flex-col gap-2 border-t border-line-soft pt-4">
-                <span className="text-[13px] font-semibold">Photos, videos and files</span>
-                <AttachmentPicker channel="WHATSAPP" value={draft.attachments} onChange={(attachments) => set({ attachments })} />
-              </div>
             </div>
+          </Step>
+
+          <Step
+            icon={<Paperclip className="h-4 w-4" />}
+            number={4}
+            next={{ label: 'Done: check and send', onClick: () => setOpen(null) }}
+            title="Attachments"
+            summary={draft.attachments.length ? describeFiles(draft.attachments) : 'Optional: photos, videos, brochure, itinerary'}
+            done={draft.attachments.length > 0 && !errorFor(['attachments'])}
+            error={errorFor(['attachments'])}
+            open={open === 'files'}
+            onToggle={() => setOpen(open === 'files' ? null : 'files')}
+          >
+            <AttachmentPicker channel="WHATSAPP" value={draft.attachments} onChange={(attachments) => set({ attachments })} />
           </Step>
         </div>
 

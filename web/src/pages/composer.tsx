@@ -8,6 +8,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ArrowRight,
   Circle,
   Clock3,
   FlaskConical,
@@ -180,20 +181,65 @@ const toDraft = (c: Campaign): Draft => ({
   attachments: c.attachments ?? [],
 });
 
-export function Step({ icon, title, summary, done, open, onToggle, children, error }: { icon: ReactNode; title: string; summary: ReactNode; done: boolean; open: boolean; onToggle: () => void; children: ReactNode; error?: boolean }) {
+/**
+ * One part of a broadcast, in the order of a letter: 1 From, 2 To, 3 Subject, 4 Message, 5 Attachments.
+ * Each shows its number (a tick once done) and, when open, a button to the next part.
+ */
+export function Step({
+  icon,
+  number,
+  title,
+  summary,
+  done,
+  open,
+  onToggle,
+  children,
+  error,
+  next,
+}: {
+  icon: ReactNode;
+  number?: number;
+  title: string;
+  summary: ReactNode;
+  done: boolean;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+  error?: boolean;
+  next?: { label: string; onClick: () => void };
+}) {
   return (
     <Panel className={cn('overflow-hidden transition-shadow', open && 'shadow-[var(--shadow-lift)]')}>
       <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-sunken sm:px-6">
-        <span className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-full', done ? 'bg-accent-soft text-accent' : error ? 'bg-warm-soft text-warm' : 'bg-line-soft text-muted')}>
-          {done ? <Check className="h-4 w-4" strokeWidth={2.6} /> : icon}
+        <span
+          className={cn(
+            'grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold transition-colors',
+            done ? 'bg-accent-soft text-accent' : error ? 'bg-warm-soft text-warm' : open ? 'bg-accent text-on-primary' : 'bg-line-soft text-muted',
+          )}
+        >
+          {done ? <Check className="h-4 w-4" strokeWidth={2.6} /> : (number ?? icon)}
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-[13px] font-semibold text-muted">{title}</span>
+          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-muted">
+            <span className="[&>svg]:h-3.5 [&>svg]:w-3.5">{number !== undefined && icon}</span>
+            {title}
+          </span>
           <span className="truncate text-sm font-medium text-ink">{summary}</span>
         </span>
         <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', open && 'rotate-180')} aria-hidden />
       </button>
-      {open && <div className="border-t border-line-soft px-5 py-5 sm:px-6">{children}</div>}
+      {open && (
+        <div className="border-t border-line-soft px-5 py-5 sm:px-6">
+          {children}
+          {next && (
+            <div className="mt-5 flex justify-end border-t border-line-soft pt-4">
+              <Button size="sm" variant="primary" onClick={next.onClick}>
+                {next.label} <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </Panel>
   );
 }
@@ -331,7 +377,8 @@ function Composer({ id }: { id: string }) {
       const d = toDraft(c);
       saved.current = d;
       setDraft(d);
-      setOpen(!d.audience?.listIds?.length && !d.audience?.filters?.length ? 'to' : !d.subject ? 'subject' : null);
+      // Open the first part that still needs something, in letter order
+      setOpen(!d.senderId ? 'from' : d.audience?.mode === 'temporary' && !d.audience.addresses?.length ? 'to' : !d.subject ? 'subject' : null);
     }
   }, [c, draft]);
 
@@ -570,26 +617,12 @@ function Composer({ id }: { id: string }) {
       </header>
 
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-        {/* Left: the four decisions */}
+        {/* Left: the parts of the letter, in order */}
         <div className="flex flex-col gap-3">
           <Step
-            icon={<Users className="h-4 w-4" />}
-            title="To"
-            summary={
-              <>
-                {audienceText} <span className="tnum font-normal text-muted">({n(recipients)} {recipients === 1 ? 'person' : 'people'})</span>
-              </>
-            }
-            done={recipients > 0 && !errorFor(['audience', 'quota'])}
-            error={errorFor(['audience', 'quota'])}
-            open={open === 'to'}
-            onToggle={() => setOpen(open === 'to' ? null : 'to')}
-          >
-            <AudienceEditor allowTemporary value={draft.audience} onChange={(a) => set({ audience: a })} />
-          </Step>
-
-          <Step
             icon={<Mail className="h-4 w-4" />}
+            number={1}
+            next={{ label: 'Next: To', onClick: () => setOpen('to') }}
             title="From"
             summary={sender ? `${sender.fromName} <${sender.fromEmail}>` : 'Choose who it’s from'}
             done={!!sender?.readyToSend}
@@ -636,7 +669,27 @@ function Composer({ id }: { id: string }) {
           </Step>
 
           <Step
+            icon={<Users className="h-4 w-4" />}
+            number={2}
+            next={{ label: 'Next: Subject', onClick: () => setOpen('subject') }}
+            title="To"
+            summary={
+              <>
+                {audienceText} <span className="tnum font-normal text-muted">({n(recipients)} {recipients === 1 ? 'person' : 'people'})</span>
+              </>
+            }
+            done={recipients > 0 && !errorFor(['audience', 'quota'])}
+            error={errorFor(['audience', 'quota'])}
+            open={open === 'to'}
+            onToggle={() => setOpen(open === 'to' ? null : 'to')}
+          >
+            <AudienceEditor allowTemporary value={draft.audience} onChange={(a) => set({ audience: a })} />
+          </Step>
+
+          <Step
             icon={<Pencil className="h-4 w-4" />}
+            number={3}
+            next={{ label: 'Next: Message', onClick: () => setOpen('content') }}
             title="Subject"
             summary={draft.subject ? <PrettyTags text={draft.subject} /> : 'Write a subject line'}
             done={!!draft.subject && !errorFor(['subject', 'unknown_tags'])}
@@ -656,7 +709,9 @@ function Composer({ id }: { id: string }) {
 
           <Step
             icon={<LayoutTemplate className="h-4 w-4" />}
-            title="Content"
+            number={4}
+            next={{ label: 'Next: Attachments', onClick: () => setOpen('files') }}
+            title="Message"
             summary={draft.html ? (errorFor(['content']) ? 'Needs content' : checks?.some((x) => x.id === 'placeholders') ? 'Design chosen, placeholders left to replace' : 'Design ready') : 'Pick a design'}
             done={!!draft.html && !checks?.some((x) => x.id === 'placeholders' || x.id === 'content')}
             error={errorFor(['content'])}
@@ -684,6 +739,8 @@ function Composer({ id }: { id: string }) {
 
           <Step
             icon={<Paperclip className="h-4 w-4" />}
+            number={5}
+            next={{ label: 'Done: check and send', onClick: () => setOpen(null) }}
             title="Attachments"
             summary={draft.attachments.length ? describeFiles(draft.attachments) : 'Optional: brochure, itinerary, photos'}
             done={draft.attachments.length > 0 && !errorFor(['attachments'])}
