@@ -56,8 +56,8 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   AI_PROVIDER: z.enum(['anthropic', 'openai']).optional(),
   AI_MODEL: z.string().optional(), // default: claude-sonnet-5-5 or gpt-5-mini
-  AI_DRAFTS_PER_DAY: z.coerce.number().int().min(0).default(40), // per company
-  AI_REPLIES_PER_DAY: z.coerce.number().int().min(0).default(300), // Drona AI suggested replies, per company
+  // Drona AI answers (replies and quote drafts) a day during a free trial; paid plans get theirs from the plan
+  TRIAL_AI_PER_DAY: z.coerce.number().int().min(0).default(30),
 });
 
 const parsed = schema.safeParse(process.env);

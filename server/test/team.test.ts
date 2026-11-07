@@ -70,10 +70,9 @@ describe('agency owner and employees', () => {
     const sixth = await c.post('/api/agency/employees', { name: 'E6', username: 'emp6', password: 'password-1' });
     expect(sixth.json().error).toBe('seats_full');
 
-    await db.update(tenants).set({ plan: 'PAID', planId: 'team10', paidUntil: new Date(Date.now() + 20 * 86_400_000) }).where(eq(tenants.id, owner.json.tenant.id));
+    await db.update(tenants).set({ plan: 'PAID', planId: 'basic', seats: 6, paidUntil: new Date(Date.now() + 20 * 86_400_000) }).where(eq(tenants.id, owner.json.tenant.id));
     expect((await c.post('/api/agency/employees', { name: 'E6', username: 'emp6', password: 'password-1' })).statusCode).toBe(201);
-    // With 6 logins, the 5-login plan can't be bought
-    expect((await c.get('/api/billing')).json().options.team5.month).toMatchObject({ ok: false, reason: 'too_small' });
+    expect((await c.post('/api/agency/employees', { name: 'E7', username: 'emp7', password: 'password-1' })).json().error).toBe('seats_full');
   });
 
   it('the owner can change the agency ID; it must be free', async () => {

@@ -1,13 +1,28 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { and, desc, eq, gt, isNotNull, lte } from 'drizzle-orm';
+import { and, desc, eq, gt, isNotNull, isNull, lte } from 'drizzle-orm';
 import { env } from '../../config/env.js';
 import { auditLogs, billingPayments, tenants, type BillingPayment } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { logger } from '../../lib/logger.js';
 import { notify } from '../notifications/service.js';
-import { BILLING_PLANS, isPlanId, nextPeriod, pricePaise, upgradePaise, type Period, type PlanId } from './plans.js';
+import { entitlements } from '../plans/entitlements.js';
 import { seatLimit, seatsUsed } from '../team/service.js';
+import {
+  BILLING_PLANS,
+  CHANGE_WINDOW_DAYS,
+  emailsFor,
+  isPlanId,
+  MAX_SEATS,
+  MIN_SEATS,
+  nextPeriod,
+  PLAN_IDS,
+  pricePaise,
+  validSeats,
+  YEAR_MONTHS,
+  type Period,
+  type PlanId,
+} from './plans.js';
 
 /**
  * Agencies paying Dhrona for their plan, through the platform's Razorpay account
@@ -70,44 +85,64 @@ const withGst = (base: number) => {
   return { amount: base + gst, gst };
 };
 
-const lastPaid = (tenantId: string) =>
-  db.query.billingPayments.findFirst({ where: and(eq(billingPayments.tenantId, tenantId), eq(billingPayments.status, 'PAID')), orderBy: [desc(billingPayments.paidAt)] });
+const DAY = 86_400_000;
+const dateIn = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
 
-/** What paying for this plan would mean right now: a new plan, a renewal, or an upgrade for the days left. */
-export async function quote(tenantId: string, plan: PlanId, period: Period, now = new Date()) {
+/** A payment already made for the period after this one (it takes effect when this one ends). */
+const upcoming = (tenantId: string) =>
+  db.query.billingPayments.findFirst({ where: and(eq(billingPayments.tenantId, tenantId), eq(billingPayments.status, 'PAID'), isNull(billingPayments.appliedAt)) });
+
+/**
+ * Where the agency stands for changing its plan: during a paid period the plan and logins are
+ * fixed; payment for the next period (with any plan and logins) opens 5 days before it ends.
+ */
+export async function changeWindow(tenantId: string, now = new Date()) {
   const t = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }))!;
-  const employees = await seatsUsed(tenantId);
-  const p = BILLING_PLANS[plan];
-  if (employees > p.seats) {
-    return { ok: false as const, reason: 'too_small', message: `You have ${employees} employee logins switched on; ${p.name} has room for ${p.seats}. Choose a bigger plan, or switch off logins you don’t need.` };
-  }
-  const active = t.plan === 'PAID' && isPlanId(t.planId) && t.paidUntil && t.paidUntil.getTime() > now.getTime() ? { planId: t.planId as PlanId, paidUntil: t.paidUntil } : null;
-  if (active && plan !== active.planId) {
-    const last = await lastPaid(tenantId);
-    if (BILLING_PLANS[plan].seats < BILLING_PLANS[active.planId].seats) {
-      const daysLeft = (active.paidUntil.getTime() - now.getTime()) / 86_400_000;
-      if (daysLeft > 3) return { ok: false as const, reason: 'downgrade_later', message: `You can move to ${p.name} in the last 3 days before your plan ends, so you don’t lose days you’ve paid for.` };
-      return { ok: true as const, kind: 'NEW' as const, period, ...withGst(pricePaise(plan, period)) };
-    }
-    if (last?.periodStart && isPlanId(last.planId)) {
-      const lastPeriod = last.period as Period;
-      const base = upgradePaise(active.planId, plan, lastPeriod, last.periodStart, active.paidUntil, now);
-      return { ok: true as const, kind: 'UPGRADE' as const, period: lastPeriod, ...withGst(base), until: active.paidUntil };
-    }
-  }
-  return { ok: true as const, kind: active && plan === active.planId ? ('RENEW' as const) : ('NEW' as const), period, ...withGst(pricePaise(plan, period)) };
+  const active = t.plan === 'PAID' && isPlanId(t.planId) && t.paidUntil && t.paidUntil.getTime() > now.getTime() ? t.paidUntil : null;
+  if (!active) return { state: 'open' as const, startsAt: now, opensAt: null, next: null };
+  const next = await upcoming(tenantId);
+  if (next) return { state: 'paid' as const, startsAt: next.periodStart!, opensAt: null, next };
+  const opensAt = new Date(active.getTime() - CHANGE_WINDOW_DAYS * DAY);
+  return { state: opensAt.getTime() <= now.getTime() ? ('open' as const) : ('locked' as const), startsAt: active, opensAt, next: null };
 }
 
-export async function createBillingOrder(tenantId: string, userId: string, plan: PlanId, period: Period) {
+/** What paying for this plan with this many logins would mean right now. */
+export async function quote(tenantId: string, plan: PlanId, seats: number, period: Period, now = new Date()) {
+  if (!validSeats(seats)) return { ok: false as const, reason: 'bad_seats', message: `Choose ${MIN_SEATS} to ${MAX_SEATS} employee logins. For more, write to us.` };
+  const t = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }))!;
+  const w = await changeWindow(tenantId, now);
+  if (w.state === 'paid') {
+    return { ok: false as const, reason: 'already_paid', message: `You’ve already paid for your next period. It starts on ${dateIn(w.startsAt)}.` };
+  }
+  if (w.state === 'locked') {
+    return {
+      ok: false as const,
+      reason: 'locked',
+      message: `Your plan and logins stay as they are until ${dateIn(w.startsAt)}. From ${dateIn(w.opensAt!)} you can pay for the next period, with any plan and number of logins.`,
+    };
+  }
+  const employees = await seatsUsed(tenantId);
+  if (employees > seats) {
+    const off = employees - seats;
+    return { ok: false as const, reason: 'too_small', message: `You have ${employees} employee logins switched on. Switch off ${off} in Team first, or choose ${employees} or more.` };
+  }
+  const renewing = t.plan === 'PAID' && isPlanId(t.planId) && t.paidUntil && t.paidUntil.getTime() > now.getTime();
+  const same = renewing && t.planId === plan && t.seats === seats;
+  const kind = !renewing ? ('NEW' as const) : same ? ('RENEW' as const) : ('CHANGE' as const);
+  return { ok: true as const, kind, period, seats, startsAt: w.startsAt, ...withGst(pricePaise(plan, seats, period)) };
+}
+
+export async function createBillingOrder(tenantId: string, userId: string, plan: PlanId, seats: number, period: Period) {
   if (!billingEnabled()) throw new AppError(503, 'billing_off', 'Online payment isn’t switched on yet. Write to support to upgrade.');
-  const q = await quote(tenantId, plan, period);
+  const q = await quote(tenantId, plan, seats, period);
   if (!q.ok) throw new AppError(409, q.reason, q.message);
   const receipt = `dhr_${tenantId.slice(0, 12)}_${Date.now().toString(36)}`;
-  const order = await gateway.createOrder({ amount: q.amount, receipt, notes: { tenant_id: tenantId, plan, period: q.period, kind: q.kind } });
+  const order = await gateway.createOrder({ amount: q.amount, receipt, notes: { tenant_id: tenantId, plan, seats: String(seats), period, kind: q.kind } });
   await db.insert(billingPayments).values({
     tenantId,
     planId: plan,
-    period: q.period,
+    seats,
+    period,
     kind: q.kind,
     amount: order.amount,
     gst: q.gst,
@@ -118,9 +153,19 @@ export async function createBillingOrder(tenantId: string, userId: string, plan:
   return { orderId: order.id, amount: order.amount, currency: order.currency, keyId: env.BILLING_RAZORPAY_KEY_ID!, kind: q.kind };
 }
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** The plan and logins a payment bought take effect. */
+async function applyPayment(tx: Tx, p: BillingPayment, now: Date) {
+  const plan = p.planId as PlanId;
+  await tx.update(tenants).set({ planId: plan, seats: p.seats, monthlyQuota: emailsFor(plan, p.seats), updatedAt: now }).where(eq(tenants.id, p.tenantId));
+  await tx.update(billingPayments).set({ appliedAt: now }).where(eq(billingPayments.id, p.id));
+}
+
 /**
  * Switches the plan on for a paid order. Safe to call twice (the browser and the webhook both
  * may): the second call finds the payment already PAID and changes nothing.
+ * Paid during a period, it buys the next one: the new plan and logins wait until then.
  */
 export async function activatePayment(orderId: string, paymentId: string, now = new Date()) {
   return db.transaction(async (tx) => {
@@ -128,28 +173,21 @@ export async function activatePayment(orderId: string, paymentId: string, now = 
     if (!p) throw new AppError(404, 'order_not_found', 'This payment isn’t one we started');
     if (p.status === 'PAID') return { payment: p, already: true };
     const [t] = await tx.select().from(tenants).where(eq(tenants.id, p.tenantId)).for('update');
-    const plan = BILLING_PLANS[p.planId as PlanId];
-    // An upgrade keeps the paid-until date; anything else adds a period
-    const { start, end } =
-      p.kind === 'UPGRADE' && t!.paidUntil && t!.paidUntil.getTime() > now.getTime()
-        ? { start: now, end: t!.paidUntil }
-        : nextPeriod(t!.plan === 'PAID' ? t!.paidUntil : null, p.period as Period, now);
+    const { start, end } = nextPeriod(t!.plan === 'PAID' ? t!.paidUntil : null, p.period as Period, now);
     const [paid] = await tx
       .update(billingPayments)
       .set({ status: 'PAID', razorpayPaymentId: paymentId, paidAt: now, periodStart: start, periodEnd: end })
       .where(eq(billingPayments.id, p.id))
       .returning();
-    await tx
-      .update(tenants)
-      .set({ plan: 'PAID', planId: p.planId, paidUntil: end, monthlyQuota: plan.emails, trialEndedAt: null, updatedAt: now })
-      .where(eq(tenants.id, p.tenantId));
+    await tx.update(tenants).set({ plan: 'PAID', paidUntil: end, trialEndedAt: null, updatedAt: now }).where(eq(tenants.id, p.tenantId));
+    if (start.getTime() <= now.getTime()) await applyPayment(tx, paid!, now);
     await tx.insert(auditLogs).values({
       tenantId: p.tenantId,
       userId: p.createdById,
       action: 'billing.paid',
       entity: 'billing_payment',
       entityId: p.id,
-      meta: { plan: p.planId, period: p.period, amount: p.amount, paymentId, until: end.toISOString() },
+      meta: { plan: p.planId, seats: p.seats, period: p.period, amount: p.amount, paymentId, from: start.toISOString(), until: end.toISOString() },
     });
     return { payment: paid!, already: false };
   });
@@ -191,46 +229,56 @@ export async function handleBillingWebhook(raw: string, signature: string | unde
   return { status: 200, body: { ok: true } };
 }
 
-const dateIn = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
+const planLine = (plan: PlanId, seats: number) => `${BILLING_PLANS[plan].name}, ${seats} employee login${seats > 1 ? 's' : ''}`;
 
 async function thankYou(p: BillingPayment) {
-  const plan = BILLING_PLANS[p.planId as PlanId];
+  const plan = p.planId as PlanId;
+  const later = p.periodStart!.getTime() > (p.paidAt ?? new Date()).getTime() + 60_000;
   await notify(p.tenantId, {
     type: 'billing.paid',
     level: 'SUCCESS',
-    title: p.kind === 'UPGRADE' ? `You’re on ${plan.name} now` : `Thank you: ${plan.name} plan is active`,
-    body: `Paid ₹${(p.amount / 100).toLocaleString('en-IN')}. ${plan.seats} employee logins and ${plan.emails.toLocaleString('en-IN')} emails a month, until ${dateIn(p.periodEnd!)}.`,
+    title: later ? `Paid: ${planLine(plan, p.seats)} from ${dateIn(p.periodStart!)}` : `Thank you: ${planLine(plan, p.seats)} is active`,
+    body: `Paid ₹${(p.amount / 100).toLocaleString('en-IN')}. ${emailsFor(plan, p.seats).toLocaleString('en-IN')} emails a month, ${dateIn(p.periodStart!)} to ${dateIn(p.periodEnd!)}.`,
     link: '/agency/billing',
     dedupeKey: `billing.paid:${p.id}`,
   });
 }
 
 export async function billingSummary(tenantId: string) {
-  const [t, payments, employees] = await Promise.all([
-    db.query.tenants.findFirst({ where: eq(tenants.id, tenantId), columns: { plan: true, planId: true, paidUntil: true, monthlyQuota: true, trialEndsAt: true } }),
+  const [t, payments, employees, window] = await Promise.all([
+    db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }),
     db.select().from(billingPayments).where(and(eq(billingPayments.tenantId, tenantId), eq(billingPayments.status, 'PAID'))).orderBy(desc(billingPayments.paidAt)).limit(24),
     seatsUsed(tenantId),
+    changeWindow(tenantId),
   ]);
-  // What each plan's button would do now, for both periods
-  const options = Object.fromEntries(
-    await Promise.all(
-      (Object.keys(BILLING_PLANS) as PlanId[]).map(async (id) => {
-        const [month, year] = await Promise.all([quote(tenantId, id, 'month'), quote(tenantId, id, 'year')]);
-        const view = (q: Awaited<ReturnType<typeof quote>>) => (q.ok ? { ok: true, kind: q.kind, amount: q.amount, gst: q.gst, period: q.period } : { ok: false, reason: q.reason, message: q.message });
-        return [id, { month: view(month), year: view(year) }] as const;
-      }),
-    ),
-  );
+  const last = payments.find((p) => p.appliedAt);
   return {
     enabled: billingEnabled(),
     gstPercent: env.BILLING_GST_PERCENT,
-    plans: Object.entries(BILLING_PLANS).map(([id, p]) => ({ id, ...p })),
-    options,
+    plans: PLAN_IDS.map((id) => ({ id, ...BILLING_PLANS[id] })),
+    limits: { minSeats: MIN_SEATS, maxSeats: MAX_SEATS, yearMonths: YEAR_MONTHS, windowDays: CHANGE_WINDOW_DAYS },
     seats: { used: employees, limit: seatLimit(t!) },
-    current: { plan: t!.plan, planId: t!.planId, paidUntil: t!.paidUntil, monthlyQuota: t!.monthlyQuota, trialEndsAt: t!.trialEndsAt },
+    entitlements: entitlements(t!),
+    current: {
+      plan: t!.plan,
+      planId: isPlanId(t!.planId) ? t!.planId : null,
+      seats: t!.seats,
+      period: last?.period ?? 'month',
+      paidUntil: t!.paidUntil,
+      monthlyQuota: t!.monthlyQuota,
+      trialEndsAt: t!.trialEndsAt,
+    },
+    // Can the owner pay now: 'open' (yes, from startsAt), 'locked' (from opensAt), 'paid' (next period already paid)
+    change: {
+      state: window.state,
+      startsAt: window.startsAt,
+      opensAt: window.opensAt,
+      next: window.next ? { planId: window.next.planId, seats: window.next.seats, period: window.next.period, periodStart: window.next.periodStart, periodEnd: window.next.periodEnd } : null,
+    },
     payments: payments.map((p) => ({
       id: p.id,
       planId: p.planId,
+      seats: p.seats,
       period: p.period,
       kind: p.kind,
       amount: p.amount,
@@ -243,14 +291,42 @@ export async function billingSummary(tenantId: string) {
   };
 }
 
+/** For the plan page: the price and what paying would mean, for a choice the owner is looking at. */
+export async function billingQuote(tenantId: string, plan: PlanId, seats: number, period: Period) {
+  const q = await quote(tenantId, plan, seats, period);
+  return q.ok ? { ok: true, kind: q.kind, amount: q.amount, gst: q.gst, startsAt: q.startsAt } : { ok: false, reason: q.reason, message: q.message };
+}
+
 const GRACE_DAYS = 3;
 
 /**
- * With the maintenance tick: a reminder 3 days before a paid plan runs out; and 3 days after it
- * runs out unpaid, the account goes back to the ended state (the trial clean-up then turns sending off).
+ * With the maintenance tick:
+ * - a payment for the next period takes effect when that period starts (its plan, logins and emails);
+ * - a reminder 5 days before a paid plan runs out, when payment for the next period opens;
+ * - 3 days after it runs out unpaid, the account goes back to the ended state (the trial clean-up then turns sending off).
  */
 export async function runPlanExpiry(now = new Date()) {
-  const soon = new Date(now.getTime() + GRACE_DAYS * 86_400_000);
+  const due = await db
+    .select()
+    .from(billingPayments)
+    .where(and(eq(billingPayments.status, 'PAID'), isNull(billingPayments.appliedAt), lte(billingPayments.periodStart, now)));
+  for (const p of due) {
+    await db.transaction((tx) => applyPayment(tx, p, now));
+    // Fewer logins than before: tell the owner if more people are still switched on
+    const on = await seatsUsed(p.tenantId);
+    if (on > p.seats) {
+      await notify(p.tenantId, {
+        type: 'billing.seats',
+        level: 'WARNING',
+        title: `${on} employee logins are on; your plan now has ${p.seats}`,
+        body: 'Switch off the logins you no longer need in Team. Nobody new can be added until then.',
+        link: '/agency/team',
+        dedupeKey: `billing.seats:${p.id}`,
+      });
+    }
+  }
+
+  const soon = new Date(now.getTime() + CHANGE_WINDOW_DAYS * DAY);
   const ending = await db
     .select({ id: tenants.id, paidUntil: tenants.paidUntil })
     .from(tenants)
@@ -260,16 +336,16 @@ export async function runPlanExpiry(now = new Date()) {
       type: 'billing.ending',
       level: 'WARNING',
       title: `Your plan runs until ${dateIn(t.paidUntil!)}`,
-      body: 'Renew in Plan & billing to keep your reminders and broadcasts going.',
+      body: 'Pay for the next period in Plan & billing. You can change your plan and number of logins now.',
       link: '/agency/billing',
       dedupeKey: `billing.ending:${t.paidUntil!.toISOString().slice(0, 10)}`,
     });
   }
-  const cutoff = new Date(now.getTime() - GRACE_DAYS * 86_400_000);
+  const cutoff = new Date(now.getTime() - GRACE_DAYS * DAY);
   const lapsed = await db
     .update(tenants)
     .set({ plan: 'TRIAL', trialEndsAt: now, trialEndedAt: null })
     .where(and(eq(tenants.plan, 'PAID'), isNotNull(tenants.paidUntil), lte(tenants.paidUntil, cutoff)))
     .returning({ id: tenants.id });
-  return { reminded: ending.length, lapsed: lapsed.length };
+  return { applied: due.length, reminded: ending.length, lapsed: lapsed.length };
 }

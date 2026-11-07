@@ -12,6 +12,7 @@ import { date, n, pct } from '@/lib/format';
 import type { Automation } from '@/lib/types';
 import { useSession } from '@/lib/session';
 import { PrettyTags } from '@/lib/tags';
+import { PlanLock, usePlanAllows } from '@/components/plan-lock';
 
 export interface Upcoming {
   days: { day: string; count: number; people: { name: string; email: string; occurrenceDate: string }[] }[];
@@ -74,7 +75,8 @@ function AutomationCard({ a }: { a: Automation }) {
     },
     onError: (e: Error) => toast.error(e.message),
   });
-  const on = a.status === 'ACTIVE';
+  const allowed = usePlanAllows('automations');
+  const on = a.status === 'ACTIVE' && allowed;
   return (
     <Panel className={cn('relative flex flex-col gap-5 p-5 lift', !on && 'bg-sunken')}>
       <div className="flex items-start gap-4">
@@ -88,8 +90,8 @@ function AutomationCard({ a }: { a: Automation }) {
           <span className="text-[13px] text-muted">{a.rule.replace(/ · /g, ', ')}</span>
         </div>
         <div className="relative z-10 flex items-center gap-2.5">
-          <span className={cn('text-xs font-semibold', on ? 'text-accent-strong' : 'text-muted')}>{on ? 'On' : a.status === 'DRAFT' ? 'Draft' : 'Paused'}</span>
-          <Switch label={on ? `Pause ${a.name}` : `Switch on ${a.name}`} checked={on} disabled={toggle.isPending} onCheckedChange={(v) => toggle.mutate(v)} />
+          <span className={cn('text-xs font-semibold', on ? 'text-accent-strong' : 'text-muted')}>{on ? 'On' : !allowed && a.status === 'ACTIVE' ? 'Waiting for your plan' : a.status === 'DRAFT' ? 'Draft' : 'Paused'}</span>
+          <Switch label={on ? `Pause ${a.name}` : `Switch on ${a.name}`} checked={on} disabled={toggle.isPending || !allowed} onCheckedChange={(v) => toggle.mutate(v)} />
         </div>
       </div>
       {on ? <WeekStrip id={a.id} tz={a.timezone} unit={a.channel === 'WHATSAPP' ? 'message' : 'email'} /> : <p className="text-[13px] text-muted">{a.status === 'DRAFT' ? 'Finish setting it up, then switch it on.' : 'Paused. Nobody gets it until you switch it back on.'}</p>}
@@ -126,6 +128,7 @@ export function AutomationsPage({ embedded, channel = 'EMAIL' }: { embedded?: bo
   const nav = useNavigate();
   const { user } = useSession();
   const wa = channel === 'WHATSAPP';
+  const allowed = usePlanAllows('automations');
   const newHref = (recipe?: string) => `/automations/new?${new URLSearchParams({ ...(wa && { channel: 'WHATSAPP' }), ...(recipe && { recipe }) })}`;
   const q = useQuery({ queryKey: ['automations', channel], queryFn: () => api.get<{ automations: Automation[] }>(`/api/automations?channel=${channel}`) });
   const list = q.data?.automations ?? [];
@@ -136,23 +139,28 @@ export function AutomationsPage({ embedded, channel = 'EMAIL' }: { embedded?: bo
       {embedded ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-ink-2">{wa ? 'WhatsApp messages' : 'Emails'} that go out by themselves on each customer’s own date: birthdays, anniversaries, trip dates.</p>
-          <LinkButton to={newHref()} variant="primary">
-            <Plus className="h-4 w-4" strokeWidth={2.4} />
-            New automatic {wa ? 'message' : 'email'}
-          </LinkButton>
+          {allowed && (
+            <LinkButton to={newHref()} variant="primary">
+              <Plus className="h-4 w-4" strokeWidth={2.4} />
+              New automatic {wa ? 'message' : 'email'}
+            </LinkButton>
+          )}
         </div>
       ) : (
         <PageHeader
           title="Automations"
           description="Messages that go out by themselves on each customer’s own date, like wishes on their birthday or anniversary."
           actions={
-            <LinkButton to="/automations/new" variant="primary">
-              <Plus className="h-4 w-4" strokeWidth={2.4} />
-              New automation
-            </LinkButton>
+            allowed && (
+              <LinkButton to="/automations/new" variant="primary">
+                <Plus className="h-4 w-4" strokeWidth={2.4} />
+                New automation
+              </LinkButton>
+            )
           }
         />
       )}
+      <PlanLock feature="automations" />
       {user.role !== 'MEMBER' && <Link to="/settings/trip-messages" className="group flex items-center gap-4 rounded-[var(--radius-panel)] border border-line bg-surface px-5 py-4 hover:bg-sunken">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-accent-soft text-accent-strong">
           <Plane className="h-5 w-5" aria-hidden />

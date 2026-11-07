@@ -8,7 +8,7 @@
 #   drona restart | stop    restart or stop everything
 #   drona backup            back up the database now
 #   drona restore <file>    put a backup back (asks first)
-#   drona plan <owner email> [paid [emails] | trial <days>]
+#   drona plan <owner email> [basic|professional|ultra <logins> [days] | paid [emails] | trial <days>]
 #   drona feature whatsapp-web <owner email> on|off
 #   drona move-from-hayate  one time only, on a server first installed under the old name
 set -euo pipefail

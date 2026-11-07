@@ -1,10 +1,10 @@
 import { and, count, eq, gte, isNull, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { campaigns, messages, sessions, tenants, trips, users } from '../../db/schema.js';
+import { billingPayments, campaigns, messages, sessions, tenants, trips, users } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { hashPassword } from '../auth/password.js';
-import { BILLING_PLANS, isPlanId, MANUAL_PAID_SEATS, TRIAL_SEATS } from '../billing/plans.js';
+import { planOf } from '../plans/entitlements.js';
 import { monthStartSql } from '../sending/start-campaign.js';
 
 /**
@@ -59,9 +59,21 @@ export async function freeLoginCode(name: string) {
 }
 
 /** How many employee logins the agency's plan allows. */
-export function seatLimit(t: { plan: 'TRIAL' | 'PAID'; planId: string | null }) {
-  if (t.plan === 'PAID') return isPlanId(t.planId) ? BILLING_PLANS[t.planId].seats : MANUAL_PAID_SEATS;
-  return TRIAL_SEATS;
+export function seatLimit(t: { plan: 'TRIAL' | 'PAID'; planId: string | null; seats?: number | null }) {
+  return planOf({ ...t, trialEndsAt: null, whatsappWebEnabled: false }).seats;
+}
+
+/**
+ * The logins that may be switched on now: the current plan's, or fewer if the agency has already
+ * paid for a smaller next period (so they don't switch someone on who must go in a few days).
+ */
+export async function seatRoom(tenantId: string) {
+  const t = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId), columns: { plan: true, planId: true, seats: true } }))!;
+  const next = await db.query.billingPayments.findFirst({
+    where: and(eq(billingPayments.tenantId, tenantId), eq(billingPayments.status, 'PAID'), isNull(billingPayments.appliedAt)),
+    columns: { seats: true },
+  });
+  return Math.min(seatLimit(t), next?.seats ?? Infinity);
 }
 
 /** Active employee logins (the owner isn't counted). */
@@ -74,13 +86,12 @@ export async function seatsUsed(tenantId: string) {
 }
 
 async function ensureRoom(tenantId: string) {
-  const t = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId), columns: { plan: true, planId: true } }))!;
-  const limit = seatLimit(t);
+  const limit = await seatRoom(tenantId);
   if ((await seatsUsed(tenantId)) >= limit) {
     throw new AppError(
       409,
       'seats_full',
-      `Your plan has ${limit} employee logins, and all are in use. Move to a bigger plan in Plan & billing, or switch off someone who has left.`,
+      `Your plan has ${limit} employee logins, and all are in use. Choose more logins for your next period in Plan & billing, or switch off someone who has left.`,
     );
   }
 }

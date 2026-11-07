@@ -1,48 +1,85 @@
 /**
- * What agencies can buy: plans by the number of employee logins, each with an email allowance.
- * The server's numbers are the ones charged; the public Pricing page shows the same plans from
- * web/src/lib/brand.ts (a test keeps them equal). Prices are before GST.
+ * What agencies buy: a plan (Basic, Professional, Ultra Premium) × the number of employee logins
+ * they choose (1 to 50; the owner is always free). The plan and the logins stay fixed for the
+ * whole paid period (30 days, or a year); changes are made when paying for the next period.
+ *
+ * The server's numbers are the ones charged. The public Pricing page shows the same numbers from
+ * web/src/lib/brand.ts (a test keeps them equal). Prices are in rupees, before GST.
  */
 export const BILLING_PLANS = {
-  team5: { name: 'Team 5', seats: 5, month: 2_999, year: 29_990, emails: 15_000 },
-  team10: { name: 'Team 10', seats: 10, month: 4_999, year: 49_990, emails: 30_000 },
-  team20: { name: 'Team 20', seats: 20, month: 8_499, year: 84_990, emails: 60_000 },
-  team50: { name: 'Team 50', seats: 50, month: 15_999, year: 1_59_990, emails: 1_50_000 },
+  basic: {
+    name: 'Basic',
+    first: 1_499, // a month, with one employee login
+    extra: 400, // a month, for each login after the first
+    emailsPerLogin: 3_000, // a month
+    aiPerLogin: 0, // Drona AI replies and quote drafts, a day
+    domains: 1,
+    automations: false,
+    groups: false,
+    leadApi: false,
+    prioritySupport: false,
+  },
+  professional: {
+    name: 'Professional',
+    first: 2_999,
+    extra: 600,
+    emailsPerLogin: 5_000,
+    aiPerLogin: 40,
+    domains: 3,
+    automations: true,
+    groups: true,
+    leadApi: false,
+    prioritySupport: false,
+  },
+  ultra: {
+    name: 'Ultra Premium',
+    first: 4_999,
+    extra: 900,
+    emailsPerLogin: 10_000,
+    aiPerLogin: 100,
+    domains: 10,
+    automations: true,
+    groups: true,
+    leadApi: true,
+    prioritySupport: true,
+  },
 } as const;
 
 export type PlanId = keyof typeof BILLING_PLANS;
 export type Period = 'month' | 'year';
 export const PLAN_IDS = Object.keys(BILLING_PLANS) as PlanId[];
 
+export const MIN_SEATS = 1;
+export const MAX_SEATS = 50;
+/** Paid yearly: 10 months' price for 12. */
+export const YEAR_MONTHS = 10;
+/** Days in a paid period. A "month" is always 30 days, so every bill covers the same time. */
+export const PERIOD_DAYS: Record<Period, number> = { month: 30, year: 365 };
+/** Payment for the next period opens this many days before the current one ends. */
+export const CHANGE_WINDOW_DAYS = 5;
+
 /** Employee logins on the free trial, and for agencies the operator set to paid by hand */
 export const TRIAL_SEATS = 5;
 export const MANUAL_PAID_SEATS = 50;
 
 export const isPlanId = (v: unknown): v is PlanId => typeof v === 'string' && v in BILLING_PLANS;
+export const validSeats = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= MIN_SEATS && (n as number) <= MAX_SEATS;
 
-/** The smallest plan with room for this many employee logins. */
-export const planForSeats = (n: number): PlanId => PLAN_IDS.find((id) => BILLING_PLANS[id].seats >= n) ?? 'team50';
+/** Rupees a month for this plan with this many employee logins. */
+export const monthlyPrice = (plan: PlanId, seats: number) => BILLING_PLANS[plan].first + BILLING_PLANS[plan].extra * Math.max(0, seats - 1);
+
+/** Rupees for the period. */
+export const periodPrice = (plan: PlanId, seats: number, period: Period) => monthlyPrice(plan, seats) * (period === 'month' ? 1 : YEAR_MONTHS);
 
 /** Rupees → paise, the unit Razorpay charges in (before GST). */
-export const pricePaise = (plan: PlanId, period: Period) => BILLING_PLANS[plan][period] * 100;
+export const pricePaise = (plan: PlanId, seats: number, period: Period) => periodPrice(plan, seats, period) * 100;
 
-/** The paid period a payment buys, starting where the current one ends (renewing early loses nothing). */
+export const emailsFor = (plan: PlanId, seats: number) => BILLING_PLANS[plan].emailsPerLogin * seats;
+export const aiPerDayFor = (plan: PlanId, seats: number) => BILLING_PLANS[plan].aiPerLogin * seats;
+
+/** The paid period a payment buys: from where the current one ends (or now), for 30 or 365 days. */
 export function nextPeriod(paidUntil: Date | null, period: Period, now = new Date()) {
   const start = paidUntil && paidUntil.getTime() > now.getTime() ? paidUntil : now;
-  const end = new Date(start);
-  if (period === 'month') end.setMonth(end.getMonth() + 1);
-  else end.setFullYear(end.getFullYear() + 1);
+  const end = new Date(start.getTime() + PERIOD_DAYS[period] * 86_400_000);
   return { start, end };
-}
-
-/**
- * Moving up a plan mid-period: pay only the difference, for the days left.
- * (from, to) = plan prices for the period; the paid-until date doesn't change.
- */
-export function upgradePaise(from: PlanId, to: PlanId, period: Period, periodStart: Date, paidUntil: Date, now = new Date()) {
-  const total = paidUntil.getTime() - periodStart.getTime();
-  const left = Math.max(0, paidUntil.getTime() - now.getTime());
-  const diff = pricePaise(to, period) - pricePaise(from, period);
-  if (diff <= 0 || total <= 0) return 0;
-  return Math.max(100, Math.round((diff * left) / total / 100) * 100); // whole rupees, at least ₹1
 }

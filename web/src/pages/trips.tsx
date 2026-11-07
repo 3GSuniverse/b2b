@@ -15,6 +15,7 @@ import { cn } from '@/lib/cn';
 import { dateRange, inr, inrShort, n } from '@/lib/format';
 import type { Contact, GroupSummary, TripStats, TripStatus, TripSummary } from '@/lib/types';
 import { CountUp } from '@/lib/motion';
+import { usePlanAllows } from '@/components/plan-lock';
 
 type View = 'board' | 'list';
 type ListTab = 'OPEN' | 'overdue' | 'due' | 'COMPLETED' | 'CLOSED' | 'ALL';
@@ -409,6 +410,7 @@ export function TripsPage() {
   const tab = (params.get('tab') as ListTab | null) ?? 'OPEN';
   const [creating, setCreating] = useState(params.get('new') === '1');
   const [newGroup, setNewGroup] = useState(false);
+  const groupsAllowed = usePlanAllows('groups');
   const stats = useStats();
   // Arriving from a contact ("Add an enquiry for them")
   const fromContact = params.get('contact');
@@ -450,10 +452,12 @@ export function TripsPage() {
               <Tag className="h-4 w-4" />
               Price list
             </LinkButton>
-            <Button onClick={() => setNewGroup(true)}>
-              <Users className="h-4 w-4" />
-              New group
-            </Button>
+            {groupsAllowed && (
+              <Button onClick={() => setNewGroup(true)}>
+                <Users className="h-4 w-4" />
+                New group
+              </Button>
+            )}
             <Button variant="primary" onClick={() => setCreating(true)}>
               <Plus className="h-4 w-4" />
               New enquiry

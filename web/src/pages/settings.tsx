@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, Wallet, Plane, KeyRound, CheckCircle2, Circle, Globe, Lock, Mail, MoreHorizontal, Plus, RefreshCw, Send, Star, Trash2, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
-import { BRAND } from '@/lib/brand';
+import { BRAND, planName } from '@/lib/brand';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/controls';
@@ -613,7 +613,7 @@ function Company() {
                 ? 'Free trial (ended)'
                 : `Free trial, ${tenantPlan.daysLeft === 0 ? 'ends today' : `${tenantPlan.daysLeft} days left`}`
               : tenantPlan?.planId
-                ? `${tenantPlan.planId.replace('team', 'Team ')}${tenantPlan.paidUntil ? `, until ${new Date(tenantPlan.paidUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}`
+                ? `${planName(tenantPlan.planId)}${tenantPlan.paidUntil ? `, until ${new Date(tenantPlan.paidUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}`
                 : 'Paid'}
             {' '}
             {user.role === 'OWNER' && <Link to="/agency/billing" className="ml-1 font-semibold text-accent hover:underline">

@@ -1,4 +1,4 @@
-import { trialEnded, whatsappWebAllowed } from '../plans/entitlements.js';
+import { hasFeature, trialEnded, whatsappWebAllowed } from '../plans/entitlements.js';
 import { and, count, eq, gte, inArray, sql, type SQL } from 'drizzle-orm';
 import { automations, automationSends, contacts, customFields, messages, tenants } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
@@ -83,7 +83,7 @@ export async function runAutomationsTick(opts: { now?: Date; enqueue?: EnqueueFn
 
   for (const a of active as AutomationRow[]) {
     const wa = a.channel === 'WHATSAPP';
-    if (a.tenant.status !== 'ACTIVE' || trialEnded(a.tenant) || a.dateField.type !== 'DATE') continue;
+    if (a.tenant.status !== 'ACTIVE' || trialEnded(a.tenant) || !hasFeature(a.tenant, 'automations') || a.dateField.type !== 'DATE') continue;
     if (wa ? !a.text?.trim() || !whatsappWebAllowed(a.tenant, now) : !a.templateId || !a.senderId) continue;
     const enqueue = wa ? enqueueWa : enqueueEmail;
     result.automations++;

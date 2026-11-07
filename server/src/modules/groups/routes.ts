@@ -5,6 +5,7 @@ import { tenants, trips } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError, parseBody } from '../../lib/http.js';
 import { requireAuth, requireRole, tenantOf } from '../auth/guard.js';
+import { requireFeature } from '../plans/entitlements.js';
 import { escapeHtml as e } from '../email/render.js';
 import { layout, notFound, range, send } from '../payments/public.js';
 import type { Actor } from '../trips/service.js';
@@ -43,6 +44,7 @@ small{font-weight:400;color:var(--muted);font-size:12px}
 export async function groupRoutes(app: FastifyInstance) {
   app.get('/api/groups', { preHandler: requireAuth }, async (req) => ({ groups: await listGroups(tenantOf(req)) }));
   app.post('/api/groups', { preHandler: requireAuth }, async (req, reply) => {
+    await requireFeature(tenantOf(req), 'groups');
     const g = await createGroup(actor(req), parseBody(groupBody, req.body));
     return reply.code(201).send({ group: await getGroup(tenantOf(req), g.id) });
   });
@@ -52,7 +54,10 @@ export async function groupRoutes(app: FastifyInstance) {
   }));
   app.post<Id>('/api/groups/:id/bookings', { preHandler: requireAuth }, async (req, reply) => reply.code(201).send({ trip: await addBooking(actor(req), req.params.id, parseBody(groupBookingBody, req.body)) }));
   app.post<Id>('/api/groups/:id/assign', { preHandler: requireAuth }, async (req) => ({ group: await autoAssign(actor(req), req.params.id) }));
-  app.post<Id>('/api/groups/:id/broadcast', { preHandler: requireAuth, config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => broadcast(actor(req), req.params.id, parseBody(broadcastBody, req.body)));
+  app.post<Id>('/api/groups/:id/broadcast', { preHandler: requireAuth, config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => {
+    await requireFeature(tenantOf(req), 'groups');
+    return broadcast(actor(req), req.params.id, parseBody(broadcastBody, req.body));
+  });
   // Full ID numbers, for the passenger manifest. Admins only; every look is logged.
   app.post<Id>('/api/groups/:id/ids', { preHandler: requireRole('ADMIN') }, async (req) => ({ ids: await revealIds(tenantOf(req), req.auth!.userId, req.params.id) }));
 

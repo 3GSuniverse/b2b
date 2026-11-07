@@ -248,7 +248,8 @@ function Conversation({ id, onBack }: { id: string; onBack: () => void }) {
     }
   }, [t?.messages.length]);
 
-  const ai = { enabled: !!useQuery({ queryKey: ['ai'], queryFn: () => api.get<{ enabled: boolean }>('/api/ai'), staleTime: 300_000 }).data?.enabled };
+  const aiQ = useQuery({ queryKey: ['ai'], queryFn: () => api.get<{ enabled: boolean; configured?: boolean; inPlan?: boolean }>('/api/ai'), staleTime: 300_000 });
+  const ai = { enabled: !!aiQ.data?.enabled, upsell: !!aiQ.data?.configured && aiQ.data.inPlan === false };
   const { user } = useSession();
   const send = useMutation({
     mutationFn: (body: string) => api.post(`/api/inbox/${id}/reply`, { text: body }),
@@ -344,6 +345,14 @@ function Conversation({ id, onBack }: { id: string; onBack: () => void }) {
           <p className="mb-2 flex items-center gap-1.5 rounded-[10px] bg-warm-soft px-3 py-2 text-[12px] text-warm-strong">
             <TriangleAlert className="h-3.5 w-3.5 shrink-0" /> Your WhatsApp number isn’t linked. Replies wait until you <Link to="/whatsapp/setup" className="font-semibold underline">link it again</Link>.
           </p>
+        )}
+        {ai.upsell && (
+          <Link
+            to="/agency/billing"
+            className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1.5 text-[12.5px] font-semibold text-accent transition-colors hover:bg-accent hover:text-white"
+          >
+            <Sparkles className="h-3.5 w-3.5" /> Drona AI writes replies like these on the Professional plan
+          </Link>
         )}
         {ai.enabled && (
           <DronaAiTray

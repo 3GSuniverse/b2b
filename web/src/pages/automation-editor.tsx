@@ -22,6 +22,7 @@ import { WhatsAppPreview } from '@/components/whatsapp/preview';
 import { useWhatsApp } from '@/components/whatsapp/settings';
 import { useNavSection } from '@/lib/section';
 import { useSession } from '@/lib/session';
+import { PlanLock } from '@/components/plan-lock';
 
 type Timing = 'before' | 'on' | 'after';
 interface Draft {
@@ -290,6 +291,7 @@ export function AutomationEditorPage() {
 
   return (
     <>
+      <PlanLock feature="automations" />
       <header className="flex flex-col gap-4">
         <Link to={hub} className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
           <ArrowLeft className="h-3.5 w-3.5" /> {wa ? 'WhatsApp' : 'Email'}: automatic {wa ? 'messages' : 'emails'}

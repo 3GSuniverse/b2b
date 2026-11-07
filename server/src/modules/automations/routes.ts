@@ -8,7 +8,7 @@ import { requireAuth, tenantOf } from '../auth/guard.js';
 import { PLACEHOLDER } from '../campaigns/checks.js';
 import { audienceSchema } from '../campaigns/service.js';
 import { countEmailAudience, countWhatsAppAudience } from '../audience/resolve.js';
-import { whatsappWebAllowed } from '../plans/entitlements.js';
+import { requireFeature, whatsappWebAllowed } from '../plans/entitlements.js';
 import { isDomainReady } from '../domains/service.js';
 import { dueContactsQuery } from './engine.js';
 import { attachmentIds, LIMITS, mergeRefs, resolveRefs, totalSize } from '../attachments/service.js';
@@ -99,6 +99,7 @@ export async function automationRoutes(app: FastifyInstance) {
 
   app.post('/api/automations', { preHandler: requireAuth }, async (req, reply) => {
     const tenantId = tenantOf(req);
+    await requireFeature(tenantId, 'automations');
     const { attachments: ids, ...b } = parseBody(createBody, req.body);
     await assertRefs(tenantId, b);
     const wa = b.channel === 'WHATSAPP';
@@ -135,6 +136,7 @@ export async function automationRoutes(app: FastifyInstance) {
 
   app.post<IdParams>('/api/automations/:id/activate', { preHandler: requireAuth }, async (req) => {
     const tenantId = tenantOf(req);
+    await requireFeature(tenantId, 'automations');
     const a = await owned(tenantId, req.params.id);
     if (a.dateField.type !== 'DATE') throw new AppError(400, 'not_a_date_field', `“${a.dateField.label}” isn’t a date field`);
     if (a.channel === 'WHATSAPP') {

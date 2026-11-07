@@ -1,11 +1,13 @@
 import { and, desc, eq, gt, inArray, isNull, lt, or } from 'drizzle-orm';
-import { campaigns, senders, sendingDomains, type SendingDomain } from '../../db/schema.js';
+import { campaigns, senders, sendingDomains, tenants, type SendingDomain } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { buildDnsRecords, checkDnsRecords, getDnsLookup, type DnsLookup, type DnsRecord } from './dns.js';
 import { getIdentityProvider, type IdentityProvider } from './identity-provider.js';
 import { normalizeDomain } from './validate.js';
 import { notify } from '../notifications/service.js';
+import { BILLING_PLANS } from '../billing/plans.js';
+import { entitlements } from '../plans/entitlements.js';
 
 interface Deps {
   identity?: IdentityProvider;
@@ -73,6 +75,11 @@ export async function addDomain(tenantId: string, rawDomain: string, deps: Deps 
     if (existing.tenantId === tenantId) return domainDto(existing);
     // Never say which company has it
     throw new AppError(409, 'domain_taken', 'This domain is already connected to another account. If it’s yours, contact support.');
+  }
+  const tenant = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }))!;
+  const { domains: allowed, plan } = entitlements(tenant);
+  if ((await db.$count(sendingDomains, eq(sendingDomains.tenantId, tenantId))) >= allowed) {
+    throw new AppError(409, 'domains_full', `Your ${BILLING_PLANS[plan].name} plan has room for ${allowed} sending domain${allowed > 1 ? 's' : ''}. Remove one, or choose a bigger plan for your next period.`);
   }
 
   let row: SendingDomain;

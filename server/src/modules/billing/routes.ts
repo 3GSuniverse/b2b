@@ -2,10 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { parseBody } from '../../lib/http.js';
 import { requireAuth, requireRole, tenantOf } from '../auth/guard.js';
-import { PLAN_IDS, type PlanId } from './plans.js';
-import { billingSummary, createBillingOrder, handleBillingWebhook, verifyCheckout } from './service.js';
+import { MAX_SEATS, MIN_SEATS, PLAN_IDS, type PlanId } from './plans.js';
+import { billingQuote, billingSummary, createBillingOrder, handleBillingWebhook, verifyCheckout } from './service.js';
 
-const orderBody = z.object({ plan: z.enum(PLAN_IDS as [PlanId, ...PlanId[]]), period: z.enum(['month', 'year']) });
+const orderBody = z.object({
+  plan: z.enum(PLAN_IDS as [PlanId, ...PlanId[]]),
+  seats: z.coerce.number().int().min(MIN_SEATS).max(MAX_SEATS),
+  period: z.enum(['month', 'year']),
+});
 const verifyBody = z.object({
   razorpay_order_id: z.string().min(1).max(64),
   razorpay_payment_id: z.string().min(1).max(64),
@@ -16,15 +20,20 @@ export async function billingRoutes(app: FastifyInstance) {
   app.get('/api/billing', { preHandler: requireAuth }, async (req) => billingSummary(tenantOf(req)));
 
   // Only the agency owner pays; the price comes from the server, never from the browser
-  app.post('/api/billing/orders', { preHandler: [requireAuth, requireRole('OWNER')], config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
+  app.post('/api/billing/orders', { preHandler: [requireAuth, requireRole('OWNER')], config: { rateLimit: { max: 15, timeWindow: '1 minute' } } }, async (req, reply) => {
     const b = parseBody(orderBody, req.body);
-    return reply.code(201).send(await createBillingOrder(tenantOf(req), req.auth!.userId, b.plan, b.period));
+    return reply.code(201).send(await createBillingOrder(tenantOf(req), req.auth!.userId, b.plan, b.seats, b.period));
+  });
+
+  app.post('/api/billing/quote', { preHandler: [requireAuth, requireRole('OWNER')], config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
+    const b = parseBody(orderBody, req.body);
+    return billingQuote(tenantOf(req), b.plan, b.seats, b.period);
   });
 
   app.post('/api/billing/verify', { preHandler: [requireAuth, requireRole('OWNER')], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
     const b = parseBody(verifyBody, req.body);
     const p = await verifyCheckout(tenantOf(req), { orderId: b.razorpay_order_id, paymentId: b.razorpay_payment_id, signature: b.razorpay_signature });
-    return { ok: true, paidUntil: p.periodEnd, plan: p.planId };
+    return { ok: true, paidUntil: p.periodEnd, plan: p.planId, seats: p.seats, startsAt: p.periodStart };
   });
 
   // Razorpay → us. Own scope, so the signature is checked against the raw body.

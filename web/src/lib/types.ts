@@ -4,8 +4,23 @@ export interface Me {
   user: { id: string; name: string; email: string | null; username: string | null; role: 'OWNER' | 'ADMIN' | 'MEMBER' };
   tenant: { id: string; name: string; slug: string; loginCode: string; status: 'ACTIVE' | 'PAUSED' | 'SUSPENDED'; timezone: string; monthlyQuota: number; pausedReason: string | null;
     features?: { whatsapp: boolean };
-    plan?: { plan: 'TRIAL' | 'PAID'; planId: string | null; paidUntil: string | null; trialEndsAt: string | null; trialEnded: boolean; daysLeft: number | null; whatsapp: { perDay: number; sentToday: number } | null; emailLimit: number | null };
+    plan?: { plan: 'TRIAL' | 'PAID'; planId: string | null; paidUntil: string | null; trialEndsAt: string | null; trialEnded: boolean; daysLeft: number | null; entitlements?: Entitlements; whatsapp: { perDay: number; sentToday: number } | null; emailLimit: number | null };
   };
+}
+
+/** What the agency's plan allows (server: modules/plans/entitlements.ts). */
+export interface Entitlements {
+  plan: 'basic' | 'professional' | 'ultra';
+  seats: number;
+  source: 'trial' | 'paid' | 'operator';
+  automations: boolean;
+  groups: boolean;
+  leadApi: boolean;
+  ai: boolean;
+  aiPerDay: number;
+  domains: number;
+  emails: number;
+  prioritySupport: boolean;
 }
 
 export interface CampaignStats {

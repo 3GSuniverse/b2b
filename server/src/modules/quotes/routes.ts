@@ -9,6 +9,7 @@ import { escapeHtml as e } from '../email/render.js';
 import { d, layout, notFound, prettyPhone, range, send, waLink } from '../payments/public.js';
 import { resolvedSettings } from '../payments/settings.js';
 import { aiEnabled, draftBody, draftQuote } from '../ai/quote-draft.js';
+import { entitlements } from '../plans/entitlements.js';
 import { formatInr, localDate } from '../trips/money.js';
 import type { Actor } from '../trips/service.js';
 import {
@@ -74,7 +75,12 @@ export async function quoteRoutes(app: FastifyInstance) {
     await deleteQuote(actor(req), req.params.id);
     return reply.code(204).send();
   });
-  app.get('/api/ai', { preHandler: requireAuth }, async () => ({ enabled: aiEnabled() }));
+  // enabled: Drona AI can be used here (the server has an AI key and the agency's plan includes it)
+  app.get('/api/ai', { preHandler: requireAuth }, async (req) => {
+    const t = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantOf(req)) }))!;
+    const plan = entitlements(t);
+    return { enabled: aiEnabled() && plan.ai, configured: aiEnabled(), inPlan: plan.ai, perDay: plan.aiPerDay };
+  });
   app.post<Id>('/api/quotes/:id/draft', { preHandler: requireAuth, config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => ({
     draft: await draftQuote(tenantOf(req), req.auth!.userId, req.params.id, parseBody(draftBody, req.body)),
   }));

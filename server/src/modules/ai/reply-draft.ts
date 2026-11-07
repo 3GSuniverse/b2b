@@ -1,10 +1,10 @@
-import { and, count, desc, eq, gte, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { env } from '../../config/env.js';
 import { auditLogs, contacts, packages, tenants, trips, waChatMessages, waChats } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { formatInr, localDate, tripMoney } from '../trips/money.js';
+import { useAi } from '../plans/entitlements.js';
 import { getClient } from './quote-draft.js';
 
 /**
@@ -74,12 +74,8 @@ export async function suggestReply(tenantId: string, userId: string, chatId: str
   const chat = await db.query.waChats.findFirst({ where: and(eq(waChats.id, chatId), eq(waChats.tenantId, tenantId)) });
   if (!chat) throw new AppError(404, 'not_found', 'Conversation not found');
 
-  // A daily allowance per agency: every suggestion costs real money
-  const [{ used } = { used: 0 }] = await db
-    .select({ used: count() })
-    .from(auditLogs)
-    .where(and(eq(auditLogs.tenantId, tenantId), eq(auditLogs.action, 'ai.reply'), gte(auditLogs.createdAt, new Date(Date.now() - 86_400_000))));
-  if (used >= env.AI_REPLIES_PER_DAY) throw new AppError(429, 'ai_limit', `You’ve used today’s ${env.AI_REPLIES_PER_DAY} Drona AI replies. More tomorrow.`);
+  // The plan's daily allowance: every suggestion costs real money
+  await useAi(tenantId);
 
   const tenant = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }))!;
   const contact = await db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, tenantId), eq(contacts.phone, chat.phone)) });

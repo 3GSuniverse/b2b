@@ -8,6 +8,7 @@ import { Field, Input } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
 import { api, ApiError } from '@/lib/api';
 import { ago, date } from '@/lib/format';
+import { PlanLock, usePlanAllows } from '@/components/plan-lock';
 
 interface ApiKey {
   id: string;
@@ -34,6 +35,7 @@ export function ApiKeysSettings() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['api-keys'], queryFn: () => api.get<{ keys: ApiKey[] }>('/api/api-keys').then((r) => r.keys) });
   const [creating, setCreating] = useState(false);
+  const allowed = usePlanAllows('leadApi');
   const [name, setName] = useState('AI call agent');
   const [made, setMade] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<ApiKey | null>(null);
@@ -67,12 +69,15 @@ export function ApiKeysSettings() {
         title="API keys"
         description="Let other systems add enquiries straight to your Trips board: your AI call agent, a website form, or anything that can send a web request."
         action={
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" />
-            New key
-          </Button>
+          allowed && (
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4" />
+              New key
+            </Button>
+          )
         }
       />
+      <PlanLock feature="leadApi" />
       <Panel className="overflow-hidden">
         {q.isPending ? (
           <Skeleton className="m-5 h-12" />

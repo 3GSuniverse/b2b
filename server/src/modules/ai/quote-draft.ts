@@ -1,4 +1,4 @@
-import { and, count, eq, gte } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { env } from '../../config/env.js';
 import { auditLogs, quotes, tenants, type QuoteLine } from '../../db/schema.js';
@@ -6,6 +6,7 @@ import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { formatInr } from '../trips/money.js';
 import { listRates } from '../quotes/service.js';
+import { useAi } from '../plans/entitlements.js';
 
 /**
  * "Draft with AI": writes the day-by-day plan and picks items from the agency's own price list.
@@ -114,12 +115,8 @@ export async function draftQuote(tenantId: string, userId: string, quoteId: stri
   if (!q) throw new AppError(404, 'quote_not_found', 'Quote not found');
   if (q.status !== 'DRAFT') throw new AppError(409, 'quote_sent', 'This quote has been sent. Make a new version to change it.');
 
-  // A daily allowance per company: each draft costs real money
-  const [{ used } = { used: 0 }] = await db
-    .select({ used: count() })
-    .from(auditLogs)
-    .where(and(eq(auditLogs.tenantId, tenantId), eq(auditLogs.action, 'ai.draft'), gte(auditLogs.createdAt, new Date(Date.now() - 86_400_000))));
-  if (used >= env.AI_DRAFTS_PER_DAY) throw new AppError(429, 'ai_limit', `You’ve used today’s ${env.AI_DRAFTS_PER_DAY} AI drafts. More tomorrow.`);
+  // The plan's daily allowance: each draft costs real money
+  await useAi(tenantId);
 
   const tenant = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }))!;
   const t = q.trip;

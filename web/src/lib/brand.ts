@@ -13,37 +13,53 @@ export const BRAND = {
   // Where disputes under the Terms are heard
   courts: 'Vijayawada, Andhra Pradesh',
   // Shown at the top of the Privacy Policy, Terms and policy pages; change it whenever any of them changes
-  legalUpdated: '5 November 2026',
+  legalUpdated: '7 November 2026',
 };
 
+export type PlanId = 'basic' | 'professional' | 'ultra';
 export type Plan = {
-  id: string;
+  id: PlanId;
   name: string;
-  /** Employee logins included (the owner is free) */
-  seats: number;
-  /** Per month, in rupees, before GST */
-  price: number;
-  /** Per year, in rupees, when paid yearly */
-  yearly: number;
+  /** Rupees a month, before GST, with one employee login */
+  first: number;
+  /** Rupees a month for each login after the first */
+  extra: number;
+  emailsPerLogin: number;
+  /** Drona AI answers a day, per login */
+  aiPerLogin: number;
+  domains: number;
   forWho: string;
-  emails: number;
   popular?: boolean;
 };
 
-// Shown on the Pricing page. Must match server/src/modules/billing/plans.ts (a test checks).
+// Shown on the Pricing page and in Plan & billing. Must match server/src/modules/billing/plans.ts (a test checks).
 export const PLANS: Plan[] = [
-  { id: 'team5', name: 'Team 5', seats: 5, price: 2_999, yearly: 29_990, emails: 15_000, forWho: 'For a small agency: 1 to 5 employees.' },
-  { id: 'team10', name: 'Team 10', seats: 10, price: 4_999, yearly: 49_990, emails: 30_000, forWho: 'For a growing agency: 6 to 10 employees.', popular: true },
-  { id: 'team20', name: 'Team 20', seats: 20, price: 8_499, yearly: 84_990, emails: 60_000, forWho: 'For a busy agency: 11 to 20 employees.' },
-  { id: 'team50', name: 'Team 50', seats: 50, price: 15_999, yearly: 1_59_990, emails: 1_50_000, forWho: 'For a large agency: 21 to 50 employees.' },
+  { id: 'basic', name: 'Basic', first: 1_499, extra: 400, emailsPerLogin: 3_000, aiPerLogin: 0, domains: 1, forWho: 'Trips, payments and broadcasts, without the extras.' },
+  { id: 'professional', name: 'Professional', first: 2_999, extra: 600, emailsPerLogin: 5_000, aiPerLogin: 40, domains: 3, forWho: 'Drona AI, automatic messages and group departures.', popular: true },
+  { id: 'ultra', name: 'Ultra Premium', first: 4_999, extra: 900, emailsPerLogin: 10_000, aiPerLogin: 100, domains: 10, forWho: 'Everything, with the most room and help first.' },
 ];
 
-/** What every plan includes, whatever its size. */
-export const EVERY_PLAN = [
-  'Your own agency console: employee logins, and what each person sends',
-  'Trips, quotes and payments',
-  'Payment reminders and trip messages',
-  'Email and WhatsApp broadcasts, with attachments',
-  'Group departures with seat and room lists',
-  'AI quote drafts in English, Telugu and Hindi',
+export const SEATS = { min: 1, max: 50 };
+/** Paid yearly: 10 months' price for 12 */
+export const YEAR_MONTHS = 10;
+
+export const monthlyPrice = (p: Plan, seats: number) => p.first + p.extra * Math.max(0, seats - 1);
+export const periodPrice = (p: Plan, seats: number, period: 'month' | 'year') => monthlyPrice(p, seats) * (period === 'month' ? 1 : YEAR_MONTHS);
+
+/** What each plan has. A string is shown as the value; true/false as a tick or a dash. */
+export const PLAN_FEATURES: { label: string; values: Record<PlanId, boolean | string | ((seats: number) => string)> }[] = [
+  { label: 'Trips, quotes, payments and receipts', values: { basic: true, professional: true, ultra: true } },
+  { label: 'Payment reminders and trip messages', values: { basic: true, professional: true, ultra: true } },
+  { label: 'Email and WhatsApp broadcasts', values: { basic: true, professional: true, ultra: true } },
+  { label: 'WhatsApp inbox: see and answer replies', values: { basic: true, professional: true, ultra: true } },
+  { label: 'Emails a month', values: { basic: (n) => (3_000 * n).toLocaleString('en-IN'), professional: (n) => (5_000 * n).toLocaleString('en-IN'), ultra: (n) => (10_000 * n).toLocaleString('en-IN') } },
+  { label: 'Your own sending domains', values: { basic: '1', professional: '3', ultra: '10' } },
+  { label: 'Drona AI: replies and quote drafts', values: { basic: false, professional: (n) => `${40 * n} a day`, ultra: (n) => `${100 * n} a day` } },
+  { label: 'Automatic messages on any date', values: { basic: false, professional: true, ultra: true } },
+  { label: 'Group departures with seat and room lists', values: { basic: false, professional: true, ultra: true } },
+  { label: 'Leads API for website forms and call agents', values: { basic: false, professional: false, ultra: true } },
+  { label: 'Priority support on WhatsApp and phone', values: { basic: false, professional: false, ultra: true } },
+  { label: 'New features first, like official WhatsApp', values: { basic: false, professional: false, ultra: true } },
 ];
+
+export const planName = (id: string | null | undefined) => PLANS.find((p) => p.id === id)?.name ?? 'Paid';

@@ -25,6 +25,7 @@ const refundSections: DocSection[] = [
       <ul>
         <li>You can cancel any time by writing to {mail} from the email address on your account. There’s no notice period and no cancellation fee.</li>
         <li>Your plan stays active until the end of the period you’ve already paid for. After that it isn’t renewed and you aren’t charged again.</li>
+        <li>Your plan and number of employee logins stay the same for each period you pay for (30 days, or a year). You can change either when you pay for the next period, from 5 days before the current one ends. Choosing fewer logins or a smaller plan doesn’t refund any part of a period already paid for.</li>
         <li>Your trips, customers and messages stay in your account after the plan ends. If you ask us to close the account, we delete its data as our <Link to="/privacy">Privacy Policy</Link> describes.</li>
       </ul>
     ),
@@ -96,7 +97,7 @@ const deliverySections: DocSection[] = [
     body: (
       <ul>
         <li>Your free trial starts the moment you sign up.</li>
-        <li>When you pay for a plan, it’s active on your account straight away, and at the latest within 24 hours. We email a receipt to the address on your account.</li>
+        <li>When you pay for a plan, it’s active on your account straight away, and at the latest within 24 hours. A payment for your next period takes effect on the day that period starts. We email a receipt to the address on your account.</li>
         <li>If your plan isn’t active 24 hours after paying, write to {mail} and we’ll sort it out the same working day.</li>
       </ul>
     ),

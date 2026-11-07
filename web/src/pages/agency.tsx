@@ -4,6 +4,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { BillingSettings } from '@/components/billing';
+import { planName } from '@/lib/brand';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Avatar, Badge, CopyButton, EmptyState, PageHeader, Panel, Skeleton } from '@/components/ui/display';
 import { Field, Input, NativeSelect } from '@/components/ui/field';
@@ -73,7 +74,7 @@ export function AgencyBillingPage() {
   return (
     <OwnerOnly>
       <div className="flex flex-col gap-6">
-        <PageHeader title="Plan & billing" description="Your plan sets how many employee logins you can have and how many emails go out each month." back={<Link to="/agency">Agency</Link>} />
+        <PageHeader title="Plan & billing" description="Choose a plan and exactly how many employee logins you need. Both stay fixed for the period you pay for." back={<Link to="/agency">Agency</Link>} />
         <BillingSettings />
       </div>
     </OwnerOnly>
@@ -168,7 +169,7 @@ function CardShell({ icon, title, children, className }: { icon: ReactNode; titl
 function PlanCard({ seats }: { seats: Agency['seats'] }) {
   const { tenant } = useSession();
   const p = tenant.plan;
-  const name = p?.plan === 'PAID' ? (p.planId ? p.planId.replace('team', 'Team ') : 'Paid plan') : 'Free trial';
+  const name = p?.plan === 'PAID' ? (p.planId ? planName(p.planId) : 'Paid plan') : 'Free trial';
   const sub =
     p?.plan === 'PAID'
       ? p.paidUntil
@@ -183,7 +184,7 @@ function PlanCard({ seats }: { seats: Agency['seats'] }) {
         <span className="text-[22px] font-extrabold tracking-[-0.02em]">{name}</span>
         <span className={cn('text-sm', p?.trialEnded ? 'font-semibold text-danger' : 'text-ink-2')}>{sub}</span>
       </div>
-      <span className="text-xs text-muted">Up to {seats.limit} employee logins</span>
+      <span className="text-xs text-muted">{seats.limit} employee login{seats.limit === 1 ? '' : 's'}{p?.plan === 'PAID' ? '' : ' on the trial'}</span>
       <LinkButton to="/agency/billing" size="sm" variant={p?.plan === 'PAID' ? 'secondary' : 'primary'} className="mt-auto self-start">
         {p?.plan === 'PAID' ? 'Plan & billing' : 'Choose a plan'}
       </LinkButton>

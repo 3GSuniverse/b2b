@@ -132,8 +132,10 @@ export const tenants = pgTable('tenants', {
   plan: tenantPlan().notNull().default('TRIAL'),
   trialEndsAt: ts(),
   trialEndedAt: ts(), // set once the end-of-trial clean-up has run
-  // Bought online (Plan & billing): which plan, and until when it's paid. Null for plans set by the operator.
+  // Bought online (Plan & billing): which plan ('basic' | 'professional' | 'ultra'), how many employee
+  // logins, and until when it's paid. Null for plans set by the operator (they get everything).
   planId: text(),
+  seats: integer(),
   paidUntil: ts(),
   // Unofficial WhatsApp Web sending: on during an active trial. This flag is an operator override for testing.
   whatsappWebEnabled: boolean().notNull().default(false),
@@ -409,9 +411,10 @@ export const billingPayments = pgTable(
   {
     id: id(),
     tenantId: tenantRef(),
-    planId: text().notNull(), // 'team5' | 'team10' | 'team20' | 'team50'
+    planId: text().notNull(), // 'basic' | 'professional' | 'ultra'
+    seats: integer().notNull().default(1), // employee logins bought
     period: text().notNull(), // 'month' | 'year'
-    kind: text().notNull().default('NEW'), // NEW | RENEW | UPGRADE (the difference for the days left)
+    kind: text().notNull().default('NEW'), // NEW | RENEW (same plan and logins) | CHANGE (a different plan or logins for the next period)
     amount: integer().notNull(), // paise, GST included
     gst: integer().notNull().default(0), // paise of GST inside amount
     currency: text().notNull().default('INR'),
@@ -420,6 +423,8 @@ export const billingPayments = pgTable(
     razorpayPaymentId: text(),
     periodStart: ts(),
     periodEnd: ts(),
+    // When the plan and logins this payment bought took effect (a payment for the next period waits for it)
+    appliedAt: ts(),
     createdById: text().references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     paidAt: ts(),

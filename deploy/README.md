@@ -118,7 +118,7 @@ drona plan owner@kurukshetra-travels.in paid 20000
 drona feature whatsapp-web owner@kurukshetra-travels.in on
 ```
 
-New sign-ups get the trial automatically: 5 days, 200 emails, WhatsApp Web up to 100 messages a day. When a company pays, run `drona plan <their email> paid <emails>`.
+New sign-ups get the trial automatically: every feature, 200 emails, WhatsApp Web up to 100 messages a day. Agencies pay online in Plan & billing. For one that pays you offline, run `drona plan <their email> professional <logins>` (or `basic` / `ultra`; add the number of days if it isn't 30).
 
 ## Everyday commands
 
@@ -130,7 +130,8 @@ New sign-ups get the trial automatically: 5 days, 200 emails, WhatsApp Web up to
 | `drona restart` | Restart after editing `deploy/.env` |
 | `drona backup` | Back up the database now (also runs every night at 02:30, keeps 14 days) |
 | `drona restore <file>` | Put a backup back. Asks before replacing anything |
-| `drona plan <email> paid [emails]` | Paid plan (the company owner's email, or the company slug) |
+| `drona plan <email> basic\|professional\|ultra <logins> [days]` | Paid plan for 30 days (or the days given), for an agency that paid offline |
+| `drona plan <email> paid [emails]` | Everything, with no end date (the company owner's email, or the company slug) |
 | `drona plan <email> trial <days>` | Restart or extend a trial |
 | `drona feature whatsapp-web <email> on\|off` | Allow WhatsApp Web after the trial (for a company you trust) |
 

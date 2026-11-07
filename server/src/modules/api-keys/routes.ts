@@ -7,6 +7,7 @@ import { db } from '../../lib/db.js';
 import { AppError, parseBody } from '../../lib/http.js';
 import { requireRole, tenantOf } from '../auth/guard.js';
 import { notify } from '../notifications/service.js';
+import { featureError, hasFeature, requireFeature } from '../plans/entitlements.js';
 import { createTrip, TRIP_SOURCES } from '../trips/service.js';
 
 /**
@@ -32,6 +33,7 @@ async function requireApiKey(req: FastifyRequest) {
   if (!row) throw new AppError(401, 'invalid_api_key', 'This API key isn’t valid, or it was revoked');
   const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, row.tenantId) });
   if (!tenant || tenant.status !== 'ACTIVE') throw new AppError(403, 'company_paused', 'This company’s account is paused');
+  if (!hasFeature(tenant, 'leadApi')) throw featureError('leadApi');
   // At most one write a minute per key for "last used", not one per request
   if (!row.lastUsedAt || Date.now() - row.lastUsedAt.getTime() > 60_000) {
     await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, row.id));
@@ -72,6 +74,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   app.post('/api/api-keys', { preHandler: requireRole('ADMIN') }, async (req, reply) => {
     const { name } = parseBody(z.object({ name: z.string().trim().min(1, 'Name the key, e.g. “AI call agent”').max(60) }), req.body);
     const tenantId = tenantOf(req);
+    await requireFeature(tenantId, 'leadApi');
     const active = await db.select({ id: apiKeys.id }).from(apiKeys).where(and(eq(apiKeys.tenantId, tenantId), isNull(apiKeys.revokedAt)));
     if (active.length >= 10) throw new AppError(409, 'too_many_keys', 'You have 10 keys. Revoke one you don’t use first.');
     const key = newKey();
