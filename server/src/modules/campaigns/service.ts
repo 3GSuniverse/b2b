@@ -294,8 +294,8 @@ export async function previewCampaign(tenantId: string, id: string, contactId?: 
 
   const vars = buildMergeVars(contact ?? null, c.tenant, { unsubscribe_url: '#unsubscribe-preview' });
   const rendered =
-    c.subject && c.html
-      ? renderEmail({ subject: c.subject, html: c.html, text: c.text, previewText: c.previewText }, vars, c.tenant)
+    c.html
+      ? renderEmail({ subject: c.subject ?? '', html: c.html, text: c.text, previewText: c.previewText }, vars, c.tenant)
       : null;
   const checks = await checksFor(input);
   return {

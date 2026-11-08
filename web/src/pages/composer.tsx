@@ -13,6 +13,8 @@ import {
   Clock3,
   FlaskConical,
   LayoutTemplate,
+  Palette,
+  PenLine,
   MessageCircle,
   Loader2,
   Mail,
@@ -32,6 +34,8 @@ import { useFields } from '@/components/contacts/contact-sheet';
 import { DeviceToggle, EmailPreview, type Device } from '@/components/email/email-frame';
 import { EmailThumbnail } from '@/components/email/thumbnail';
 import { MergeTagMenu, VisualEditor } from '@/components/email/visual-editor';
+import { LetterEditor } from '@/components/email/letter-editor';
+import { letter, letterBody, LETTER_START } from '@/lib/letter';
 import { SendNowButton } from '@/components/campaigns/send-button';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Badge, PageHeader, Panel, Skeleton } from '@/components/ui/display';
@@ -120,7 +124,7 @@ function NewCampaign() {
           </Link>
         }
         title={channel === 'WHATSAPP' ? 'New WhatsApp broadcast' : 'New email broadcast'}
-        description="Name it, then pick a design to start from. You’ll change the words next."
+        description={channel === 'WHATSAPP' ? 'Name it, then write the message.' : 'Name it, then write your email or start from a design.'}
       />
       <Panel className="flex flex-col gap-5 p-5 sm:p-6">
         <Field label="Broadcast name" hint="Only your team sees this.">
@@ -142,7 +146,30 @@ function NewCampaign() {
         )}
       </Panel>
       {channel === 'EMAIL' ? (
-        <DesignGallery onPick={(d) => create.mutate(d)} busy={create.isPending} />
+        <>
+          <button
+            type="button"
+            disabled={create.isPending}
+            onClick={() => create.mutate({ key: 'letter', name: 'Plain email', subject: '', previewText: '', html: letter(LETTER_START) })}
+            className="lift group flex items-center gap-5 overflow-hidden rounded-[20px] bg-[linear-gradient(120deg,#4a3fd1,#7b5cff_55%,#b06bff)] p-5 text-left text-white shadow-[var(--shadow-lift)] disabled:opacity-70 sm:p-6"
+          >
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[16px] bg-white/15 transition-transform group-hover:-rotate-6 group-hover:scale-105">
+              {create.isPending ? <Loader2 className="h-6 w-6 animate-spin" /> : <PenLine className="h-6 w-6" />}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="text-[18px] font-bold tracking-[-0.01em]">Write an email</span>
+              <span className="text-[13.5px] leading-snug text-white/85">A blank page, like Gmail. Type your message, attach a photo or brochure, send. Nothing to fill in.</span>
+            </span>
+            <ArrowRight className="hidden h-5 w-5 shrink-0 transition-transform group-hover:translate-x-1 sm:block" />
+          </button>
+          <div className="flex items-center gap-3 pt-2">
+            <span className="flex items-center gap-2 text-[15px] font-semibold">
+              <Palette className="h-4 w-4 text-accent" /> Or start from a design
+            </span>
+            <span className="h-px flex-1 bg-line" aria-hidden />
+          </div>
+          <DesignGallery onPick={(d) => create.mutate(d)} busy={create.isPending} />
+        </>
       ) : (
         <Panel className="flex flex-col items-start gap-4 p-5 sm:p-6">
           <p className="max-w-xl text-sm leading-relaxed text-muted">
@@ -379,7 +406,8 @@ function Composer({ id }: { id: string }) {
       saved.current = d;
       setDraft(d);
       // Open the first part that still needs something, in letter order
-      setOpen(!d.senderId ? 'from' : d.audience?.mode === 'temporary' && !d.audience.addresses?.length ? 'to' : !d.subject ? 'subject' : null);
+      const written = letterBody(d.html) !== null;
+      setOpen(!d.senderId ? 'from' : d.audience?.mode === 'temporary' && !d.audience.addresses?.length ? 'to' : written ? 'content' : !d.subject ? 'subject' : null);
     }
   }, [c, draft]);
 
@@ -487,6 +515,8 @@ function Composer({ id }: { id: string }) {
   const recipients = count.data?.count ?? preview.data?.recipients ?? 0;
   const firstError = checks?.find((x) => x.level === 'error');
   const errorFor = (ids: string[]) => !!checks?.some((x) => x.level === 'error' && ids.includes(x.id));
+  const body = letterBody(draft.html);
+  const isLetter = body !== null;
 
   return (
     <>
@@ -618,7 +648,7 @@ function Composer({ id }: { id: string }) {
         )}
       </header>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+      <div className={cn('grid grid-cols-[minmax(0,1fr)] items-start gap-6', isLetter ? 'xl:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]' : 'xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]')}>
         {/* Left: the parts of the letter, in order */}
         <div className="flex flex-col gap-3">
           <Step
@@ -673,7 +703,7 @@ function Composer({ id }: { id: string }) {
           <Step
             icon={<Users className="h-4 w-4" />}
             number={2}
-            next={{ label: 'Next: Subject', onClick: () => setOpen('subject') }}
+            next={isLetter ? { label: 'Next: Write it', onClick: () => setOpen('content') } : { label: 'Next: Subject', onClick: () => setOpen('subject') }}
             title="To"
             summary={
               <>
@@ -688,6 +718,7 @@ function Composer({ id }: { id: string }) {
             <AudienceEditor allowTemporary value={draft.audience} onChange={(a) => set({ audience: a })} />
           </Step>
 
+          {!isLetter && (
           <Step
             icon={<Pencil className="h-4 w-4" />}
             number={3}
@@ -708,7 +739,48 @@ function Composer({ id }: { id: string }) {
               </Field>
             </div>
           </Step>
+          )}
 
+          {isLetter ? (
+            <Step
+              icon={<PenLine className="h-4 w-4" />}
+              number={3}
+              next={{ label: 'Next: Attachments', onClick: () => setOpen('files') }}
+              title="Message"
+              summary={draft.subject ? <PrettyTags text={draft.subject} /> : 'Write the subject and your message'}
+              done={!!draft.subject && !errorFor(['subject', 'content', 'placeholders', 'unknown_tags'])}
+              error={errorFor(['subject', 'content', 'placeholders', 'unknown_tags'])}
+              open={open === 'content'}
+              onToggle={() => setOpen(open === 'content' ? null : 'content')}
+            >
+              <div className="flex flex-col gap-4">
+                <Field label="Subject" aside={`${draft.subject.length} / 60`}>
+                  {(p) => <SubjectInput {...p} value={draft.subject} onChange={(v) => set({ subject: v })} fields={fields.data} placeholder="Goa seats open for December, {first_name|friend}" />}
+                </Field>
+                <LetterEditor body={body} onChange={(b) => set({ html: letter(b) })} fields={fields.data?.fields ?? []} autoFocus={!!draft.subject} />
+                <details className="group text-sm">
+                  <summary className="cursor-pointer list-none text-[13px] font-semibold text-accent hover:text-accent-strong">
+                    <span className="group-open:hidden">+ Add preview text</span>
+                    <span className="hidden group-open:inline">Preview text</span>
+                  </summary>
+                  <Textarea
+                    aria-label="Preview text"
+                    className="mt-2 min-h-0"
+                    rows={2}
+                    value={draft.previewText}
+                    onChange={(e) => set({ previewText: e.target.value })}
+                    placeholder="The grey line after the subject in most inboxes, e.g. 3 nights, flights included, from ₹18,500"
+                  />
+                </details>
+                <div className="flex flex-wrap items-center gap-2 border-t border-line-soft pt-3 text-xs text-muted">
+                  <span>Want photos, prices and buttons laid out?</span>
+                  <button type="button" onClick={() => setChangingDesign(true)} className="inline-flex items-center gap-1 font-semibold text-accent hover:text-accent-strong">
+                    <Palette className="h-3.5 w-3.5" /> Use a design instead
+                  </button>
+                </div>
+              </div>
+            </Step>
+          ) : (
           <Step
             icon={<LayoutTemplate className="h-4 w-4" />}
             number={4}
@@ -734,14 +806,28 @@ function Composer({ id }: { id: string }) {
                   <Button size="sm" onClick={() => setChangingDesign(true)}>
                     Change design
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      const before = draft.html;
+                      set({ html: letter(LETTER_START) });
+                      setOpen('content');
+                      toast('Switched to a plain email', { action: { label: 'Undo', onClick: () => set({ html: before }) } });
+                    }}
+                  >
+                    <PenLine className="h-4 w-4" />
+                    Write a plain email instead
+                  </Button>
                 </div>
               </div>
             </div>
           </Step>
+          )}
 
           <Step
             icon={<Paperclip className="h-4 w-4" />}
-            number={5}
+            number={isLetter ? 4 : 5}
             next={{ label: 'Done: check and send', onClick: () => setOpen(null) }}
             title="Attachments"
             summary={draft.attachments.length ? describeFiles(draft.attachments) : 'Optional: brochure, itinerary, photos'}

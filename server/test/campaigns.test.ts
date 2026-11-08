@@ -8,6 +8,7 @@ import { setEmailProvider } from '../src/modules/email/index.js';
 import { MemoryEmailProvider } from '../src/modules/email/memory-provider.js';
 import { SendError } from '../src/modules/email/types.js';
 import { processSendJob } from '../src/modules/sending/send-message.js';
+import { PLACEHOLDER } from '../src/modules/campaigns/checks.js';
 import { closeQueues } from '../src/queues/index.js';
 import { api, signup } from './api-helpers.js';
 import { resetDb } from './helpers.js';
@@ -101,6 +102,24 @@ describe('preview and checks', () => {
     expect(byId.placeholders.note).toContain('[PRICE]');
     expect(byId.fallback_first_name).toMatchObject({ level: 'warning', title: '1 contact has no first name.' });
     expect(byId.unsubscribe.level).toBe('ok');
+  });
+
+  it('a plain email has nothing to replace, but needs a message written before it sends', async () => {
+    const { c } = await company([{ email: 'ravi@x.in', firstName: 'Ravi' }]);
+    const starters = (await c.get('/api/templates/starters')).json().starters;
+    const plain = starters.find((s: { id: string }) => s.id === 'plain-letter');
+    expect(plain.html).not.toMatch(PLACEHOLDER);
+    const id = (await c.post('/api/campaigns', { ...draft, html: plain.html })).json().campaign.id;
+    const byId = async () => Object.fromEntries((await c.post(`/api/campaigns/${id}/preview`, {})).json().checks.map((x: { id: string }) => [x.id, x]));
+    const before = await byId();
+    expect(before.content).toMatchObject({ level: 'error', title: 'Write your message.' });
+    expect(before.placeholders).toBeUndefined();
+
+    await c.patch(`/api/campaigns/${id}`, { html: plain.html.replace('<br></p><p', 'Goa has 6 seats left for December.</p><p') });
+    const after = await byId();
+    expect(after.content).toBeUndefined();
+    const p = (await c.post(`/api/campaigns/${id}/preview`, {})).json();
+    expect(p.rendered.html).toContain('Hi Ravi,');
   });
 
   it('refuses to send while checks fail, with the reason', async () => {

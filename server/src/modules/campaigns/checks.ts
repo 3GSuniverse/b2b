@@ -1,3 +1,4 @@
+import { letterWords, UNTOUCHED_LETTER } from '../templates/starters.js';
 import { and, count, eq, sql, type SQL } from 'drizzle-orm';
 import { contacts, customFields, type Audience, type AttachmentRef } from '../../db/schema.js';
 import { LIMITS, totalSize } from '../attachments/service.js';
@@ -99,6 +100,10 @@ export async function campaignChecks(input: CheckInput): Promise<{ checks: Check
   else if (subject.length > 78) add({ id: 'subject', level: 'warning', title: 'The subject line is long.', note: `${subject.length} characters — phones show about 40–60.` });
   else add({ id: 'subject', level: 'ok', title: 'Subject length is good.', note: `${subject.length} characters fits most phone screens.` });
   if (!html) add({ id: 'content', level: 'error', title: 'The email has no content yet.' });
+  else {
+    const words = letterWords(html);
+    if (words !== null && (words === UNTOUCHED_LETTER || words.length < 3)) add({ id: 'content', level: 'error', title: 'Write your message.', note: 'Type it between the greeting and the sign-off.' });
+  }
 
   add({ id: 'unsubscribe', level: 'ok', title: 'Unsubscribe link added.', note: 'Required by Gmail and Yahoo — added to every email automatically.' });
   if (!input.tenant.postalAddress?.trim()) {

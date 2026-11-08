@@ -16,6 +16,24 @@ const button = (label: string, accent: string) =>
 <a href="[LINK]" style="display:inline-block;padding:14px 26px;font:700 15px Arial,Helvetica,sans-serif;color:#ffffff;text-decoration:none;border-radius:8px;">${label}</a>
 </td></tr></table>`;
 
+/**
+ * A plain, written email. The editor recognises it by data-drona-letter and lets people type
+ * straight into it, like the WhatsApp message box. web/src/lib/letter.ts builds the same markup.
+ */
+export const letter = (body: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head>
+<body style="margin:0;padding:24px 16px;font:15px/1.6 Arial,Helvetica,sans-serif;color:#1a1a1a;background:#ffffff;">
+<div data-drona-letter="1" style="max-width:560px;">${body}</div>
+</body></html>`;
+const P = 'style="margin:0 0 14px;"';
+/** What a new plain email starts with: a greeting, room to write, a sign-off. Nothing to replace. */
+export const LETTER_START = `<p ${P}>Hi {first_name|there},</p><p ${P}><br></p><p ${P}>Warm regards,<br>{company_name}</p>`;
+/** The words of an untouched plain email, to tell when nothing has been written yet. */
+export const letterWords = (html: string) => {
+  const m = /<div data-drona-letter[^>]*>([\s\S]*)<\/div>/i.exec(html);
+  return m ? m[1]!.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim() : null;
+};
+export const UNTOUCHED_LETTER = letterWords(letter(LETTER_START));
+
 export interface Starter {
   id: string;
   name: string;
@@ -26,6 +44,14 @@ export interface Starter {
 }
 
 export const STARTERS: Starter[] = [
+  {
+    id: 'plain-letter',
+    name: 'Plain email',
+    description: 'A blank page you write yourself, like a normal email. Often lands in the main inbox, not Promotions.',
+    subject: '',
+    previewText: '',
+    html: letter(LETTER_START),
+  },
   {
     id: 'offer-spotlight',
     name: 'Offer spotlight',
@@ -68,21 +94,6 @@ ${[3, 4].map((n) => `<td width="50%" valign="top" style="padding:8px;"><div styl
       '#2b4a73',
       '#eef2f6',
     ),
-  },
-  {
-    id: 'plain-letter',
-    name: 'Plain letter',
-    description: 'Looks like a personal email. Often lands in the main inbox, not Promotions.',
-    subject: 'Quick note about your trip, {first_name|there}',
-    previewText: '',
-    html: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:24px 16px;font:15px/1.6 Arial,Helvetica,sans-serif;color:#1a1a1a;background:#ffffff;">
-<div style="max-width:560px;">
-<p>Hi {first_name|there},</p>
-<p>[WRITE AS YOU WOULD TO ONE CUSTOMER — SHORT AND PERSONAL.]</p>
-<p>If you have any questions, just reply to this email.</p>
-<p>Warm regards,<br>[YOUR NAME]<br>{company_name}</p>
-</div></body></html>`,
   },
   {
     id: 'trip-reminder',

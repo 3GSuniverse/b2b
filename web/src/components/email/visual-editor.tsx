@@ -79,7 +79,7 @@ const tagLabel = (key: string, fallback?: string) => {
 };
 
 /** A merge tag as a solid chip: it can be moved or deleted, never typed into half-way. */
-function chipFor(doc: Document, raw: string) {
+export function chipFor(doc: Document, raw: string) {
   const m = new RegExp(TAG_RE.source).exec(raw)!;
   const span = doc.createElement('span');
   span.setAttribute('data-drona-tag', raw);
@@ -89,8 +89,8 @@ function chipFor(doc: Document, raw: string) {
 }
 
 /** Turns {first_name|there} text into chips throughout the body. */
-function chipify(doc: Document) {
-  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
+export function chipify(doc: Document, root: HTMLElement = doc.body) {
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: (n) => (n.parentElement?.closest('style,script,title,[data-drona-tag]') ? NodeFilter.FILTER_REJECT : new RegExp(TAG_RE.source).test(n.nodeValue ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
   });
   const nodes: Text[] = [];

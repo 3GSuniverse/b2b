@@ -116,9 +116,23 @@ export function Sheet({
 
 // ---------------------------------------------------------------- Popover
 
-export function Popover({ trigger, children, align = 'end', className }: { trigger: ReactNode; children: ReactNode; align?: 'start' | 'center' | 'end'; className?: string }) {
+export function Popover({
+  trigger,
+  children,
+  align = 'end',
+  className,
+  open,
+  onOpenChange,
+}: {
+  trigger: ReactNode;
+  children: ReactNode;
+  align?: 'start' | 'center' | 'end';
+  className?: string;
+  open?: boolean;
+  onOpenChange?: (o: boolean) => void;
+}) {
   return (
-    <PopoverPrimitive.Root>
+    <PopoverPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <PopoverPrimitive.Trigger asChild>{trigger}</PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content

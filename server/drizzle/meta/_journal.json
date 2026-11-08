@@ -155,6 +155,13 @@
       "when": 1794054551477,
       "tag": "0021_daily_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794154976705,
+      "tag": "0022_plain_email",
+      "breakpoints": true
     }
   ]
 }

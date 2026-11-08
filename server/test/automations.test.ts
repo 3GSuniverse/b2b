@@ -195,7 +195,7 @@ describe('automations API', () => {
   it('starter templates are available to every company', async () => {
     const { cookie } = await signup(app);
     const list = (await api(app, cookie).get('/api/templates/starters')).json().starters;
-    expect(list.map((s: { id: string }) => s.id)).toEqual(['offer-spotlight', 'package-grid', 'plain-letter', 'trip-reminder', 'birthday']);
+    expect(list.map((s: { id: string }) => s.id)).toEqual(['plain-letter', 'offer-spotlight', 'package-grid', 'trip-reminder', 'birthday']);
   });
 
   it('companies can’t see each other’s automations or templates', async () => {
