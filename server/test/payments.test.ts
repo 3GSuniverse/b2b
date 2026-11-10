@@ -15,7 +15,7 @@ import { addDays } from '../src/modules/trips/money.js';
 import { MemoryWhatsAppGateway } from '../src/modules/whatsapp/gateway.js';
 import { processWhatsAppJob } from '../src/modules/whatsapp/service.js';
 import { api, signup } from './api-helpers.js';
-import { makeContact, makeTenant, resetDb } from './helpers.js';
+import { makeContact, makeTenant, resetDb, makeLine } from './helpers.js';
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 beforeAll(async () => {
@@ -147,7 +147,7 @@ describe('payment reminders', () => {
 
   it('on WhatsApp when the number is linked, even to someone who didn’t opt in to offers', async () => {
     const { tenant, contact } = await bookedTrip({ dueIn: 1, tenant: { whatsappWebEnabled: true }, contact: { whatsappStatus: 'UNSUBSCRIBED' } });
-    await db.insert(whatsappSessions).values({ tenantId: tenant.id, status: 'CONNECTED', phone: '+919000000001', intervalSeconds: 0 });
+    await makeLine(tenant.id, { status: 'CONNECTED', phone: '+919000000001', intervalSeconds: 0 });
     const q = queues();
     await runPaymentReminders({ now: NOW, ...q.opts });
     expect(q.whatsapp).toHaveLength(1);
@@ -159,7 +159,7 @@ describe('payment reminders', () => {
 
   it('never to someone who replied STOP; falls back to email', async () => {
     const { tenant, contact } = await bookedTrip({ dueIn: 1, tenant: { whatsappWebEnabled: true } });
-    await db.insert(whatsappSessions).values({ tenantId: tenant.id, status: 'CONNECTED', phone: '+919000000001' });
+    await makeLine(tenant.id, { status: 'CONNECTED', phone: '+919000000001' });
     await db.insert(suppressions).values({ tenantId: tenant.id, channel: 'WHATSAPP', address: contact.phone!, reason: 'UNSUBSCRIBE' });
     const q = queues();
     await runPaymentReminders({ now: NOW, ...q.opts });

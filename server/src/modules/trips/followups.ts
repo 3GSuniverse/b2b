@@ -10,7 +10,7 @@ import { requireAuth, requireRole, tenantOf } from '../auth/guard.js';
 import { findUnknownTags, renderString } from '../email/render.js';
 import { trialEnded, whatsappWebAllowed } from '../plans/entitlements.js';
 import { REMINDER_HOUR } from '../payments/reminders.js';
-import { getSession } from '../whatsapp/service.js';
+import { whatsappReady } from '../whatsapp/service.js';
 import { addDays, localDate } from './money.js';
 import { quoteUrl } from '../quotes/service.js';
 
@@ -215,7 +215,7 @@ export async function runTripFollowups(
         });
       if (!wanted.length) continue;
 
-      const whatsappUp = whatsappWebAllowed(tenant, now) && (await getSession(tenant.id)).status === 'CONNECTED';
+      const whatsappUp = whatsappWebAllowed(tenant, now) && (await whatsappReady(tenant.id));
       const sender =
         (await db.query.senders.findFirst({ where: and(eq(senders.tenantId, tenant.id), eq(senders.isDefault, true)) })) ??
         (await db.query.senders.findFirst({ where: eq(senders.tenantId, tenant.id), orderBy: [asc(senders.createdAt)] }));

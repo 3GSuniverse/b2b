@@ -86,8 +86,8 @@ const whatsappWorker = new Worker<WhatsAppJob>(
   QUEUES.whatsappSend,
   async (job, token) => {
     if (job.data.kind === 'test') {
-      const { tenantId, to, text, attachments } = job.data;
-      await deliverWhatsApp(whatsapp, tenantId, to, text, await loadFiles(tenantId, attachments ?? []));
+      const { tenantId, sessionId, to, text, attachments } = job.data;
+      await deliverWhatsApp(whatsapp, sessionId, to, text, await loadFiles(tenantId, attachments ?? []));
       return 'test_sent';
     }
     const { messageId } = job.data;

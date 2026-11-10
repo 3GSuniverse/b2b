@@ -4,9 +4,9 @@ import { createRedis, getRedis } from '../../lib/redis.js';
 //  - commands (connect / disconnect) go API → worker over pub/sub
 //  - the current QR code goes worker → API as a short-lived key
 const CHANNEL = 'whatsapp:commands';
-const qrKey = (tenantId: string) => `whatsapp:qr:${tenantId}`;
+const qrKey = (sessionId: string) => `whatsapp:qr:${sessionId}`;
 
-export type WhatsAppCommand = { action: 'connect' | 'disconnect'; tenantId: string };
+export type WhatsAppCommand = { action: 'connect' | 'disconnect'; sessionId: string };
 
 export async function publishCommand(cmd: WhatsAppCommand) {
   await getRedis().publish(CHANNEL, JSON.stringify(cmd));
@@ -26,10 +26,10 @@ export async function subscribeCommands(handler: (cmd: WhatsAppCommand) => void)
 }
 
 /** WhatsApp rotates the QR about every 20 seconds; keep each one a little longer than that. */
-export async function setQr(tenantId: string, qr: string | null) {
-  if (qr) await getRedis().set(qrKey(tenantId), qr, 'EX', 60);
-  else await getRedis().del(qrKey(tenantId));
+export async function setQr(sessionId: string, qr: string | null) {
+  if (qr) await getRedis().set(qrKey(sessionId), qr, 'EX', 60);
+  else await getRedis().del(qrKey(sessionId));
 }
-export async function getQr(tenantId: string) {
-  return getRedis().get(qrKey(tenantId));
+export async function getQr(sessionId: string) {
+  return getRedis().get(qrKey(sessionId));
 }

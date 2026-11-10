@@ -39,6 +39,18 @@ export function requireRole(min: Role) {
   };
 }
 
+/** Who is looking: employees (MEMBER) see their own customers, numbers and chats; owners and managers see everyone's. */
+export interface Viewer {
+  tenantId: string;
+  userId: string;
+  role: Role;
+}
+export function viewerOf(req: FastifyRequest): Viewer {
+  if (!req.auth) throw new AppError(401, 'not_signed_in', 'Please sign in');
+  return { tenantId: req.auth.tenantId, userId: req.auth.userId, role: req.auth.role };
+}
+export const seesAll = (v: Pick<Viewer, 'role'>) => v.role !== 'MEMBER';
+
 /** The tenant of the signed-in user. Every query in a route must be scoped by this. */
 export function tenantOf(req: FastifyRequest): string {
   if (!req.auth) throw new AppError(401, 'not_signed_in', 'Please sign in');

@@ -11,7 +11,7 @@ import { startCampaign } from '../src/modules/sending/start-campaign.js';
 import { MemoryWhatsAppGateway } from '../src/modules/whatsapp/gateway.js';
 import { processWhatsAppJob } from '../src/modules/whatsapp/service.js';
 import { api, signup } from './api-helpers.js';
-import { fakeQueue, makeCampaign, makeContact, makeTenant, resetDb } from './helpers.js';
+import { fakeQueue, makeCampaign, makeContact, makeTenant, resetDb, makeLine } from './helpers.js';
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 beforeAll(async () => {
@@ -27,7 +27,7 @@ beforeEach(resetDb);
 describe('temporary lists: send to pasted numbers and emails without saving them', () => {
   it('WhatsApp: cleans up the numbers, skips people who said STOP, saves nobody', async () => {
     const { tenant } = await makeTenant({ whatsappWebEnabled: true });
-    await db.insert(whatsappSessions).values({ tenantId: tenant.id, status: 'CONNECTED', phone: '+919000000001', dailyLimit: 200, intervalSeconds: 0 });
+    await makeLine(tenant.id, { status: 'CONNECTED', phone: '+919000000001', dailyLimit: 200, intervalSeconds: 0 });
     const ravi = await makeContact(tenant.id, { phone: '+919000000002', whatsappStatus: 'SUBSCRIBED', firstName: 'Ravi' });
     await db.insert(suppressions).values({ tenantId: tenant.id, channel: 'WHATSAPP', address: '+919000000003', reason: 'UNSUBSCRIBE' });
     const audience = { mode: 'temporary' as const, addresses: ['98480 12345', '+91 98480-12345', 'not a number', '9000000002', '9000000003'] };

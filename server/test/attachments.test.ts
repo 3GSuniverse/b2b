@@ -13,7 +13,7 @@ import { startCampaign } from '../src/modules/sending/start-campaign.js';
 import { MemoryWhatsAppGateway } from '../src/modules/whatsapp/gateway.js';
 import { processWhatsAppJob } from '../src/modules/whatsapp/service.js';
 import { api, signup } from './api-helpers.js';
-import { fakeQueue, makeCampaign, makeContact, makeTenant, resetDb } from './helpers.js';
+import { fakeQueue, makeCampaign, makeContact, makeTenant, resetDb, makeLine } from './helpers.js';
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 beforeAll(async () => {
@@ -115,7 +115,7 @@ describe('emails carry their attachments', () => {
 describe('WhatsApp carries photos and documents', () => {
   async function linked() {
     const { tenant } = await makeTenant({ whatsappWebEnabled: true });
-    await db.insert(whatsappSessions).values({ tenantId: tenant.id, status: 'CONNECTED', phone: '+919000000001', dailyLimit: 200, intervalSeconds: 0 });
+    await makeLine(tenant.id, { status: 'CONNECTED', phone: '+919000000001', dailyLimit: 200, intervalSeconds: 0 });
     await makeContact(tenant.id, { phone: '+919000000010', whatsappStatus: 'SUBSCRIBED', firstName: 'Ravi' });
     return tenant;
   }

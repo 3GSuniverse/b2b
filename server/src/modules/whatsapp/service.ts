@@ -1,6 +1,6 @@
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, max, min, sql } from 'drizzle-orm';
 import QRCode from 'qrcode';
-import { campaigns, contacts, messages, suppressions, tenants, whatsappSessions, whatsappTrialNumbers } from '../../db/schema.js';
+import { campaigns, contacts, messages, suppressions, tenants, users, whatsappSessions, whatsappTrialNumbers } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { buildMergeVars, renderString } from '../email/render.js';
@@ -25,15 +25,15 @@ const CAPTION_MAX = 1024;
  * Returns the first message's id (for ✓✓ receipts). Once anything has reached the customer,
  * a later failure is reported in `partial` instead of thrown: retrying would send the first part twice.
  */
-export async function deliverWhatsApp(gateway: WhatsAppGateway, tenantId: string, to: string, text: string, files: AttachmentFile[]) {
+export async function deliverWhatsApp(gateway: WhatsAppGateway, sessionId: string, to: string, text: string, files: AttachmentFile[]) {
   const media = (f: AttachmentFile, caption?: string) =>
-    gateway.sendMedia(tenantId, to, { kind: whatsappKind(f.type), data: f.data, mimeType: f.type, fileName: f.name, caption });
+    gateway.sendMedia(sessionId, to, { kind: whatsappKind(f.type), data: f.data, mimeType: f.type, fileName: f.name, caption });
   const only = files.length === 1 ? files[0]! : null;
   if (only && whatsappKind(only.type) !== 'audio' && text.length <= CAPTION_MAX) {
     return { id: (await media(only, text || undefined)).id, partial: null as string | null };
   }
   const parts: (() => Promise<{ id: string }>)[] = [
-    ...(text.trim() ? [() => gateway.sendText(tenantId, to, text)] : []),
+    ...(text.trim() ? [() => gateway.sendText(sessionId, to, text)] : []),
     ...files.map((f) => () => media(f)),
   ];
   let first: string | null = null;
@@ -51,16 +51,53 @@ export async function deliverWhatsApp(gateway: WhatsAppGateway, tenantId: string
 
 /** WhatsApp's own limit for one text message. */
 export const WHATSAPP_MAX_LENGTH = 4096;
-/** The agency's own daily limit setting. The plan's limit (350 a login a day on Basic, and more) caps it too. */
+/** Each number's own daily limit setting. The plan's limit (per number) caps it too. */
 export const DAILY_LIMIT_RANGE = { min: 20, max: 50 * 750 } as const;
 
 // ---------------------------------------------------------------- session state
 
-export async function getSession(tenantId: string) {
-  const s = await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.tenantId, tenantId) });
+export type WhatsAppSession = typeof whatsappSessions.$inferSelect;
+
+/** This login's own WhatsApp number (made on first use). */
+export async function getSession(tenantId: string, userId: string) {
+  const s = await db.query.whatsappSessions.findFirst({ where: and(eq(whatsappSessions.tenantId, tenantId), eq(whatsappSessions.userId, userId)) });
   if (s) return s;
-  const [created] = await db.insert(whatsappSessions).values({ tenantId }).onConflictDoNothing().returning();
-  return created ?? (await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.tenantId, tenantId) }))!;
+  const [created] = await db.insert(whatsappSessions).values({ tenantId, userId }).onConflictDoNothing().returning();
+  const row = created ?? (await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.userId, userId) }));
+  if (!row || row.tenantId !== tenantId) throw new AppError(404, 'not_found', 'Login not found');
+  return row;
+}
+
+export async function sessionById(sessionId: string) {
+  const s = await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.id, sessionId) });
+  if (!s) throw new AppError(404, 'not_found', 'WhatsApp number not found');
+  return s;
+}
+
+/**
+ * The number a message goes out from. `people` are the logins it belongs to, best first
+ * (who sent it, who owns the trip or the customer). The first of them with a linked number wins.
+ * With `fallback`, any linked number in the agency will do (automatic messages);
+ * without it, a person's number that's down means waiting for it (their broadcast, their reply).
+ */
+export async function pickSession(tenantId: string, people: (string | null | undefined)[], opts: { fallback?: boolean } = {}) {
+  const ids = [...new Set(people.filter((p): p is string => !!p))];
+  const rows = await db.query.whatsappSessions.findMany({
+    where: opts.fallback || !ids.length ? eq(whatsappSessions.tenantId, tenantId) : and(eq(whatsappSessions.tenantId, tenantId), inArray(whatsappSessions.userId, ids)),
+  });
+  const own = ids.map((id) => rows.find((r) => r.userId === id)).filter((r): r is WhatsAppSession => !!r);
+  const up = own.find((r) => r.status === 'CONNECTED');
+  if (up) return up;
+  if (opts.fallback || !ids.length) {
+    const any = rows.filter((r) => r.status === 'CONNECTED').sort((a, b) => (a.connectedAt?.getTime() ?? 0) - (b.connectedAt?.getTime() ?? 0))[0];
+    if (any) return any;
+  }
+  return own.find((r) => r.phone) ?? own[0] ?? null;
+}
+
+/** Whether a message for these people could go out on WhatsApp right now. */
+export async function whatsappReady(tenantId: string, people: (string | null | undefined)[] = [], opts: { fallback?: boolean } = { fallback: true }) {
+  return (await pickSession(tenantId, people, opts))?.status === 'CONNECTED';
 }
 
 export async function assertEnabled(tenantId: string) {
@@ -70,24 +107,40 @@ export async function assertEnabled(tenantId: string) {
   }
 }
 
-/** Sent in the last 24 hours from this company's number (rolling, like the Gmail limit). */
-export async function whatsappUsageLast24h(tenantId: string, now = new Date()) {
+/** Sent in the last 24 hours from this number (rolling, like the Gmail limit). */
+export async function whatsappUsageLast24h(sessionId: string, now = new Date()) {
   const since = new Date(now.getTime() - 86_400_000);
   const [row] = await db
     .select({ sent: count(), oldest: min(messages.sentAt), last: max(messages.sentAt) })
     .from(messages)
-    .where(and(eq(messages.tenantId, tenantId), eq(messages.channel, 'WHATSAPP'), isNotNull(messages.sentAt), gte(messages.sentAt, since)));
+    .where(and(eq(messages.whatsappSessionId, sessionId), eq(messages.channel, 'WHATSAPP'), isNotNull(messages.sentAt), gte(messages.sentAt, since)));
   return { sent: row?.sent ?? 0, oldest: row?.oldest ?? null, last: row?.last ?? null };
 }
 
-export async function whatsappStatusDto(tenantId: string) {
-  const s = await getSession(tenantId);
+/** Sent in the last 24 hours from all the agency's numbers together. */
+export async function agencyUsageLast24h(tenantId: string, now = new Date()) {
+  const since = new Date(now.getTime() - 86_400_000);
+  const [row] = await db
+    .select({ sent: count(), oldest: min(messages.sentAt) })
+    .from(messages)
+    .where(and(eq(messages.tenantId, tenantId), eq(messages.channel, 'WHATSAPP'), isNotNull(messages.sentAt), gte(messages.sentAt, since)));
+  return { sent: row?.sent ?? 0, oldest: row?.oldest ?? null };
+}
+
+export async function whatsappStatusDto(tenantId: string, userId: string) {
+  return sessionDto(await getSession(tenantId, userId));
+}
+
+export async function sessionDto(s: WhatsAppSession) {
+  const tenantId = s.tenantId;
   const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
   const trialPerDay = tenant ? trialWhatsAppPerDay(tenant) : null;
   const planPerDay = tenant ? whatsappDailyCap(tenant) : null;
-  const usage = await whatsappUsageLast24h(tenantId);
-  const qr = s.status === 'CONNECTING' ? await getQr(tenantId) : null;
+  const usage = await whatsappUsageLast24h(s.id);
+  const qr = s.status === 'CONNECTING' ? await getQr(s.id) : null;
   return {
+    id: s.id,
+    userId: s.userId,
     status: s.status,
     phone: s.phone,
     displayName: s.displayName,
@@ -103,17 +156,36 @@ export async function whatsappStatusDto(tenantId: string) {
   };
 }
 
+/** Every employee's number, for owners and managers. Logins that never linked one are left out. */
+export async function listNumbers(tenantId: string) {
+  const rows = await db
+    .select({ s: whatsappSessions, name: users.name, username: users.username })
+    .from(whatsappSessions)
+    .innerJoin(users, eq(users.id, whatsappSessions.userId))
+    .where(and(eq(whatsappSessions.tenantId, tenantId), isNull(users.disabledAt)))
+    .orderBy(users.name);
+  const out = [];
+  for (const r of rows) {
+    if (r.s.status === 'DISCONNECTED' && !r.s.phone) continue;
+    const usage = await whatsappUsageLast24h(r.s.id);
+    out.push({ id: r.s.id, userId: r.s.userId, employee: r.name, username: r.username, status: r.s.status, phone: r.s.phone, displayName: r.s.displayName, sentLast24h: usage.sent, connectedAt: r.s.connectedAt, lastError: r.s.lastError });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- events from the connection (worker)
 
-export async function onQr(tenantId: string) {
-  await db.update(whatsappSessions).set({ status: 'CONNECTING', lastError: null }).where(eq(whatsappSessions.tenantId, tenantId));
+export async function onQr(sessionId: string) {
+  await db.update(whatsappSessions).set({ status: 'CONNECTING', lastError: null }).where(eq(whatsappSessions.id, sessionId));
 }
 
 /**
  * Called when a phone finishes linking. Returns false if the number isn't allowed here:
  * each WhatsApp number gets one free trial, so signing up again doesn't buy more messages.
  */
-export async function onConnected(tenantId: string, phone: string, displayName: string | null): Promise<boolean> {
+export async function onConnected(sessionId: string, phone: string, displayName: string | null): Promise<boolean> {
+  const before = await sessionById(sessionId);
+  const tenantId = before.tenantId;
   const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
   if (tenant?.plan === 'TRIAL' && !tenant.whatsappWebEnabled && phone) {
     const [claimed] = await db.insert(whatsappTrialNumbers).values({ phone, tenantId }).onConflictDoNothing().returning();
@@ -122,15 +194,14 @@ export async function onConnected(tenantId: string, phone: string, displayName: 
       await db
         .update(whatsappSessions)
         .set({ status: 'DISCONNECTED', phone: null, lastError: `${phone} has already been used for a free trial. Link a different number, or upgrade.` })
-        .where(eq(whatsappSessions.tenantId, tenantId));
+        .where(eq(whatsappSessions.id, sessionId));
       return false;
     }
   }
-  const before = await getSession(tenantId);
   await db
     .update(whatsappSessions)
     .set({ status: 'CONNECTED', phone, displayName, lastError: null, connectedAt: before.status === 'CONNECTED' ? before.connectedAt : new Date() })
-    .where(eq(whatsappSessions.tenantId, tenantId));
+    .where(eq(whatsappSessions.id, sessionId));
   if (before.status !== 'CONNECTED') {
     await notify(tenantId, {
       type: 'whatsapp.connected',
@@ -145,16 +216,17 @@ export async function onConnected(tenantId: string, phone: string, displayName: 
 }
 
 /** Linking couldn't reach WhatsApp at all (network, or WhatsApp refusing the connection). */
-export async function onLinkFailed(tenantId: string) {
+export async function onLinkFailed(sessionId: string) {
   await db
     .update(whatsappSessions)
     .set({ status: 'DISCONNECTED', lastError: 'Couldn’t reach WhatsApp to show a QR code. Check the server’s internet connection and try again.' })
-    .where(and(eq(whatsappSessions.tenantId, tenantId), eq(whatsappSessions.status, 'CONNECTING')));
+    .where(and(eq(whatsappSessions.id, sessionId), eq(whatsappSessions.status, 'CONNECTING')));
 }
 
 /** The phone unlinked us, or WhatsApp refused the number. Either way, sending stops until it's relinked. */
-export async function onEnded(tenantId: string, reason: 'LOGGED_OUT' | 'BLOCKED', detail?: string) {
-  const s = await getSession(tenantId);
+export async function onEnded(sessionId: string, reason: 'LOGGED_OUT' | 'BLOCKED', detail?: string) {
+  const s = await sessionById(sessionId);
+  const tenantId = s.tenantId;
   await db
     .update(whatsappSessions)
     .set({
@@ -164,7 +236,7 @@ export async function onEnded(tenantId: string, reason: 'LOGGED_OUT' | 'BLOCKED'
           ? 'WhatsApp blocked this number from using WhatsApp Web. Check the phone for a message from WhatsApp.'
           : 'The number was unlinked from the phone (Linked devices → Log out). Link it again to keep sending.',
     })
-    .where(eq(whatsappSessions.tenantId, tenantId));
+    .where(eq(whatsappSessions.id, sessionId));
   await notify(tenantId, {
     type: `whatsapp.${reason.toLowerCase()}`,
     level: 'ERROR',
@@ -246,7 +318,7 @@ export async function onIncoming(tenantId: string, fromPhone: string, text: stri
 export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGateway = getWhatsAppGateway(), now = new Date()): Promise<SendOutcome> {
   const msg = await db.query.messages.findFirst({
     where: eq(messages.id, messageId),
-    with: { tenant: true, contact: true, campaign: true },
+    with: { tenant: true, contact: true, campaign: true, trip: true },
   });
   if (!msg) return 'missing';
   if (msg.status !== 'QUEUED') return 'already_processed';
@@ -283,18 +355,32 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
     return 'failed';
   }
 
-  // The linked number must be up. If it isn't, wait — the company may relink it.
-  const session = await getSession(msg.tenantId);
-  if (session.status !== 'CONNECTED') {
-    throw new DeferSend(new Date(now.getTime() + 15 * 60_000), `WhatsApp isn’t linked (${session.status.toLowerCase()})`);
+  // Which employee's number: the one who sent it; for automatic messages the trip's or customer's employee,
+  // or any linked number in the agency. It must be up; if it isn't, wait — they may relink it.
+  const session = msg.whatsappSessionId
+    ? await sessionById(msg.whatsappSessionId).catch(() => null)
+    : await pickSession(msg.tenantId, [msg.sentById, msg.campaign?.createdById, msg.trip?.assignedToId, msg.trip?.createdById], {
+        fallback: !msg.sentById && !msg.campaignId,
+      });
+  if (!session || session.status !== 'CONNECTED') {
+    throw new DeferSend(new Date(now.getTime() + 15 * 60_000), `WhatsApp isn’t linked (${session?.status.toLowerCase() ?? 'no number'})`);
   }
 
-  // Pacing: one message every N seconds per number, and a daily cap
-  const usage = await whatsappUsageLast24h(msg.tenantId, now);
+  // Pacing: one message every N seconds per number, and a daily cap per number
+  const usage = await whatsappUsageLast24h(session.id, now);
   const dailyLimit = effectiveWhatsAppLimit(session.dailyLimit, whatsappDailyCap(msg.tenant));
   if (usage.sent >= dailyLimit) {
     const until = new Date((usage.oldest?.getTime() ?? now.getTime()) + 86_400_000 + 60_000);
     throw new DeferSend(until, `Daily WhatsApp limit of ${dailyLimit} reached`);
+  }
+  // The free trial's allowance is for the whole agency, however many numbers are linked
+  const trialPerDay = trialWhatsAppPerDay(msg.tenant);
+  if (trialPerDay !== null) {
+    const agency = await agencyUsageLast24h(msg.tenantId, now);
+    if (agency.sent >= trialPerDay) {
+      const until = new Date((agency.oldest?.getTime() ?? now.getTime()) + 86_400_000 + 60_000);
+      throw new DeferSend(until, `Daily WhatsApp limit of ${trialPerDay} reached`);
+    }
   }
   if (usage.last && now.getTime() - usage.last.getTime() < session.intervalSeconds * 1000) {
     throw new DeferSend(new Date(usage.last.getTime() + session.intervalSeconds * 1000), 'pacing');
@@ -302,7 +388,7 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
 
   let exists: boolean;
   try {
-    exists = await gateway.exists(msg.tenantId, msg.toAddress);
+    exists = await gateway.exists(session.id, msg.toAddress);
   } catch (err) {
     if (err instanceof WhatsAppError && err.permanent) {
       await finalizeMessage(msg, 'FAILED', err.code);
@@ -326,7 +412,7 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
   let id: string;
   let partial: string | null;
   try {
-    ({ id, partial } = await deliverWhatsApp(gateway, msg.tenantId, msg.toAddress, text, files));
+    ({ id, partial } = await deliverWhatsApp(gateway, session.id, msg.toAddress, text, files));
   } catch (err) {
     if (err instanceof WhatsAppError && err.permanent) {
       await finalizeMessage(msg, 'FAILED', err.code);
@@ -338,7 +424,7 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
   await db.transaction(async (tx) => {
     const updated = await tx
       .update(messages)
-      .set({ status: 'SENT', providerMessageId: id, sentAt: new Date(), attempts: sql`${messages.attempts} + 1`, error: partial })
+      .set({ status: 'SENT', whatsappSessionId: session.id, providerMessageId: id, sentAt: new Date(), attempts: sql`${messages.attempts} + 1`, error: partial })
       .where(and(eq(messages.id, msg.id), eq(messages.status, 'QUEUED')))
       .returning({ id: messages.id });
     if (updated.length) await bumpCounter(tx, msg, 'sent');
@@ -346,7 +432,7 @@ export async function processWhatsAppJob(messageId: string, gateway: WhatsAppGat
   if (msg.campaignId) await maybeCompleteCampaign(msg.campaignId);
   if (msg.automationId) await syncAutomationSend(msg.id, 'SENT');
   // Into the customer's conversation in the inbox, if they have one (never fails the send)
-  await recordSent(msg, text, id).catch(() => undefined);
+  await recordSent({ ...msg, whatsappSessionId: session.id }, text, id).catch(() => undefined);
   return 'sent';
 }
 
@@ -355,7 +441,7 @@ export function renderWhatsApp(body: string, contact: Parameters<typeof buildMer
   return renderString(body, buildMergeVars(contact, tenant), { html: false });
 }
 
-/** Campaigns still waiting to send from this number — shown when the number is unlinked or blocked. */
+/** Campaigns still waiting to send — shown when a number is unlinked or blocked. */
 export async function activeWhatsAppCampaigns(tenantId: string) {
   return db
     .select({ id: campaigns.id, name: campaigns.name })

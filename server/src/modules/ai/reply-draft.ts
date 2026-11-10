@@ -1,5 +1,7 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
+import type { Viewer } from '../auth/guard.js';
+import { ownedChat } from '../inbox/service.js';
 import { auditLogs, contacts, packages, tenants, trips, waChatMessages, waChats } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
@@ -68,11 +70,11 @@ function trimLines(lines: string[], max: number) {
   return out;
 }
 
-export async function suggestReply(tenantId: string, userId: string, chatId: string, input: z.infer<typeof suggestBody>) {
+export async function suggestReply(v: Viewer, chatId: string, input: z.infer<typeof suggestBody>) {
+  const { tenantId, userId } = v;
   const ai = getClient();
   if (!ai) throw new AppError(503, 'ai_not_configured', 'Drona AI isn’t set up on this server yet.');
-  const chat = await db.query.waChats.findFirst({ where: and(eq(waChats.id, chatId), eq(waChats.tenantId, tenantId)) });
-  if (!chat) throw new AppError(404, 'not_found', 'Conversation not found');
+  const chat = await ownedChat(v, chatId);
 
   // The plan's daily allowance: every suggestion costs real money
   await useAi(tenantId);

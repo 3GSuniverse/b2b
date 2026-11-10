@@ -26,7 +26,7 @@ import { AppError } from '../../lib/http.js';
 import { BILLING_PLANS, isPlanId } from '../billing/plans.js';
 import { effectiveWhatsAppLimit, emailDailyCap, entitlements, planDto, whatsappDailyCap } from '../plans/entitlements.js';
 import { emailUsageLast24h } from '../sending/daily-cap.js';
-import { whatsappUsageLast24h } from '../whatsapp/service.js';
+import { listNumbers } from '../whatsapp/service.js';
 
 /** A short, plain name for the browser behind a session, e.g. "Chrome on Windows". */
 export function deviceName(ua: string | null | undefined) {
@@ -77,8 +77,14 @@ export async function agencyProfile(tenantId: string) {
       )
       .then((r) => r.rows[0]?.n ?? 0),
     emailUsageLast24h(tenantId, now),
-    whatsappUsageLast24h(tenantId, now),
-    db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.tenantId, tenantId) }),
+    // Every employee's number together
+    db
+      .execute<{ sent: number }>(
+        sql`select count(*)::int as sent from ${messages} where ${messages.tenantId} = ${tenantId} and ${messages.channel} = 'WHATSAPP'
+            and ${messages.sentAt} >= ${new Date(now.getTime() - 86_400_000).toISOString()}::timestamptz`,
+      )
+      .then((r) => ({ sent: r.rows[0]?.sent ?? 0 })),
+    db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.tenantId, tenantId), orderBy: sql`${whatsappSessions.status} = 'CONNECTED' desc, ${whatsappSessions.connectedAt} desc nulls last` }),
     db.select().from(sendingDomains).where(eq(sendingDomains.tenantId, tenantId)),
     db.select().from(senders).where(eq(senders.tenantId, tenantId)),
     db
@@ -239,6 +245,7 @@ export async function agencyProfile(tenantId: string) {
       topErrors: topErrors.map((e) => ({ ...e, error: (e.error ?? '').slice(0, 240) })),
     },
     channels: {
+      whatsappNumbers: await listNumbers(tenantId),
       whatsapp: wa ? { status: wa.status, phone: wa.phone, displayName: wa.displayName, lastError: wa.lastError, connectedAt: wa.connectedAt, ownDailyLimit: wa.dailyLimit } : null,
       domains: domains.map((d) => ({
         id: d.id,

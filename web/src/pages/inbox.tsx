@@ -55,6 +55,8 @@ type ChatRow = {
   done: boolean;
   contactId: string | null;
   name: string | null;
+  /** Whose number the chat is on */
+  employee: string | null;
 };
 type ThreadMessage = {
   id: string;
@@ -113,6 +115,9 @@ export function useInboxUnread() {
 }
 
 export function InboxTab() {
+  const { user } = useSession();
+  // Owners and managers see every employee's chats: say whose number each one is on
+  const showEmployee = user.role !== 'MEMBER';
   const [params, setParams] = useSearchParams();
   const open = params.get('chat');
   const [filter, setFilter] = useState<Filter>('all');
@@ -191,6 +196,7 @@ export function InboxTab() {
                           {c.lastDirection === 'OUT' && <span className="text-faint">You: </span>}
                           {c.lastPreview || ' '}
                         </span>
+                        {showEmployee && c.employee && <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent-strong">{c.employee}</span>}
                         {c.unread > 0 && <span className="tnum grid h-5 min-w-5 place-items-center rounded-full bg-success px-1.5 text-[11px] font-bold text-white">{c.unread}</span>}
                         {c.done && !c.unread && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" aria-label="Done" />}
                       </span>

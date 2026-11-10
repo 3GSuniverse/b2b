@@ -14,7 +14,7 @@ import { recordFromPhone, recordIncoming } from '../inbox/service.js';
 const log = logger.child({ module: 'whatsapp' });
 
 /**
- * Holds one WhatsApp Web connection per company, inside the worker process.
+ * Holds one WhatsApp Web connection per linked number (one per login), inside the worker process.
  * Unofficial: it links like WhatsApp Web does (Linked devices → Link a device).
  */
 export class WhatsAppManager implements WhatsAppGateway {
@@ -24,22 +24,22 @@ export class WhatsAppManager implements WhatsAppGateway {
   private failures = new Map<string, number>(); // consecutive failed connection attempts
   private unsubscribe?: () => Promise<unknown>;
 
-  /** Reconnect every company that was linked before the worker restarted, and listen for commands. */
+  /** Reconnect every number that was linked before the worker restarted, and listen for commands. */
   async start() {
     this.unsubscribe = await subscribeCommands((cmd) => void this.handle(cmd));
     const linked = await db
-      .select({ tenantId: whatsappSessions.tenantId })
+      .select({ sessionId: whatsappSessions.id })
       .from(whatsappSessions)
       .innerJoin(tenants, eq(tenants.id, whatsappSessions.tenantId))
       .where(and(eq(whatsappSessions.status, 'CONNECTED'), eq(tenants.whatsappWebEnabled, true)));
-    for (const { tenantId } of linked) await this.connect(tenantId);
+    for (const { sessionId } of linked) await this.connect(sessionId);
     log.info({ sessions: linked.length }, 'whatsapp manager started');
   }
 
   async stop() {
     await this.unsubscribe?.();
-    for (const [tenantId, sock] of this.sockets) {
-      this.stopping.add(tenantId);
+    for (const [sessionId, sock] of this.sockets) {
+      this.stopping.add(sessionId);
       sock.end(undefined);
     }
     this.sockets.clear();
@@ -47,26 +47,29 @@ export class WhatsAppManager implements WhatsAppGateway {
 
   private async handle(cmd: WhatsAppCommand) {
     try {
-      if (cmd.action === 'connect') await this.connect(cmd.tenantId, { fresh: true });
-      else await this.disconnect(cmd.tenantId);
+      if (cmd.action === 'connect') await this.connect(cmd.sessionId, { fresh: true });
+      else await this.disconnect(cmd.sessionId);
     } catch (err) {
       log.error({ err, cmd }, 'whatsapp command failed');
     }
   }
 
-  private async connect(tenantId: string, opts: { fresh?: boolean } = {}) {
-    if (this.starting.has(tenantId)) return;
-    const existing = this.sockets.get(tenantId);
+  private async connect(sessionId: string, opts: { fresh?: boolean } = {}) {
+    if (this.starting.has(sessionId)) return;
+    const existing = this.sockets.get(sessionId);
     if (existing && !opts.fresh) return;
     if (existing) {
-      this.stopping.add(tenantId);
+      this.stopping.add(sessionId);
       existing.end(undefined);
-      this.sockets.delete(tenantId);
+      this.sockets.delete(sessionId);
     }
-    this.starting.add(tenantId);
-    this.stopping.delete(tenantId);
+    this.starting.add(sessionId);
+    this.stopping.delete(sessionId);
     try {
-      const { state, saveCreds } = await useDbAuthState(tenantId);
+      const line = await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.id, sessionId), columns: { id: true, tenantId: true } });
+      if (!line) return; // the login was removed
+      const { tenantId } = line;
+      const { state, saveCreds } = await useDbAuthState(line);
       const sock = makeWASocket({
         auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys) },
         browser: Browsers.ubuntu('Chrome'),
@@ -74,59 +77,59 @@ export class WhatsAppManager implements WhatsAppGateway {
         markOnlineOnConnect: false, // don't mark the owner "online" on their phone all day
         syncFullHistory: false, // only the recent sync WhatsApp needs to map contacts; no old chats
       });
-      this.sockets.set(tenantId, sock);
+      this.sockets.set(sessionId, sock);
       sock.ev.on('creds.update', () => void saveCreds());
 
       sock.ev.on('connection.update', async (u) => {
         try {
           if (u.qr) {
-            await setQr(tenantId, u.qr);
-            await onQr(tenantId);
+            await setQr(sessionId, u.qr);
+            await onQr(sessionId);
           }
           if (u.connection === 'open') {
-            this.failures.delete(tenantId);
-            await setQr(tenantId, null);
+            this.failures.delete(sessionId);
+            await setQr(sessionId, null);
             const me = sock.user;
-            const allowed = await onConnected(tenantId, me ? fromJid(me.id) : '', me?.name ?? me?.verifiedName ?? null);
+            const allowed = await onConnected(sessionId, me ? fromJid(me.id) : '', me?.name ?? me?.verifiedName ?? null);
             if (!allowed) {
-              log.warn({ tenantId }, 'number already used for a trial, unlinking');
-              await this.disconnect(tenantId);
+              log.warn({ sessionId }, 'number already used for a trial, unlinking');
+              await this.disconnect(sessionId);
               return;
             }
-            log.info({ tenantId }, 'whatsapp connected');
+            log.info({ sessionId }, 'whatsapp connected');
           }
           if (u.connection === 'close') {
-            this.sockets.delete(tenantId);
+            this.sockets.delete(sessionId);
             const code = (u.lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output?.statusCode;
-            if (this.stopping.has(tenantId)) return;
+            if (this.stopping.has(sessionId)) return;
             if (code === DisconnectReason.loggedOut) {
-              await clearAuthState(tenantId);
-              await onEnded(tenantId, 'LOGGED_OUT');
+              await clearAuthState(sessionId);
+              await onEnded(sessionId, 'LOGGED_OUT');
             } else if (code === DisconnectReason.forbidden) {
-              await clearAuthState(tenantId);
-              await onEnded(tenantId, 'BLOCKED');
+              await clearAuthState(sessionId);
+              await onEnded(sessionId, 'BLOCKED');
             } else if (code === DisconnectReason.restartRequired) {
-              setTimeout(() => void this.connect(tenantId), 500); // normal right after scanning the QR
+              setTimeout(() => void this.connect(sessionId), 500); // normal right after scanning the QR
             } else {
               // Network trouble. A linked number keeps retrying, slower each time (max 5 min).
               // While linking, give up after a few tries so the page can say so.
-              const n = (this.failures.get(tenantId) ?? 0) + 1;
-              this.failures.set(tenantId, n);
+              const n = (this.failures.get(sessionId) ?? 0) + 1;
+              this.failures.set(sessionId, n);
               const paired = !!state.creds.registered || !!state.creds.me;
               if (!paired && n >= 4) {
-                this.failures.delete(tenantId);
-                await setQr(tenantId, null);
-                await onLinkFailed(tenantId);
-                log.warn({ tenantId, code }, 'whatsapp linking gave up');
+                this.failures.delete(sessionId);
+                await setQr(sessionId, null);
+                await onLinkFailed(sessionId);
+                log.warn({ sessionId, code }, 'whatsapp linking gave up');
                 return;
               }
               const delay = Math.min(300_000, 5_000 * 2 ** (n - 1));
-              log.warn({ tenantId, code, attempt: n, delay }, 'whatsapp connection closed, reconnecting');
-              setTimeout(() => void this.connect(tenantId), delay);
+              log.warn({ sessionId, code, attempt: n, delay }, 'whatsapp connection closed, reconnecting');
+              setTimeout(() => void this.connect(sessionId), delay);
             }
           }
         } catch (err) {
-          log.error({ err, tenantId }, 'whatsapp connection update failed');
+          log.error({ err, sessionId }, 'whatsapp connection update failed');
         }
       });
 
@@ -151,56 +154,56 @@ export class WhatsAppManager implements WhatsAppGateway {
           const item = { phone: fromJid(jid), waId: m.key.id ?? null, at, ...content };
           try {
             if (m.key.fromMe) {
-              await recordFromPhone(tenantId, item);
+              await recordFromPhone(tenantId, sessionId, item);
               continue;
             }
             if (type !== 'notify') continue;
-            await recordIncoming(tenantId, item);
+            await recordIncoming(tenantId, sessionId, item);
             if (content.text) {
               const reply = await onIncoming(tenantId, item.phone, content.text);
               if (reply) await sock.sendMessage(jid, { text: reply });
             }
           } catch (err) {
-            log.error({ err, tenantId }, 'handling a WhatsApp message failed');
+            log.error({ err, sessionId }, 'handling a WhatsApp message failed');
           }
         }
       });
     } finally {
-      this.starting.delete(tenantId);
+      this.starting.delete(sessionId);
     }
   }
 
-  private async disconnect(tenantId: string) {
-    this.stopping.add(tenantId);
-    const sock = this.sockets.get(tenantId);
-    this.sockets.delete(tenantId);
+  private async disconnect(sessionId: string) {
+    this.stopping.add(sessionId);
+    const sock = this.sockets.get(sessionId);
+    this.sockets.delete(sessionId);
     try {
       await sock?.logout();
     } catch {
       sock?.end(undefined);
     }
-    await clearAuthState(tenantId);
-    await setQr(tenantId, null);
+    await clearAuthState(sessionId);
+    await setQr(sessionId, null);
   }
 
-  private socketFor(tenantId: string) {
-    const s = this.sockets.get(tenantId);
+  private socketFor(sessionId: string) {
+    const s = this.sockets.get(sessionId);
     if (!s?.user) throw new WhatsAppError('WhatsApp isn’t connected right now', false, 'not_connected');
     return s;
   }
 
-  async exists(tenantId: string, phone: string) {
-    const r = await this.socketFor(tenantId).onWhatsApp(toJid(phone));
+  async exists(sessionId: string, phone: string) {
+    const r = await this.socketFor(sessionId).onWhatsApp(toJid(phone));
     return !!r?.[0]?.exists;
   }
 
-  async sendText(tenantId: string, phone: string, text: string) {
-    const sent = await this.socketFor(tenantId).sendMessage(toJid(phone), { text });
+  async sendText(sessionId: string, phone: string, text: string) {
+    const sent = await this.socketFor(sessionId).sendMessage(toJid(phone), { text });
     if (!sent?.key.id) throw new WhatsAppError('WhatsApp didn’t accept the message', false, 'send_failed');
     return { id: sent.key.id };
   }
 
-  async sendMedia(tenantId: string, phone: string, m: WhatsAppMedia) {
+  async sendMedia(sessionId: string, phone: string, m: WhatsAppMedia) {
     const content: AnyMessageContent =
       m.kind === 'image'
         ? { image: m.data, mimetype: m.mimeType, caption: m.caption }
@@ -209,7 +212,7 @@ export class WhatsAppManager implements WhatsAppGateway {
           : m.kind === 'audio'
             ? { audio: m.data, mimetype: m.mimeType }
             : { document: m.data, mimetype: m.mimeType, fileName: m.fileName, caption: m.caption };
-    const sent = await this.socketFor(tenantId).sendMessage(toJid(phone), content);
+    const sent = await this.socketFor(sessionId).sendMessage(toJid(phone), content);
     if (!sent?.key.id) throw new WhatsAppError('WhatsApp didn’t accept the file', false, 'send_failed');
     return { id: sent.key.id };
   }

@@ -19,6 +19,17 @@ export async function signup(app: App, overrides: Record<string, string> = {}) {
   return { cookie: `sid=${cookie.value}`, body, json: res.json() as { user: { id: string }; tenant: { id: string } } };
 }
 
+/** An employee login made by the owner, signed in. */
+export async function employee(app: App, owner: { cookie: string }, username: string) {
+  const made = await app.inject({ method: 'POST', url: '/api/agency/employees', headers: { cookie: owner.cookie }, payload: { name: username, username, password: `${username}-pass-1` } });
+  if (made.statusCode !== 201) throw new Error(`employee failed: ${made.statusCode} ${made.body}`);
+  const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: owner.cookie } });
+  const agency = (me.json() as { tenant: { loginCode: string } }).tenant.loginCode;
+  const res = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { agency, username, password: `${username}-pass-1` } });
+  if (res.statusCode !== 200) throw new Error(`login failed: ${res.statusCode} ${res.body}`);
+  return { id: (made.json() as { member: { id: string } }).member.id, cookie: `sid=${res.cookies.find((c) => c.name === 'sid')!.value}` };
+}
+
 export function api(app: App, cookie: string) {
   return {
     get: (url: string) => app.inject({ method: 'GET', url, headers: { cookie } }),

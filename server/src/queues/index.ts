@@ -16,7 +16,7 @@ export const QUEUES = {
 
 export type WhatsAppJob =
   | { kind: 'message'; messageId: string }
-  | { kind: 'test'; tenantId: string; to: string; text: string; attachments?: AttachmentRef[] };
+  | { kind: 'test'; tenantId: string; sessionId: string; to: string; text: string; attachments?: AttachmentRef[] };
 
 export interface EmailSendJob {
   messageId: string; // the Message row holds everything else
@@ -54,8 +54,8 @@ export async function enqueueWhatsApp(messageIds: string[], opts: { urgent?: boo
   );
 }
 
-export async function enqueueWhatsAppTest(tenantId: string, to: string, text: string, attachments: AttachmentRef[] = []) {
-  await getWhatsAppQueue().add('test', { kind: 'test', tenantId, to, text, attachments }, { attempts: 1 });
+export async function enqueueWhatsAppTest(tenantId: string, sessionId: string, to: string, text: string, attachments: AttachmentRef[] = []) {
+  await getWhatsAppQueue().add('test', { kind: 'test', tenantId, sessionId, to, text, attachments }, { attempts: 1 });
 }
 
 export function getImportQueue(): Queue<{ importId: string }> {

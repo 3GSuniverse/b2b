@@ -10,7 +10,7 @@ import { startCampaign } from '../src/modules/sending/start-campaign.js';
 import { MemoryWhatsAppGateway } from '../src/modules/whatsapp/gateway.js';
 import { processWhatsAppJob } from '../src/modules/whatsapp/service.js';
 import { api, signup } from './api-helpers.js';
-import { fakeQueue, makeContact, makeTenant, resetDb } from './helpers.js';
+import { fakeQueue, makeContact, makeTenant, resetDb, makeLine } from './helpers.js';
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 beforeAll(async () => {
@@ -25,25 +25,25 @@ beforeEach(resetDb);
 
 async function agencyWithBroadcast() {
   const { tenant } = await makeTenant({ whatsappWebEnabled: true });
-  await db.insert(whatsappSessions).values({ tenantId: tenant.id, status: 'CONNECTED', phone: '+919000000001', dailyLimit: 200, intervalSeconds: 0 });
+  const line = await makeLine(tenant.id, { status: 'CONNECTED', phone: '+919000000001', dailyLimit: 200, intervalSeconds: 0 });
   const ravi = await makeContact(tenant.id, { phone: '+919848012345', whatsappStatus: 'SUBSCRIBED', firstName: 'Ravi' });
   const [c] = await db.insert(campaigns).values({ tenantId: tenant.id, channel: 'WHATSAPP', name: 'Kerala offer', text: 'Namaste {first_name|there}, Kerala 3 nights ₹18,500' }).returning();
   const q = fakeQueue();
   await startCampaign(c!.id, { enqueue: async () => undefined, enqueueWhatsApp: q.enqueue });
   const gw = new MemoryWhatsAppGateway();
   await processWhatsAppJob(q.queued[0]!, gw);
-  return { tenant, ravi, gw };
+  return { tenant, ravi, gw, line };
 }
 
 describe('WhatsApp inbox', () => {
   it('a reply opens a conversation that starts with the broadcast it answers', async () => {
-    const { tenant } = await agencyWithBroadcast();
+    const { tenant, line } = await agencyWithBroadcast();
     // Nobody has replied yet: no conversation
     expect(await db.$count(waChats)).toBe(0);
 
-    const chatId = await recordIncoming(tenant.id, { phone: '+919848012345', text: 'Is it available in December?', waId: 'IN-1', at: new Date() });
+    const chatId = await recordIncoming(tenant.id, line.id, { phone: '+919848012345', text: 'Is it available in December?', waId: 'IN-1', at: new Date() });
     // The same message delivered twice is kept once
-    await recordIncoming(tenant.id, { phone: '+919848012345', text: 'Is it available in December?', waId: 'IN-1', at: new Date() });
+    await recordIncoming(tenant.id, line.id, { phone: '+919848012345', text: 'Is it available in December?', waId: 'IN-1', at: new Date() });
     const thread = await db.select().from(waChatMessages).where(eq(waChatMessages.chatId, chatId)).orderBy(waChatMessages.at);
     expect(thread.map((m) => [m.direction, m.source, m.body])).toEqual([
       ['OUT', 'broadcast', 'Namaste Ravi, Kerala 3 nights ₹18,500'],
@@ -54,19 +54,20 @@ describe('WhatsApp inbox', () => {
   });
 
   it('the team answers from Dhrona; the reply is sent and not recorded twice', async () => {
-    const { tenant, gw } = await agencyWithBroadcast();
-    const chatId = await recordIncoming(tenant.id, { phone: '+919848012345', text: 'Price for 4?', waId: 'IN-2', at: new Date() });
+    const { tenant, gw, line } = await agencyWithBroadcast();
+    const chatId = await recordIncoming(tenant.id, line.id, { phone: '+919848012345', text: 'Price for 4?', waId: 'IN-2', at: new Date() });
     const q = fakeQueue();
-    const [user] = await db.insert(users).values({ tenantId: tenant.id, name: 'Priya', username: 'priya', passwordHash: 'x', role: 'MEMBER' }).returning();
-    const r = await reply(tenant.id, user!.id, chatId, 'Namaste Ravi garu 🙏 For 4 people it is ₹74,000.', q.enqueue);
+    // The employee whose number it is answers
+    const user = { id: line.userId };
+    const r = await reply({ tenantId: tenant.id, userId: user.id, role: 'MEMBER' }, chatId, 'Namaste Ravi garu 🙏 For 4 people it is ₹74,000.', q.enqueue);
     expect(q.queued).toEqual([r.messageId]);
     const m = await db.query.messages.findFirst({ where: eq(messages.id, r.messageId) });
-    expect(m).toMatchObject({ service: true, sentById: user!.id, toAddress: '+919848012345' });
+    expect(m).toMatchObject({ service: true, sentById: user.id, toAddress: '+919848012345', whatsappSessionId: line.id });
 
     expect(await processWhatsAppJob(r.messageId, gw)).toBe('sent');
     const waId = gw.sent.at(-1)!.id;
     // WhatsApp echoes our own message back as "sent from this number"
-    await recordFromPhone(tenant.id, { phone: '+919848012345', text: 'Namaste Ravi garu 🙏 For 4 people it is ₹74,000.', waId, at: new Date() });
+    await recordFromPhone(tenant.id, line.id, { phone: '+919848012345', text: 'Namaste Ravi garu 🙏 For 4 people it is ₹74,000.', waId, at: new Date() });
     const rows = await db.select().from(waChatMessages).where(eq(waChatMessages.chatId, chatId));
     expect(rows.filter((x) => x.source === 'reply')).toHaveLength(1);
     expect(rows.find((x) => x.source === 'reply')!.waId).toBe(waId);
@@ -74,7 +75,7 @@ describe('WhatsApp inbox', () => {
     expect((await db.query.waChats.findFirst({ where: eq(waChats.id, chatId) }))!.unread).toBe(0);
 
     // Typed on the phone itself: recorded as sent from the phone
-    await recordFromPhone(tenant.id, { phone: '+919848012345', text: 'Sending the itinerary now', waId: 'PHONE-1', at: new Date() });
+    await recordFromPhone(tenant.id, line.id, { phone: '+919848012345', text: 'Sending the itinerary now', waId: 'PHONE-1', at: new Date() });
     expect(await db.$count(waChatMessages, eq(waChatMessages.source, 'phone'))).toBe(1);
   });
 
@@ -82,9 +83,10 @@ describe('WhatsApp inbox', () => {
     const owner = await signup(app, { companyName: 'Inbox Travels' });
     const other = await signup(app, { companyName: 'Other Travels' });
     const tenantId = owner.json.tenant.id;
+    const line = await makeLine(tenantId, { userId: owner.json.user.id });
     await makeContact(tenantId, { phone: '+919848012345', firstName: 'Ravi', lastName: 'Kumar' });
-    const chatId = await recordIncoming(tenantId, { phone: '+919848012345', text: 'Hello', waId: 'A', at: new Date() });
-    await recordIncoming(tenantId, { phone: '+919000000077', text: null, mediaKind: 'image', waId: 'B', at: new Date(Date.now() + 1000) });
+    const chatId = await recordIncoming(tenantId, line.id, { phone: '+919848012345', text: 'Hello', waId: 'A', at: new Date() });
+    await recordIncoming(tenantId, line.id, { phone: '+919000000077', text: null, mediaKind: 'image', waId: 'B', at: new Date(Date.now() + 1000) });
     const c = api(app, owner.cookie);
 
     const list = (await c.get('/api/inbox')).json().chats;

@@ -205,9 +205,11 @@ export async function whatsappChecks(input: {
   text: string | null;
   audience: Audience | null;
   attachments?: AttachmentRef[];
+  /** Who made it: it goes from their WhatsApp number */
+  createdById?: string | null;
 }): Promise<{ checks: Check[]; canSend: boolean; recipients: number }> {
   const { countWhatsAppAudience } = await import('../audience/resolve.js');
-  const { getSession, whatsappUsageLast24h, WHATSAPP_MAX_LENGTH } = await import('../whatsapp/service.js');
+  const { pickSession, whatsappUsageLast24h, WHATSAPP_MAX_LENGTH } = await import('../whatsapp/service.js');
   const checks: Check[] = [];
   const add = (c: Check) => checks.push(c);
 
@@ -216,8 +218,8 @@ export async function whatsappChecks(input: {
   else if (!whatsappWebAllowed(input.tenant)) add({ id: 'feature', level: 'error', title: 'WhatsApp sending isn’t available on this account.' });
   const cap = await whatsappTrialCapacity(input.tenant);
 
-  const session = await getSession(input.tenantId);
-  if (session.status === 'CONNECTED') add({ id: 'sender', level: 'ok', title: `Sending from ${session.phone ?? 'your WhatsApp'}.` });
+  const session = await pickSession(input.tenantId, [input.createdById]);
+  if (session?.status === 'CONNECTED') add({ id: 'sender', level: 'ok', title: `Sending from ${session.phone ?? 'your WhatsApp'}.` });
   else add({ id: 'sender', level: 'error', title: 'Link your WhatsApp number first.', note: 'WhatsApp → Linked number, then scan the QR code with your phone.' });
 
   const text = input.text?.trim() ?? '';
@@ -239,7 +241,7 @@ export async function whatsappChecks(input: {
   if (temporary) await temporaryChecks(input.tenantId, input.audience!, 'WHATSAPP', text, add);
   else if (!recipients) add({ id: 'audience', level: 'error', title: 'Nobody in this audience agreed to WhatsApp messages.', note: 'Only contacts marked “Agreed to WhatsApp” with a phone number get WhatsApp campaigns.' });
   else add({ id: 'audience', level: 'ok', title: `${recipients.toLocaleString('en-IN')} recipient${recipients > 1 ? 's' : ''}.`, note: 'Only contacts who agreed to WhatsApp messages.' });
-  if (recipients) {
+  if (recipients && session) {
     if (cap !== null) {
       if (recipients > cap.beforeTrialEnds) {
         add({ id: 'trial_limit', level: 'error', title: `Too many for the rest of your trial.`, note: `The trial sends up to ${cap.perDay} WhatsApp messages a day, so ${cap.beforeTrialEnds} more fit before it ends. This campaign needs ${recipients.toLocaleString('en-IN')}. Choose a smaller list, or upgrade.` });
@@ -247,7 +249,7 @@ export async function whatsappChecks(input: {
         add({ id: 'trial_limit', level: 'ok', title: `Trial: up to ${cap.perDay} WhatsApp messages a day.`, note: recipients > cap.leftToday ? `${cap.leftToday} go out today; the rest continue tomorrow.` : `${cap.leftToday} left today.` });
       }
     }
-    const usage = await whatsappUsageLast24h(input.tenantId);
+    const usage = await whatsappUsageLast24h(session.id);
     const dailyLimit = effectiveWhatsAppLimit(session.dailyLimit, whatsappDailyCap(input.tenant));
     const today = Math.max(0, dailyLimit - usage.sent);
     const minutes = Math.ceil((Math.min(recipients, today) * session.intervalSeconds) / 60);

@@ -15,7 +15,7 @@ import { MemoryWhatsAppGateway } from '../src/modules/whatsapp/gateway.js';
 import { DeferSend } from '../src/modules/sending/send-message.js';
 import { MemoryEmailProvider } from '../src/modules/email/memory-provider.js';
 import { api, signup } from './api-helpers.js';
-import { makeCampaign, makeContact, makeTenant, resetDb } from './helpers.js';
+import { makeCampaign, makeContact, makeTenant, resetDb, makeLine } from './helpers.js';
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 beforeAll(async () => {
@@ -72,7 +72,7 @@ describe('the trial WhatsApp allowance: 100 a day', () => {
 
   it('refuses a campaign that couldn’t finish before the trial ends', async () => {
     const { tenant } = await trialCompany(20 * 3_600_000); // last day
-    await db.insert(whatsappSessions).values({ tenantId: tenant.id, status: 'CONNECTED', phone: '+919000000001' });
+    await makeLine(tenant.id, { status: 'CONNECTED', phone: '+919000000001' });
     await usedToday(tenant.id, 98);
     for (let i = 0; i < 3; i++) await makeContact(tenant.id, { phone: `+91900000001${i}`, whatsappStatus: 'SUBSCRIBED' });
     const [c] = await db.insert(campaigns).values({ tenantId: tenant.id, channel: 'WHATSAPP', name: 'new', text: 'Hi' }).returning();
@@ -82,7 +82,7 @@ describe('the trial WhatsApp allowance: 100 a day', () => {
 
   it('with days left, the same campaign is fine: today’s cap is hit, the rest goes tomorrow', async () => {
     const { tenant } = await trialCompany(3 * DAY);
-    await db.insert(whatsappSessions).values({ tenantId: tenant.id, status: 'CONNECTED', phone: '+919000000001', dailyLimit: 200, intervalSeconds: 0 });
+    await makeLine(tenant.id, { status: 'CONNECTED', phone: '+919000000001', dailyLimit: 200, intervalSeconds: 0 });
     await usedToday(tenant.id, 100);
     await makeContact(tenant.id, { phone: '+919000000010', whatsappStatus: 'SUBSCRIBED' });
     const [c] = await db.insert(campaigns).values({ tenantId: tenant.id, channel: 'WHATSAPP', name: 'new', text: 'Hi' }).returning();
@@ -97,7 +97,7 @@ describe('the trial WhatsApp allowance: 100 a day', () => {
   it('a trial can’t raise its own daily limit above 100', async () => {
     const { cookie } = await signup(app);
     const c = api(app, cookie);
-    expect((await c.patch('/api/whatsapp', { dailyLimit: 150 })).json().details.fields.dailyLimit).toBe('The free trial allows up to 100 a day');
+    expect((await c.patch('/api/whatsapp', { dailyLimit: 150 })).json().details.fields.dailyLimit).toBe('The free trial allows up to 100 a day for each number');
     expect((await c.get('/api/whatsapp')).json().whatsapp).toMatchObject({ dailyLimit: 100, trialPerDay: 100 });
   });
 });
@@ -118,8 +118,8 @@ describe('when the trial ends', () => {
 
   it('the clean-up unlinks WhatsApp, cancels scheduled sends, pauses automations and tells them once', async () => {
     const { tenant, sender } = await trialCompany(-60_000);
-    await db.insert(whatsappSessions).values({ tenantId: tenant.id, status: 'CONNECTED', phone: '+919000000001' });
-    await db.insert(whatsappAuth).values({ tenantId: tenant.id, key: 'creds', valueEnc: 'x' });
+    const line = await makeLine(tenant.id, { status: 'CONNECTED', phone: '+919000000001' });
+    await db.insert(whatsappAuth).values({ tenantId: tenant.id, sessionId: line.id, key: 'creds', valueEnc: 'x' });
     const c = await makeCampaign(tenant.id, sender.id);
     await db.update(campaigns).set({ status: 'SCHEDULED', scheduledAt: new Date(Date.now() + DAY) }).where(eq(campaigns.id, c.id));
     const [f] = await db.insert(customFields).values({ tenantId: tenant.id, key: 'trip_date', label: 'Trip date', type: 'DATE' }).returning();
@@ -157,14 +157,16 @@ describe('one free trial per WhatsApp number', () => {
     const a = await trialCompany();
     const b = await trialCompany();
     const paid = await makeTenant();
-    for (const t of [a.tenant, b.tenant, paid.tenant]) await db.insert(whatsappSessions).values({ tenantId: t.id, status: 'CONNECTING' });
+    const lines = [];
+    for (const t of [a.tenant, b.tenant, paid.tenant]) lines.push(await makeLine(t.id, { status: 'CONNECTING' }));
+    const [la, lb, lp] = lines as [{ id: string }, { id: string }, { id: string }];
 
-    expect(await onConnected(a.tenant.id, '+919848022338', 'Ravi')).toBe(true);
-    expect(await onConnected(a.tenant.id, '+919848022338', 'Ravi')).toBe(true); // relinking your own is fine
-    expect(await onConnected(b.tenant.id, '+919848022338', 'Ravi')).toBe(false);
+    expect(await onConnected(la.id, '+919848022338', 'Ravi')).toBe(true);
+    expect(await onConnected(la.id, '+919848022338', 'Ravi')).toBe(true); // relinking your own is fine
+    expect(await onConnected(lb.id, '+919848022338', 'Ravi')).toBe(false);
     const s = await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.tenantId, b.tenant.id) });
     expect(s).toMatchObject({ status: 'DISCONNECTED', phone: null });
     expect(s!.lastError).toContain('already been used for a free trial');
-    expect(await onConnected(paid.tenant.id, '+919848022338', 'Ravi')).toBe(true); // not a trial
+    expect(await onConnected(lp.id, '+919848022338', 'Ravi')).toBe(true); // not a trial
   });
 });

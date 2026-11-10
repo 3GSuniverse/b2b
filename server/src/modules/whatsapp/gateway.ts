@@ -12,11 +12,11 @@ export type WhatsAppMedia = {
 };
 
 export interface WhatsAppGateway {
-  sendText(tenantId: string, phoneE164: string, text: string): Promise<{ id: string }>;
+  sendText(sessionId: string, phoneE164: string, text: string): Promise<{ id: string }>;
   /** A photo, video, audio clip or document, with an optional caption. */
-  sendMedia(tenantId: string, phoneE164: string, media: WhatsAppMedia): Promise<{ id: string }>;
+  sendMedia(sessionId: string, phoneE164: string, media: WhatsAppMedia): Promise<{ id: string }>;
   /** Whether this number has a WhatsApp account. */
-  exists(tenantId: string, phoneE164: string): Promise<boolean>;
+  exists(sessionId: string, phoneE164: string): Promise<boolean>;
 }
 
 export class WhatsAppError extends Error {
@@ -47,20 +47,20 @@ export const fromJid = (jid: string) => `+${jid.split('@')[0]!.split(':')[0]}`;
 
 /** For tests: records what would have been sent. */
 export class MemoryWhatsAppGateway implements WhatsAppGateway {
-  sent: { tenantId: string; to: string; text: string; id: string; media?: Omit<WhatsAppMedia, 'data'> & { size: number } }[] = [];
+  sent: { sessionId: string; to: string; text: string; id: string; media?: Omit<WhatsAppMedia, 'data'> & { size: number } }[] = [];
   notOnWhatsApp = new Set<string>();
   failNext: WhatsAppError | null = null;
-  async sendText(tenantId: string, to: string, text: string) {
+  async sendText(sessionId: string, to: string, text: string) {
     if (this.failNext) {
       const e = this.failNext;
       this.failNext = null;
       throw e;
     }
     const id = `wamid-${this.sent.length + 1}-${Math.random().toString(36).slice(2, 8)}`;
-    this.sent.push({ tenantId, to, text, id });
+    this.sent.push({ sessionId, to, text, id });
     return { id };
   }
-  async sendMedia(tenantId: string, to: string, media: WhatsAppMedia) {
+  async sendMedia(sessionId: string, to: string, media: WhatsAppMedia) {
     if (this.failNext) {
       const e = this.failNext;
       this.failNext = null;
@@ -68,10 +68,10 @@ export class MemoryWhatsAppGateway implements WhatsAppGateway {
     }
     const id = `wamid-${this.sent.length + 1}-${Math.random().toString(36).slice(2, 8)}`;
     const { data, ...rest } = media;
-    this.sent.push({ tenantId, to, text: media.caption ?? '', id, media: { ...rest, size: data.length } });
+    this.sent.push({ sessionId, to, text: media.caption ?? '', id, media: { ...rest, size: data.length } });
     return { id };
   }
-  async exists(_tenantId: string, phone: string) {
+  async exists(_sessionId: string, phone: string) {
     return !this.notOnWhatsApp.has(phone);
   }
 }

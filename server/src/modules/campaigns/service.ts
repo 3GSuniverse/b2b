@@ -7,7 +7,7 @@ import type { EnqueueFn } from '../../queues/index.js';
 import { tenants } from '../../db/schema.js';
 import { emailAudienceWhere, whatsappAudienceWhere } from '../audience/resolve.js';
 import { normalizePhone } from '../contacts/normalize.js';
-import { getSession, renderWhatsApp } from '../whatsapp/service.js';
+import { pickSession, renderWhatsApp } from '../whatsapp/service.js';
 import { enqueueWhatsAppTest } from '../../queues/index.js';
 import { getEmailProvider, SendError } from '../email/index.js';
 import { buildMergeVars, renderEmail } from '../email/render.js';
@@ -265,6 +265,8 @@ async function checkInputFor(tenantId: string, id: string) {
       channel: c.channel,
       text: c.text,
       attachments: c.attachments,
+      // A broadcast goes from the WhatsApp number of the employee who made it
+      createdById: c.createdById,
     },
   };
 }
@@ -311,13 +313,13 @@ export async function sendTestWhatsApp(tenantId: string, id: string, phones: str
   if (c.channel !== 'WHATSAPP') throw new AppError(400, 'wrong_channel', 'This is an email campaign');
   if (!whatsappWebAllowed(c.tenant)) throw new AppError(403, 'trial_ended', 'Your free trial has ended');
   if (!c.text?.trim() && !c.attachments.length) throw new AppError(400, 'no_content', 'Write the message first');
-  const session = await getSession(tenantId);
-  if (session.status !== 'CONNECTED') throw new AppError(400, 'whatsapp_not_connected', 'Link your WhatsApp number first, in WhatsApp → Linked number');
+  const session = await pickSession(tenantId, [c.createdById]);
+  if (session?.status !== 'CONNECTED') throw new AppError(400, 'whatsapp_not_connected', 'Link your WhatsApp number first, in WhatsApp → Linked number');
   const normalized = phones.map((p) => normalizePhone(p));
   if (normalized.some((p) => !p)) throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { phones: 'Enter valid phone numbers' } });
   const [sample] = await db.select().from(contacts).where(whatsappAudienceWhere(tenantId, c.audience)).orderBy(contacts.createdAt).limit(1);
   const text = `[Test] ${renderWhatsApp(c.text ?? '', sample ?? null, c.tenant)}`;
-  for (const p of normalized) await enqueueWhatsAppTest(tenantId, p!, text, c.attachments);
+  for (const p of normalized) await enqueueWhatsAppTest(tenantId, session.id, p!, text, c.attachments);
   return { queued: normalized as string[], previewAs: sample?.phone ?? null };
 }
 

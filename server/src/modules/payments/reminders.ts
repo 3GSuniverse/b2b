@@ -8,7 +8,7 @@ import { escapeHtml, renderString } from '../email/render.js';
 import { notify } from '../notifications/service.js';
 import { trialEnded, whatsappWebAllowed } from '../plans/entitlements.js';
 import { addDays, formatInr, localDate, tripMoney, type DueInput } from '../trips/money.js';
-import { getSession } from '../whatsapp/service.js';
+import { whatsappReady } from '../whatsapp/service.js';
 import { resolvedSettings } from './settings.js';
 import { customerLink } from '../../lib/links.js';
 
@@ -110,7 +110,7 @@ export async function runPaymentReminders(
       const today = localDate(tenant.timezone, now);
 
       // What can we send with, right now?
-      const whatsappUp = whatsappWebAllowed(tenant, now) && (await getSession(tenantId)).status === 'CONNECTED';
+      const whatsappUp = whatsappWebAllowed(tenant, now) && (await whatsappReady(tenantId));
       const sender =
         (await db.query.senders.findFirst({ where: and(eq(senders.tenantId, tenantId), eq(senders.isDefault, true)) })) ??
         (await db.query.senders.findFirst({ where: eq(senders.tenantId, tenantId), orderBy: [asc(senders.createdAt)] }));

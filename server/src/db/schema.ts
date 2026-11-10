@@ -586,6 +586,8 @@ export const messages = pgTable(
     service: boolean().notNull().default(false),
     contactId: text().references(() => contacts.id, { onDelete: 'set null' }),
     senderId: text().references(() => senders.id, { onDelete: 'set null' }), // which mailbox/domain sent it
+    // Which employee's WhatsApp number sent it (set when it's sent, or up front for inbox replies)
+    whatsappSessionId: text().references((): AnyPgColumn => whatsappSessions.id, { onDelete: 'set null' }),
     channel: channel().notNull().default('EMAIL'),
     toAddress: text().notNull(),
     status: messageStatus().notNull().default('QUEUED'),
@@ -603,6 +605,7 @@ export const messages = pgTable(
     uniqueIndex().on(t.campaignId, t.toAddress),
     index().on(t.tenantId, t.status),
     index().on(t.senderId, t.sentAt), // rolling 24h count per mailbox
+    index().on(t.whatsappSessionId, t.sentAt), // rolling 24h count per WhatsApp number
   ],
 );
 
@@ -689,9 +692,14 @@ export const whatsappSessionStatus = pgEnum('whatsapp_session_status', [
   'BLOCKED', // WhatsApp refused the number
 ]);
 
+// One linked WhatsApp number per login: each employee links the number their company gave them
 export const whatsappSessions = pgTable('whatsapp_sessions', {
   id: id(),
-  tenantId: tenantRef().unique(),
+  tenantId: tenantRef(),
+  userId: text()
+    .notNull()
+    .unique()
+    .references((): AnyPgColumn => users.id, { onDelete: 'cascade' }),
   status: whatsappSessionStatus().notNull().default('DISCONNECTED'),
   phone: text(), // E.164 of the linked number
   displayName: text(),
@@ -702,7 +710,7 @@ export const whatsappSessions = pgTable('whatsapp_sessions', {
   connectedAt: ts(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-});
+}, (t) => [index().on(t.tenantId)]);
 
 // Every number that has been linked during a trial — one free trial per WhatsApp number
 export const whatsappTrialNumbers = pgTable('whatsapp_trial_numbers', {
@@ -716,10 +724,13 @@ export const whatsappAuth = pgTable(
   'whatsapp_auth',
   {
     tenantId: tenantRef(),
+    sessionId: text()
+      .notNull()
+      .references(() => whatsappSessions.id, { onDelete: 'cascade' }),
     key: text().notNull(),
     valueEnc: text().notNull(),
   },
-  (t) => [primaryKey({ columns: [t.tenantId, t.key] })],
+  (t) => [primaryKey({ columns: [t.sessionId, t.key] })],
 );
 
 // ---------------------------------------------------------------------
@@ -1206,6 +1217,10 @@ export const waChats = pgTable(
   {
     id: id(),
     tenantId: tenantRef(),
+    // The employee's number this conversation happens on
+    sessionId: text()
+      .notNull()
+      .references((): AnyPgColumn => whatsappSessions.id, { onDelete: 'cascade' }),
     phone: text().notNull(), // E.164
     lastMessageAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     lastPreview: text(),
@@ -1214,7 +1229,7 @@ export const waChats = pgTable(
     doneAt: timestamp({ withTimezone: true }), // marked as handled; a new message reopens it
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex().on(t.tenantId, t.phone), index().on(t.tenantId, t.lastMessageAt)],
+  (t) => [uniqueIndex().on(t.sessionId, t.phone), index().on(t.tenantId, t.lastMessageAt)],
 );
 
 export const waChatMessages = pgTable(

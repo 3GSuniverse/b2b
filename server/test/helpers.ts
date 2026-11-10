@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { db } from '../src/lib/db.js';
 import {
   campaigns,
@@ -8,6 +8,8 @@ import {
   senders,
   sendingDomains,
   tenants,
+  users,
+  whatsappSessions,
   type Audience,
 } from '../src/db/schema.js';
 
@@ -106,4 +108,20 @@ export function fakeQueue() {
       queued.push(...ids);
     },
   };
+}
+
+/**
+ * A linked WhatsApp number. Numbers belong to a login: uses the agency's first login,
+ * or makes an employee login for it.
+ */
+export async function makeLine(tenantId: string, overrides: Partial<typeof whatsappSessions.$inferInsert> = {}) {
+  let userId = overrides.userId;
+  if (!userId) {
+    const existing = await db.query.users.findFirst({ where: eq(users.tenantId, tenantId), orderBy: [asc(users.createdAt)] });
+    userId =
+      existing?.id ??
+      (await db.insert(users).values({ tenantId, name: 'Ravi', username: `ravi-${Math.random().toString(36).slice(2, 8)}`, passwordHash: 'x' }).returning())[0]!.id;
+  }
+  const [line] = await db.insert(whatsappSessions).values({ tenantId, ...overrides, userId }).returning();
+  return line!;
 }

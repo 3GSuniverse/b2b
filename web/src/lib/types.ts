@@ -304,6 +304,9 @@ export interface CampaignReport {
 }
 
 export interface WhatsAppStatus {
+  /** This login's own number */
+  id: string;
+  userId: string;
   status: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'LOGGED_OUT' | 'BLOCKED';
   phone: string | null;
   displayName: string | null;

@@ -1,6 +1,7 @@
 import { and, desc, eq, gt, gte, ilike, isNull, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { campaigns, contacts, messages, users, waChatMessages, waChats, type Message } from '../../db/schema.js';
+import { campaigns, contacts, messages, users, waChatMessages, waChats, whatsappSessions, type Message } from '../../db/schema.js';
+import { seesAll, type Viewer } from '../auth/guard.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { enqueueWhatsApp } from '../../queues/index.js';
@@ -42,15 +43,23 @@ function sourceOf(m: Pick<Message, 'campaignId' | 'automationId' | 'sentById' | 
   return 'automatic';
 }
 
-/** The chat with this number, made on first contact; earlier messages we sent them are copied in. */
-async function ensureChat(tenantId: string, phone: string) {
-  const [made] = await db.insert(waChats).values({ tenantId, phone }).onConflictDoNothing().returning({ id: waChats.id });
-  if (!made) return (await db.query.waChats.findFirst({ where: and(eq(waChats.tenantId, tenantId), eq(waChats.phone, phone)), columns: { id: true } }))!.id;
+/** Chats on the employee's own number(s); owners and managers see every chat. */
+function chatScope(v: Viewer) {
+  return and(
+    eq(waChats.tenantId, v.tenantId),
+    seesAll(v) ? undefined : sql`${waChats.sessionId} in (select ${whatsappSessions.id} from ${whatsappSessions} where ${whatsappSessions.userId} = ${v.userId})`,
+  );
+}
+
+/** The chat with this number on this employee's line, made on first contact; earlier messages we sent them are copied in. */
+async function ensureChat(tenantId: string, sessionId: string, phone: string) {
+  const [made] = await db.insert(waChats).values({ tenantId, sessionId, phone }).onConflictDoNothing().returning({ id: waChats.id });
+  if (!made) return (await db.query.waChats.findFirst({ where: and(eq(waChats.sessionId, sessionId), eq(waChats.phone, phone)), columns: { id: true } }))!.id;
 
   // What we sent this person recently (broadcasts, reminders), so their reply makes sense
   const since = new Date(Date.now() - BACKFILL_DAYS * 86_400_000);
   const earlier = await db.query.messages.findMany({
-    where: and(eq(messages.tenantId, tenantId), eq(messages.channel, 'WHATSAPP'), eq(messages.toAddress, phone), gte(messages.sentAt, since)),
+    where: and(eq(messages.whatsappSessionId, sessionId), eq(messages.channel, 'WHATSAPP'), eq(messages.toAddress, phone), gte(messages.sentAt, since)),
     with: { campaign: { columns: { text: true } }, contact: true, tenant: true },
     orderBy: [desc(messages.sentAt)],
     limit: 20,
@@ -90,8 +99,8 @@ async function touch(chatId: string, direction: 'IN' | 'OUT', text: string | nul
 }
 
 /** A customer wrote to the agency. */
-export async function recordIncoming(tenantId: string, m: InboundMessage) {
-  const chatId = await ensureChat(tenantId, m.phone);
+export async function recordIncoming(tenantId: string, sessionId: string, m: InboundMessage) {
+  const chatId = await ensureChat(tenantId, sessionId, m.phone);
   const [row] = await db
     .insert(waChatMessages)
     .values({ tenantId, chatId, direction: 'IN', source: 'customer', body: m.text, mediaKind: m.mediaKind ?? null, mediaName: m.mediaName ?? null, waId: m.waId, at: m.at })
@@ -105,14 +114,14 @@ export async function recordIncoming(tenantId: string, m: InboundMessage) {
  * Something the agency's own number sent: typed on the phone, or the echo of a message Dhrona sent.
  * Echoes of Dhrona's messages are matched up instead of recorded twice.
  */
-export async function recordFromPhone(tenantId: string, m: InboundMessage) {
+export async function recordFromPhone(tenantId: string, sessionId: string, m: InboundMessage) {
   if (m.waId) {
     const seen = await db.query.waChatMessages.findFirst({ where: and(eq(waChatMessages.tenantId, tenantId), eq(waChatMessages.waId, m.waId)), columns: { id: true } });
     if (seen) return;
     const [sentByDhrona] = await db.select({ id: messages.id }).from(messages).where(and(eq(messages.tenantId, tenantId), eq(messages.providerMessageId, m.waId))).limit(1);
     if (sentByDhrona) return; // recordSent handles it
   }
-  const chat = await db.query.waChats.findFirst({ where: and(eq(waChats.tenantId, tenantId), eq(waChats.phone, m.phone)), columns: { id: true } });
+  const chat = await db.query.waChats.findFirst({ where: and(eq(waChats.sessionId, sessionId), eq(waChats.phone, m.phone)), columns: { id: true } });
   if (chat && m.text) {
     // A reply typed in Dhrona whose send is still finishing: same chat, same words, moments ago
     const pending = await db.query.waChatMessages.findFirst({
@@ -130,7 +139,7 @@ export async function recordFromPhone(tenantId: string, m: InboundMessage) {
       return;
     }
   }
-  const chatId = chat?.id ?? (await ensureChat(tenantId, m.phone));
+  const chatId = chat?.id ?? (await ensureChat(tenantId, sessionId, m.phone));
   const [row] = await db
     .insert(waChatMessages)
     .values({ tenantId, chatId, direction: 'OUT', source: 'phone', body: m.text, mediaKind: m.mediaKind ?? null, mediaName: m.mediaName ?? null, waId: m.waId, at: m.at })
@@ -140,13 +149,19 @@ export async function recordFromPhone(tenantId: string, m: InboundMessage) {
 }
 
 /** Dhrona delivered a WhatsApp message: add it to the person's chat, if they have one. */
-export async function recordSent(msg: Pick<Message, 'id' | 'tenantId' | 'toAddress' | 'campaignId' | 'automationId' | 'sentById' | 'service'>, text: string, waId: string, at = new Date()) {
+export async function recordSent(
+  msg: Pick<Message, 'id' | 'tenantId' | 'toAddress' | 'campaignId' | 'automationId' | 'sentById' | 'service' | 'whatsappSessionId'>,
+  text: string,
+  waId: string,
+  at = new Date(),
+) {
   const own = await db.query.waChatMessages.findFirst({ where: eq(waChatMessages.messageId, msg.id), columns: { id: true, chatId: true } });
   if (own) {
     await db.update(waChatMessages).set({ waId, at }).where(eq(waChatMessages.id, own.id));
     return;
   }
-  const chat = await db.query.waChats.findFirst({ where: and(eq(waChats.tenantId, msg.tenantId), eq(waChats.phone, msg.toAddress)), columns: { id: true } });
+  if (!msg.whatsappSessionId) return;
+  const chat = await db.query.waChats.findFirst({ where: and(eq(waChats.sessionId, msg.whatsappSessionId), eq(waChats.phone, msg.toAddress)), columns: { id: true } });
   if (!chat) return; // copied in later if they ever reply
   await db
     .insert(waChatMessages)
@@ -166,7 +181,7 @@ export const listQuery = z.object({
 
 const nameSql = sql<string | null>`nullif(trim(coalesce(${contacts.firstName}, '') || ' ' || coalesce(${contacts.lastName}, '')), '')`;
 
-export async function listChats(tenantId: string, q: z.infer<typeof listQuery>) {
+export async function listChats(v: Viewer, q: z.infer<typeof listQuery>) {
   const term = q.search ? `%${q.search.replace(/[%_]/g, '')}%` : null;
   const rows = await db
     .select({
@@ -179,12 +194,16 @@ export async function listChats(tenantId: string, q: z.infer<typeof listQuery>) 
       done: sql<boolean>`${waChats.doneAt} is not null`,
       contactId: contacts.id,
       name: nameSql,
+      // Whose number the chat is on (owners and managers see everyone's)
+      employee: users.name,
     })
     .from(waChats)
     .leftJoin(contacts, and(eq(contacts.tenantId, waChats.tenantId), eq(contacts.phone, waChats.phone)))
+    .leftJoin(whatsappSessions, eq(whatsappSessions.id, waChats.sessionId))
+    .leftJoin(users, eq(users.id, whatsappSessions.userId))
     .where(
       and(
-        eq(waChats.tenantId, tenantId),
+        chatScope(v),
         q.filter === 'unread' ? gt(waChats.unread, 0) : undefined,
         q.filter === 'open' ? isNull(waChats.doneAt) : undefined,
         q.filter === 'done' ? sql`${waChats.doneAt} is not null` : undefined,
@@ -197,22 +216,23 @@ export async function listChats(tenantId: string, q: z.infer<typeof listQuery>) 
   return { chats: rows };
 }
 
-export async function unreadCount(tenantId: string) {
+export async function unreadCount(v: Viewer) {
   const [r] = await db
     .select({ chats: sql<number>`count(*) filter (where ${waChats.unread} > 0)::int`, messages: sql<number>`coalesce(sum(${waChats.unread}), 0)::int` })
     .from(waChats)
-    .where(eq(waChats.tenantId, tenantId));
+    .where(chatScope(v));
   return r ?? { chats: 0, messages: 0 };
 }
 
-async function ownedChat(tenantId: string, chatId: string) {
-  const chat = await db.query.waChats.findFirst({ where: and(eq(waChats.id, chatId), eq(waChats.tenantId, tenantId)) });
+export async function ownedChat(v: Viewer, chatId: string) {
+  const [chat] = await db.select().from(waChats).where(and(eq(waChats.id, chatId), chatScope(v))).limit(1);
   if (!chat) throw new AppError(404, 'not_found', 'Conversation not found');
   return chat;
 }
 
-export async function getThread(tenantId: string, chatId: string) {
-  const chat = await ownedChat(tenantId, chatId);
+export async function getThread(v: Viewer, chatId: string) {
+  const { tenantId } = v;
+  const chat = await ownedChat(v, chatId);
   const [contact, rows] = await Promise.all([
     db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, tenantId), eq(contacts.phone, chat.phone)), columns: { id: true, firstName: true, lastName: true, email: true, whatsappStatus: true } }),
     db
@@ -249,14 +269,15 @@ export async function getThread(tenantId: string, chatId: string) {
 export const replyBody = z.object({ text: z.string().trim().min(1, 'Write a reply first').max(4000, 'Keep it under 4,000 characters') });
 
 /** An employee answers from Dhrona. It goes ahead of any broadcast still sending. */
-export async function reply(tenantId: string, userId: string, chatId: string, text: string, enqueue = (ids: string[]) => enqueueWhatsApp(ids, { urgent: true })) {
-  const chat = await ownedChat(tenantId, chatId);
+export async function reply(v: Viewer, chatId: string, text: string, enqueue = (ids: string[]) => enqueueWhatsApp(ids, { urgent: true })) {
+  const { tenantId, userId } = v;
+  const chat = await ownedChat(v, chatId);
   const contact = await db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, tenantId), eq(contacts.phone, chat.phone)), columns: { id: true } });
   const now = new Date();
   // A reply to someone who wrote to you: it goes unless they replied STOP
   const [m] = await db
     .insert(messages)
-    .values({ tenantId, channel: 'WHATSAPP', toAddress: chat.phone, contactId: contact?.id ?? null, body: text, service: true, sentById: userId })
+    .values({ tenantId, channel: 'WHATSAPP', toAddress: chat.phone, contactId: contact?.id ?? null, body: text, service: true, sentById: userId, whatsappSessionId: chat.sessionId })
     .returning();
   const [row] = await db
     .insert(waChatMessages)
@@ -268,13 +289,13 @@ export async function reply(tenantId: string, userId: string, chatId: string, te
   return { id: row!.id, messageId: m!.id };
 }
 
-export async function markRead(tenantId: string, chatId: string) {
-  await ownedChat(tenantId, chatId);
+export async function markRead(v: Viewer, chatId: string) {
+  await ownedChat(v, chatId);
   await db.update(waChats).set({ unread: 0 }).where(eq(waChats.id, chatId));
 }
 
-export async function setDone(tenantId: string, chatId: string, done: boolean) {
-  await ownedChat(tenantId, chatId);
+export async function setDone(v: Viewer, chatId: string, done: boolean) {
+  await ownedChat(v, chatId);
   await db.update(waChats).set({ doneAt: done ? new Date() : null, ...(done ? { unread: 0 } : {}) }).where(eq(waChats.id, chatId));
 }
 

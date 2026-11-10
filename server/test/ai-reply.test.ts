@@ -6,7 +6,7 @@ import { closeRedis } from '../src/lib/redis.js';
 import { setAiClient } from '../src/modules/ai/quote-draft.js';
 import { recordIncoming } from '../src/modules/inbox/service.js';
 import { api, signup } from './api-helpers.js';
-import { makeContact, resetDb } from './helpers.js';
+import { makeContact, resetDb, makeLine } from './helpers.js';
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 const calls: { system: string; prompt: string }[] = [];
@@ -43,7 +43,7 @@ describe('Drona AI: suggested replies on WhatsApp', () => {
     await db.insert(tripDues).values({ tenantId, tripId: trip!.id, label: 'Advance', amount: 2_000_000, dueDate: '2026-11-10', position: 0 });
     await db.insert(tripPayments).values({ tenantId, tripId: trip!.id, amount: 500_000, receiptNumber: 1, paidAt: new Date('2026-11-01'), method: 'UPI' });
     await c.put('/api/ai/notes', { aiNotes: 'Office hours 9 am to 8 pm. We accept UPI and bank transfer.' });
-    const chatId = await recordIncoming(tenantId, { phone: '+919848012345', text: 'కేరళ ప్యాకేజీ ధర ఎంత?', waId: 'w1', at: new Date() });
+    const chatId = await recordIncoming(tenantId, (await makeLine(tenantId, { userId: owner.json.user.id })).id, { phone: '+919848012345', text: 'కేరళ ప్యాకేజీ ధర ఎంత?', waId: 'w1', at: new Date() });
 
     const r = await c.post(`/api/inbox/${chatId}/suggest`, { hint: 'mention the December offer' });
     expect(r.statusCode).toBe(200);
@@ -65,7 +65,7 @@ describe('Drona AI: suggested replies on WhatsApp', () => {
     const owner = await signup(app);
     const tenantId = owner.json.tenant.id;
     const c = api(app, owner.cookie);
-    const chatId = await recordIncoming(tenantId, { phone: '+919000000001', text: 'Hello', waId: 'w2', at: new Date() });
+    const chatId = await recordIncoming(tenantId, (await makeLine(tenantId, { userId: owner.json.user.id })).id, { phone: '+919000000001', text: 'Hello', waId: 'w2', at: new Date() });
     answer = 'Sorry, I cannot help';
     expect((await c.post(`/api/inbox/${chatId}/suggest`, {})).json().error).toBe('ai_bad_answer');
     setAiClient(null);
@@ -76,7 +76,7 @@ describe('Drona AI: suggested replies on WhatsApp', () => {
   it('keeps each agency’s conversations and notes to itself; employees can’t change the notes', async () => {
     const a = await signup(app);
     const b = await signup(app);
-    const chatId = await recordIncoming(a.json.tenant.id, { phone: '+919000000002', text: 'Hi', waId: 'w3', at: new Date() });
+    const chatId = await recordIncoming(a.json.tenant.id, (await makeLine(a.json.tenant.id, { userId: a.json.user.id })).id, { phone: '+919000000002', text: 'Hi', waId: 'w3', at: new Date() });
     expect((await api(app, b.cookie).post(`/api/inbox/${chatId}/suggest`, {})).statusCode).toBe(404);
     const emp = await api(app, a.cookie).post('/api/agency/employees', { name: 'E', username: 'emp1', password: 'password-1' });
     expect(emp.statusCode).toBe(201);

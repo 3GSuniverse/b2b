@@ -11,15 +11,16 @@ const dec = <T>(s: string): T => JSON.parse(decryptSecret(s), BufferJSON.reviver
  * Baileys login state kept in Postgres, encrypted, instead of files on disk —
  * survives redeploys, and a database leak alone can't take over the number.
  */
-export async function useDbAuthState(tenantId: string): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> {
-  const row = await db.query.whatsappAuth.findFirst({ where: and(eq(whatsappAuth.tenantId, tenantId), eq(whatsappAuth.key, 'creds')) });
+export async function useDbAuthState(session: { id: string; tenantId: string }): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> {
+  const { id: sessionId, tenantId } = session;
+  const row = await db.query.whatsappAuth.findFirst({ where: and(eq(whatsappAuth.sessionId, sessionId), eq(whatsappAuth.key, 'creds')) });
   const creds: AuthenticationCreds = row ? dec(row.valueEnc) : initAuthCreds();
 
   const write = async (key: string, value: unknown) => {
     await db
       .insert(whatsappAuth)
-      .values({ tenantId, key, valueEnc: enc(value) })
-      .onConflictDoUpdate({ target: [whatsappAuth.tenantId, whatsappAuth.key], set: { valueEnc: enc(value) } });
+      .values({ tenantId, sessionId, key, valueEnc: enc(value) })
+      .onConflictDoUpdate({ target: [whatsappAuth.sessionId, whatsappAuth.key], set: { valueEnc: enc(value) } });
   };
 
   return {
@@ -32,7 +33,7 @@ export async function useDbAuthState(tenantId: string): Promise<{ state: Authent
           const rows = await db
             .select()
             .from(whatsappAuth)
-            .where(and(eq(whatsappAuth.tenantId, tenantId), inArray(whatsappAuth.key, ids.map((id) => `${type}:${id}`))));
+            .where(and(eq(whatsappAuth.sessionId, sessionId), inArray(whatsappAuth.key, ids.map((id) => `${type}:${id}`))));
           for (const r of rows) {
             let v = dec<SignalDataTypeMap[T]>(r.valueEnc);
             if (type === 'app-state-sync-key' && v) v = proto.Message.AppStateSyncKeyData.fromObject(v as object) as unknown as SignalDataTypeMap[T];
@@ -45,7 +46,7 @@ export async function useDbAuthState(tenantId: string): Promise<{ state: Authent
             for (const [id, value] of Object.entries(data[category] ?? {})) {
               const key = `${category}:${id}`;
               if (value) await write(key, value);
-              else await db.delete(whatsappAuth).where(and(eq(whatsappAuth.tenantId, tenantId), eq(whatsappAuth.key, key)));
+              else await db.delete(whatsappAuth).where(and(eq(whatsappAuth.sessionId, sessionId), eq(whatsappAuth.key, key)));
             }
           }
         },
@@ -56,6 +57,6 @@ export async function useDbAuthState(tenantId: string): Promise<{ state: Authent
 }
 
 /** Forget the linked device completely (after logout or unlink). */
-export async function clearAuthState(tenantId: string) {
-  await db.delete(whatsappAuth).where(eq(whatsappAuth.tenantId, tenantId));
+export async function clearAuthState(sessionId: string) {
+  await db.delete(whatsappAuth).where(eq(whatsappAuth.sessionId, sessionId));
 }

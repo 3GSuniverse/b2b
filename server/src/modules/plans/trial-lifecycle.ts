@@ -35,15 +35,17 @@ export async function runTrialLifecycle(now = new Date()) {
     .where(and(eq(tenants.plan, 'TRIAL'), isNull(tenants.trialEndedAt), lte(tenants.trialEndsAt, now)));
   for (const t of expired) {
     // WhatsApp: unlink on WhatsApp's side (worker) and forget the keys here, even if the worker is down
-    const session = await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.tenantId, t.id) });
-    if (session && session.status !== 'DISCONNECTED') {
-      await publishCommand({ action: 'disconnect', tenantId: t.id }).catch((err) => logger.warn({ err }, 'could not reach the worker'));
-      await db
-        .update(whatsappSessions)
-        .set({ status: 'DISCONNECTED', lastError: 'Unlinked because the free trial ended.' })
-        .where(eq(whatsappSessions.tenantId, t.id));
+    const lines = await db.query.whatsappSessions.findMany({ where: eq(whatsappSessions.tenantId, t.id) });
+    for (const session of lines) {
+      if (session.status !== 'DISCONNECTED') {
+        await publishCommand({ action: 'disconnect', sessionId: session.id }).catch((err) => logger.warn({ err }, 'could not reach the worker'));
+        await db
+          .update(whatsappSessions)
+          .set({ status: 'DISCONNECTED', lastError: 'Unlinked because the free trial ended.' })
+          .where(eq(whatsappSessions.id, session.id));
+      }
+      await clearAuthState(session.id);
     }
-    await clearAuthState(t.id);
 
     await db
       .update(campaigns)

@@ -4,7 +4,6 @@ import { campaigns, messages, senders } from '../../db/schema.js';
 import { enqueueEmails, enqueueWhatsApp, type EnqueueFn } from '../../queues/index.js';
 import { countEmailAudience, countWhatsAppAudience, iterateEmailAudience, iterateWhatsAppAudience } from '../audience/resolve.js';
 import { trialEnded, whatsappTrialCapacity, whatsappWebAllowed } from '../plans/entitlements.js';
-import { whatsappSessions } from '../../db/schema.js';
 import { isDomainReady } from '../domains/service.js';
 import { LIMITS, totalSize } from '../attachments/service.js';
 
@@ -166,7 +165,9 @@ export async function startWhatsAppCampaign(campaignId: string, opts: { enqueue?
   if (campaign.tenant.status !== 'ACTIVE') throw new CampaignError('Sending is paused for this account', 'tenant_not_active');
   if (trialEnded(campaign.tenant, now)) throw new CampaignError('Your free trial has ended. Upgrade to keep sending.', 'trial_ended');
   if (!whatsappWebAllowed(campaign.tenant, now)) throw new CampaignError('WhatsApp sending isn’t available on this account', 'whatsapp_not_ready');
-  const session = await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.tenantId, campaign.tenantId) });
+  // It goes from the WhatsApp number of the employee who made it
+  const { pickSession } = await import('../whatsapp/service.js');
+  const session = await pickSession(campaign.tenantId, [campaign.createdById]);
   if (session?.status !== 'CONNECTED') throw new CampaignError('Link your WhatsApp number first, in WhatsApp → Linked number', 'whatsapp_not_ready');
   if (!campaign.text?.trim() && !campaign.attachments.length) throw new CampaignError('The message is empty', 'no_content');
   if (campaign.audience?.mode === 'temporary' && !campaign.audience.consent) throw new CampaignError('Confirm that the people in the temporary list agreed to hear from you', 'consent_needed');

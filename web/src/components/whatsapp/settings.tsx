@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link2Off, Loader2, MessageCircle, RefreshCw, ShieldAlert, Smartphone } from 'lucide-react';
+import { Link2Off, Loader2, MessageCircle, RefreshCw, ShieldAlert, Smartphone, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -77,8 +77,6 @@ function Linking({ wa, onCancel }: { wa: WhatsAppStatus; onCancel: () => void })
 export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {}) {
   const qc = useQueryClient();
   const { tenant, user } = useSession();
-  // One WhatsApp number per agency: only the owner or a Manager can link, unlink or change the pace
-  const canManage = user.role !== 'MEMBER';
   const trial = tenant.plan?.plan === 'TRIAL' ? tenant.plan : null;
   const q = useWhatsApp({ poll: true });
   const wa = q.data;
@@ -138,6 +136,7 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
       <RiskNote />
 
       <Panel className="flex flex-col gap-6 p-5 sm:p-6">
+        <PanelHeader title="Your WhatsApp number" description="Every login links its own number: the one your company gave you. Your broadcasts and replies go out from it." />
         <div className="flex flex-wrap items-center gap-4">
           <span className="grid h-11 w-11 place-items-center rounded-[12px] bg-[#e7f8ee] text-[#128c4a]">
             <MessageCircle className="h-5 w-5" />
@@ -149,7 +148,7 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
           <Badge tone={st.tone} dot>
             {st.label}
           </Badge>
-          {!canManage ? null : wa.status === 'CONNECTED' ? (
+          {wa.status === 'CONNECTED' ? (
             <Button variant="danger-ghost" size="sm" onClick={() => setConfirmUnlink(true)}>
               <Link2Off className="h-4 w-4" />
               Unlink
@@ -162,16 +161,7 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
           ) : null}
         </div>
 
-        {!canManage && wa.status !== 'CONNECTED' && (
-          <div className="flex items-start gap-3 rounded-[12px] bg-[#fff6e5] px-4 py-3 text-[13px] text-[#8a5a00]">
-            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              Your agency shares one WhatsApp number. Ask your agency owner or a Manager to link it. Once it’s linked, you can send WhatsApp messages and broadcasts from here.
-            </span>
-          </div>
-        )}
-
-        {canManage && wa.status === 'CONNECTING' && (
+        {wa.status === 'CONNECTING' && (
           <div className="border-t border-line-soft pt-6">
             <Linking wa={wa} onCancel={() => disconnect.mutate()} />
           </div>
@@ -191,7 +181,7 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
       </Panel>
 
       <Panel className="flex flex-col gap-5 p-5 sm:p-6">
-        <PanelHeader title="Sending pace" description="Slower is safer. Broadcasts bigger than the daily limit continue the next day by themselves." />
+        <PanelHeader title="Sending pace" description="For your number. Slower is safer. Broadcasts bigger than the daily limit continue the next day by themselves." />
         <div className="grid gap-5 sm:grid-cols-2">
           <Field
             label="Messages per day"
@@ -205,7 +195,6 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
             {(p) => (
               <Input
                 {...p}
-                disabled={!canManage}
                 type="number"
                 min={20}
                 max={cap ?? 500}
@@ -216,22 +205,24 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
             )}
           </Field>
           <Field label="Seconds between messages" hint="At least 6. We recommend 10 or more." error={errOf('intervalSeconds')}>
-            {(p) => <Input {...p} disabled={!canManage} type="number" min={6} max={120} value={limits.intervalSeconds} onChange={(e) => setLimits({ ...limits, intervalSeconds: Number(e.target.value) })} />}
+            {(p) => <Input {...p} type="number" min={6} max={120} value={limits.intervalSeconds} onChange={(e) => setLimits({ ...limits, intervalSeconds: Number(e.target.value) })} />}
           </Field>
         </div>
-        {!canManage && <p className="text-[13px] text-muted">Only your agency owner or a Manager can change the pace.</p>}
-        <div className={canManage ? 'flex justify-end' : 'hidden'}>
+        <div className="flex justify-end">
           <Button variant="primary" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>
             Save pace
           </Button>
         </div>
       </Panel>
 
+      {user.role !== 'MEMBER' && <TeamNumbers />}
+
       <Panel className="flex flex-col gap-2 p-5 text-[13px] leading-relaxed text-muted sm:p-6">
         <p className="font-semibold text-ink">How it behaves</p>
         <p>Only customers marked “Agreed to WhatsApp messages” with a phone number get WhatsApp broadcasts.</p>
         <p>If someone replies STOP, they’re unsubscribed from WhatsApp straight away and get a short confirmation.</p>
         <p>If the phone unlinks this device or WhatsApp blocks the number, sending pauses and you get an alert.</p>
+        <p>Automatic messages (payment reminders, trip follow-ups) go from the number of the employee who handles the trip, or from any linked number if they don’t have one.</p>
       </Panel>
 
       <Dialog
@@ -249,5 +240,84 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
         }
       />
     </div>
+  );
+}
+
+type TeamNumber = {
+  id: string;
+  userId: string;
+  employee: string;
+  username: string | null;
+  status: WhatsAppStatus['status'];
+  phone: string | null;
+  displayName: string | null;
+  sentLast24h: number;
+  connectedAt: string | null;
+  lastError: string | null;
+};
+
+/** Owners and managers: every employee's number, and unlinking one (e.g. when someone leaves). */
+function TeamNumbers() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['whatsapp', 'numbers'], queryFn: () => api.get<{ numbers: TeamNumber[] }>('/api/whatsapp/numbers').then((r) => r.numbers), refetchInterval: 30_000 });
+  const [unlink, setUnlink] = useState<TeamNumber | null>(null);
+  const drop = useMutation({
+    mutationFn: (id: string) => api.post('/api/whatsapp/disconnect', { sessionId: id }),
+    onSuccess: () => {
+      setUnlink(null);
+      void qc.invalidateQueries({ queryKey: ['whatsapp'] });
+      toast.success('Number unlinked');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <Panel className="flex flex-col gap-4 p-5 sm:p-6">
+      <PanelHeader title="Your team’s numbers" description="Each employee links their own WhatsApp number. You can see them all here, and unlink one when someone leaves." />
+      {!q.data ? (
+        <Skeleton className="h-20 rounded-[12px]" />
+      ) : !q.data.length ? (
+        <div className="flex items-center gap-3 rounded-[12px] bg-sunken px-4 py-3.5 text-[13px] text-muted">
+          <Users className="h-4 w-4 shrink-0" />
+          No employee has linked a number yet. They do it from their own login, on this page.
+        </div>
+      ) : (
+        <ul className="flex flex-col divide-y divide-line-soft">
+          {q.data.map((t) => (
+            <li key={t.id} className="flex flex-wrap items-center gap-3 py-3">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-[#e7f8ee] text-sm font-bold text-[#128c4a]">{t.employee.slice(0, 1).toUpperCase()}</span>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="text-sm font-semibold">{t.employee}</span>
+                <span className="text-[13px] text-muted">
+                  {t.phone ?? 'No number'} · {n(t.sentLast24h)} sent in the last 24 hours
+                </span>
+              </div>
+              <Badge tone={STATUS[t.status].tone} dot>
+                {STATUS[t.status].label}
+              </Badge>
+              {t.status !== 'DISCONNECTED' && (
+                <Button variant="danger-ghost" size="sm" onClick={() => setUnlink(t)}>
+                  <Link2Off className="h-4 w-4" />
+                  Unlink
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <Dialog
+        open={!!unlink}
+        onOpenChange={(o) => !o && setUnlink(null)}
+        title={`Unlink ${unlink?.employee ?? ''}’s number?`}
+        description="Their WhatsApp messages stop until they link a number again. Chats on their phone aren’t affected."
+        footer={
+          <>
+            <Button onClick={() => setUnlink(null)}>Keep linked</Button>
+            <Button variant="danger" loading={drop.isPending} onClick={() => unlink && drop.mutate(unlink.id)}>
+              Unlink
+            </Button>
+          </>
+        }
+      />
+    </Panel>
   );
 }

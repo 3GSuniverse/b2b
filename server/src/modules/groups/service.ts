@@ -10,7 +10,7 @@ import { whatsappWebAllowed } from '../plans/entitlements.js';
 import { addDays, localDate, rupeesToPaise, tripMoney, type DueInput } from '../trips/money.js';
 import { ownedPackage } from '../packages/service.js';
 import { createTrip, createTripBody, type Actor } from '../trips/service.js';
-import { getSession } from '../whatsapp/service.js';
+import { whatsappReady } from '../whatsapp/service.js';
 import { attachmentIds, LIMITS, resolveRefs, totalSize } from '../attachments/service.js';
 
 /**
@@ -381,7 +381,7 @@ export async function broadcast(actor: Actor, groupId: string, input: z.infer<ty
   const files = await resolveRefs(tenant.id, input.attachments);
   const emailFits = totalSize(files) <= LIMITS.emailTotalBytes;
   const bookings = await db.query.trips.findMany({ where: and(eq(trips.groupId, groupId), inArray(trips.status, ['QUOTED', 'BOOKED'])), with: { contact: true } });
-  const whatsappUp = whatsappWebAllowed(tenant) && (await getSession(tenant.id)).status === 'CONNECTED';
+  const whatsappUp = whatsappWebAllowed(tenant) && (await whatsappReady(tenant.id, [actor.userId], { fallback: false }));
   const sender =
     (await db.query.senders.findFirst({ where: and(eq(senders.tenantId, tenant.id), eq(senders.isDefault, true)) })) ??
     (await db.query.senders.findFirst({ where: eq(senders.tenantId, tenant.id), orderBy: [asc(senders.createdAt)] }));
