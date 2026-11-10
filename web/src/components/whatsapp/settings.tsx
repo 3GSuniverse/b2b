@@ -76,7 +76,9 @@ function Linking({ wa, onCancel }: { wa: WhatsAppStatus; onCancel: () => void })
 
 export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {}) {
   const qc = useQueryClient();
-  const { tenant } = useSession();
+  const { tenant, user } = useSession();
+  // One WhatsApp number per agency: only the owner or a Manager can link, unlink or change the pace
+  const canManage = user.role !== 'MEMBER';
   const trial = tenant.plan?.plan === 'TRIAL' ? tenant.plan : null;
   const q = useWhatsApp({ poll: true });
   const wa = q.data;
@@ -147,7 +149,7 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
           <Badge tone={st.tone} dot>
             {st.label}
           </Badge>
-          {wa.status === 'CONNECTED' ? (
+          {!canManage ? null : wa.status === 'CONNECTED' ? (
             <Button variant="danger-ghost" size="sm" onClick={() => setConfirmUnlink(true)}>
               <Link2Off className="h-4 w-4" />
               Unlink
@@ -160,7 +162,16 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
           ) : null}
         </div>
 
-        {wa.status === 'CONNECTING' && (
+        {!canManage && wa.status !== 'CONNECTED' && (
+          <div className="flex items-start gap-3 rounded-[12px] bg-[#fff6e5] px-4 py-3 text-[13px] text-[#8a5a00]">
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Your agency shares one WhatsApp number. Ask your agency owner or a Manager to link it. Once it’s linked, you can send WhatsApp messages and broadcasts from here.
+            </span>
+          </div>
+        )}
+
+        {canManage && wa.status === 'CONNECTING' && (
           <div className="border-t border-line-soft pt-6">
             <Linking wa={wa} onCancel={() => disconnect.mutate()} />
           </div>
@@ -194,6 +205,7 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
             {(p) => (
               <Input
                 {...p}
+                disabled={!canManage}
                 type="number"
                 min={20}
                 max={cap ?? 500}
@@ -204,10 +216,11 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
             )}
           </Field>
           <Field label="Seconds between messages" hint="At least 6. We recommend 10 or more." error={errOf('intervalSeconds')}>
-            {(p) => <Input {...p} type="number" min={6} max={120} value={limits.intervalSeconds} onChange={(e) => setLimits({ ...limits, intervalSeconds: Number(e.target.value) })} />}
+            {(p) => <Input {...p} disabled={!canManage} type="number" min={6} max={120} value={limits.intervalSeconds} onChange={(e) => setLimits({ ...limits, intervalSeconds: Number(e.target.value) })} />}
           </Field>
         </div>
-        <div className="flex justify-end">
+        {!canManage && <p className="text-[13px] text-muted">Only your agency owner or a Manager can change the pace.</p>}
+        <div className={canManage ? 'flex justify-end' : 'hidden'}>
           <Button variant="primary" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>
             Save pace
           </Button>
