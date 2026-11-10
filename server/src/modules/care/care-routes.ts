@@ -187,7 +187,6 @@ export async function careRoutes(app: FastifyInstance) {
     if (body.assigneeId !== undefined && body.assigneeId !== t.assigneeId) {
       const to = body.assigneeId ? await db.query.careStaff.findFirst({ where: and(eq(careStaff.id, body.assigneeId), isNull(careStaff.disabledAt)) }) : null;
       if (body.assigneeId && !to) throw new AppError(400, 'staff_not_found', 'That person isn’t in customer care');
-      if (t.assigneeId && t.assigneeId !== me.staffId && me.role !== 'LEAD') throw new AppError(403, 'forbidden', 'Only a team lead can move someone else’s request');
       set.assigneeId = body.assigneeId;
       await addMessage({ ticketId: t.id, author: 'SYSTEM', internal: true, body: to ? (to.id === me.staffId ? `${me.name} took this request` : `${me.name} gave this request to ${to.name}`) : `${me.name} unassigned this request` });
     }
@@ -212,7 +211,7 @@ export async function careRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/care/staff', async () => {
-    const staff = await db.select({ id: careStaff.id, name: careStaff.name, role: careStaff.role }).from(careStaff).where(isNull(careStaff.disabledAt)).orderBy(asc(careStaff.name));
+    const staff = await db.select({ id: careStaff.id, name: careStaff.name }).from(careStaff).where(isNull(careStaff.disabledAt)).orderBy(asc(careStaff.name));
     return { staff };
   });
 

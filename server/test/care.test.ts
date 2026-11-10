@@ -23,9 +23,9 @@ beforeEach(async () => {
 });
 
 /** A customer care login, signed in. */
-async function careLogin(name = 'Priya Sharma', role = 'AGENT') {
+async function careLogin(name = 'Priya Sharma') {
   const email = `${name.split(' ')[0]!.toLowerCase()}-${Math.random().toString(36).slice(2, 6)}@care.dhrona.in`;
-  await db.insert(careStaff).values({ email, name, role, passwordHash: await hashPassword('care-password-1') });
+  await db.insert(careStaff).values({ email, name, passwordHash: await hashPassword('care-password-1') });
   const res = await app.inject({ method: 'POST', url: '/api/care/auth/login', payload: { email, password: 'care-password-1' } });
   expect(res.statusCode).toBe(200);
   const cookie = res.cookies.find((c) => c.name === 'care_sid')!;
@@ -127,17 +127,15 @@ describe('customer care', () => {
     expect((await other.post(`/api/support/tickets/${mine}/messages`, { body: 'hi' })).statusCode).toBe(404);
   });
 
-  it('only a team lead moves someone else’s request', async () => {
+  it('anyone in customer care can take or pass on any request', async () => {
     const owner = await signup(app);
     const id = (await api(app, owner.cookie).post('/api/support/tickets', request)).json().ticket.id;
     const priya = await careLogin('Priya Sharma');
     const ravi = await careLogin('Ravi Kumar');
-    const lead = await careLogin('Lata Rao', 'LEAD');
     await priya.c.patch(`/api/care/tickets/${id}`, { assigneeId: priya.staff.id });
-    expect((await ravi.c.patch(`/api/care/tickets/${id}`, { assigneeId: ravi.staff.id })).statusCode).toBe(403);
-    expect((await lead.c.patch(`/api/care/tickets/${id}`, { assigneeId: ravi.staff.id, priority: 'URGENT' })).statusCode).toBe(200);
+    expect((await ravi.c.patch(`/api/care/tickets/${id}`, { assigneeId: ravi.staff.id, priority: 'URGENT' })).statusCode).toBe(200);
     const t = (await ravi.c.get(`/api/care/tickets/${id}`)).json();
     expect(t.ticket).toMatchObject({ assigneeId: ravi.staff.id, priority: 'URGENT' });
-    expect(t.messages.filter((m: { internal: boolean }) => m.internal).map((m: { body: string }) => m.body)).toEqual(['Priya Sharma took this request', 'Lata Rao gave this request to Ravi Kumar', 'Lata Rao set priority to urgent']);
+    expect(t.messages.filter((m: { internal: boolean }) => m.internal).map((m: { body: string }) => m.body)).toEqual(['Priya Sharma took this request', 'Ravi Kumar took this request', 'Ravi Kumar set priority to urgent']);
   });
 });

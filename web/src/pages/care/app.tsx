@@ -198,7 +198,7 @@ function CareShell({ children }: { children: ReactNode }) {
             <div className="px-2.5 py-2">
               <p className="text-[13px] font-semibold">{staff.name}</p>
               <p className="text-xs text-muted">
-                {staff.role === 'LEAD' ? 'Team lead' : 'Customer care'} · {staff.email}
+                Customer care · {staff.email}
               </p>
             </div>
             <MenuItem icon={<LogOut />} onSelect={() => out.mutate()}>

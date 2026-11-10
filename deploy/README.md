@@ -127,11 +127,11 @@ Every agency login has **Customer care** (the headset at the top, and in the pro
 Make a login for each person in your support team:
 
 ```bash
-drona care add support@yourcompany.in "Ravi Kumar" lead
+drona care add support@yourcompany.in "Ravi Kumar"
 drona care add priya@yourcompany.in "Priya Sharma"
 ```
 
-Each command prints a password once. They sign in at `https://<your site>/care`. A team lead can move anyone's request; an agent can take unassigned requests and their own.
+Each command prints a password once. They sign in at `https://<your site>/care`. Everyone in customer care is equal: anyone can take or pass on any request.
 
 ## Everyday commands
 
@@ -148,7 +148,7 @@ Each command prints a password once. They sign in at `https://<your site>/care`.
 | `drona plan <email> paid [emails]` | Everything, with no end date (the company owner's email, or the company slug) |
 | `drona plan <email> trial <days>` | Restart or extend a trial |
 | `drona feature whatsapp-web <email> on\|off` | Allow WhatsApp Web after the trial (for a company you trust) |
-| `drona care add <email> "<name>" [lead]` | A customer care login (prints a one-time password). Add `lead` for a team lead, who can move anyone's requests |
+| `drona care add <email> "<name>"` | A customer care login (prints a one-time password) |
 | `drona care password <email>` | A new password for a customer care login |
 | `drona care off <email>` / `on <email>` | Switch a customer care login off (signs them out) or back on |
 | `drona care list` | Everyone in customer care |

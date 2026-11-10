@@ -20,7 +20,6 @@ const hash = (t: string) => createHash('sha256').update(t).digest('hex');
 export interface CareAuth {
   staffId: string;
   name: string;
-  role: 'AGENT' | 'LEAD';
 }
 
 declare module 'fastify' {
@@ -39,7 +38,7 @@ export async function requireCare(req: FastifyRequest) {
   });
   if (!s || s.staff.disabledAt) throw new AppError(401, 'care_session_expired', 'Your customer care session has ended. Sign in again.');
   if (Date.now() - s.lastSeenAt.getTime() > 5 * 60_000) await db.update(careSessions).set({ lastSeenAt: new Date() }).where(eq(careSessions.id, s.id));
-  req.care = { staffId: s.staffId, name: s.staff.name, role: s.staff.role === 'LEAD' ? 'LEAD' : 'AGENT' };
+  req.care = { staffId: s.staffId, name: s.staff.name };
 }
 
 const loginBody = z.object({
@@ -64,7 +63,7 @@ export async function careAuthRoutes(app: FastifyInstance, opts: { rateLimitMax?
     await db.insert(careSessions).values({ tokenHash: hash(token), staffId: staff.id, expiresAt });
     await db.update(careStaff).set({ lastLoginAt: new Date() }).where(eq(careStaff.id, staff.id));
     setCookie(reply, token, expiresAt);
-    return { staff: { id: staff.id, name: staff.name, email: staff.email, role: staff.role } };
+    return { staff: { id: staff.id, name: staff.name, email: staff.email } };
   });
 
   app.post('/api/care/auth/logout', async (req, reply) => {
@@ -76,6 +75,6 @@ export async function careAuthRoutes(app: FastifyInstance, opts: { rateLimitMax?
 
   app.get('/api/care/auth/me', { preHandler: requireCare }, async (req) => {
     const s = (await db.query.careStaff.findFirst({ where: eq(careStaff.id, req.care!.staffId) }))!;
-    return { staff: { id: s.id, name: s.name, email: s.email, role: s.role } };
+    return { staff: { id: s.id, name: s.name, email: s.email } };
   });
 }

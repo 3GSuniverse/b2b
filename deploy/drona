@@ -11,7 +11,7 @@
 #   drona restore <file>    put a backup back (asks first)
 #   drona plan <owner email> [basic|professional|ultra <logins> [days] | paid [emails] | trial <days>]
 #   drona feature whatsapp-web <owner email> on|off
-#   drona care add <email> "<name>" [lead] | password | off | on <email> | list   customer care staff
+#   drona care add <email> "<name>" | password | off | on <email> | list   customer care staff
 #   drona move-from-hayate  one time only, on a server first installed under the old name
 set -euo pipefail
 

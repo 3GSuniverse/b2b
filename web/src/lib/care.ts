@@ -47,7 +47,7 @@ export type MyTicket = {
 
 // ---------------------------------------------------------------- the customer care dashboard
 
-export type CareStaff = { id: string; name: string; email: string; role: 'AGENT' | 'LEAD' };
+export type CareStaff = { id: string; name: string; email: string };
 export type CareView = 'needs_reply' | 'waiting' | 'mine' | 'unassigned' | 'resolved' | 'all';
 
 export type CareSummary = {
