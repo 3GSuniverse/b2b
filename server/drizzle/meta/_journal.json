@@ -162,6 +162,13 @@
       "when": 1794154976705,
       "tag": "0022_plain_email",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794334014615,
+      "tag": "0023_customer_care",
+      "breakpoints": true
     }
   ]
 }

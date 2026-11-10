@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, ChevronDown, Clock3, KeyRound, Mail, FileText, LayoutDashboard, LogOut, Megaphone, Menu as MenuIcon, MessageCircle, MessageSquarePlus, Plane, Plus, Repeat2, Search, Settings, UserPlus, Users } from 'lucide-react';
+import { Building2, ChevronDown, Clock3, Headset, KeyRound, Mail, FileText, LayoutDashboard, LogOut, Megaphone, Menu as MenuIcon, MessageCircle, MessageSquarePlus, Plane, Plus, Repeat2, Search, Settings, UserPlus, Users } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -16,7 +16,7 @@ import { NotificationsButton } from './notifications';
 import { Button, LinkButton } from './ui/button';
 import { Field, Input } from './ui/field';
 import { Avatar, Badge, Kbd, ProgressBar } from './ui/display';
-import { Dialog, Menu, MenuItem, MenuSeparator, Sheet } from './ui/overlay';
+import { Dialog, Menu, MenuItem, MenuSeparator, Sheet, Tooltip } from './ui/overlay';
 
 // The sidebar: home, the two master tabs (Email, WhatsApp), the day-to-day work, then the agency
 type Role = 'OWNER' | 'ADMIN' | 'MEMBER';
@@ -145,6 +145,7 @@ function AccountMenu() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const [pw, setPw] = useState(false);
+  const loc = useLocation();
   const signOut = useMutation({
     mutationFn: () => api.post('/api/auth/logout'),
     onSettled: () => {
@@ -173,6 +174,8 @@ function AccountMenu() {
       <MenuSeparator />
       {user.role === 'OWNER' && <MenuItem icon={<Building2 />} onSelect={() => nav('/agency')}>Agency, logins and plan</MenuItem>}
       {user.role !== 'MEMBER' && <MenuItem icon={<Settings />} onSelect={() => nav('/settings/company')}>Settings</MenuItem>}
+      <MenuItem icon={<Headset />} onSelect={() => nav(careLink(loc.pathname))}>Contact customer care</MenuItem>
+      <MenuSeparator />
       <MenuItem icon={<KeyRound />} onSelect={() => setPw(true)}>Change my password</MenuItem>
       <MenuItem icon={<LogOut />} onSelect={() => signOut.mutate()}>Sign out</MenuItem>
     </Menu>
@@ -279,6 +282,31 @@ function CreateMenu() {
   );
 }
 
+/** Where "Contact customer care" goes: a new request that knows which page you were on. */
+const careLink = (from: string) => (from.startsWith('/help') ? '/help' : `/help/new?from=${encodeURIComponent(from)}`);
+
+/** The headset at the top: opens customer care, with a dot when they've replied. */
+function CareButton() {
+  const { pathname } = useLocation();
+  const unread = useQuery({ queryKey: ['support', 'unread'], queryFn: () => api.get<{ unread: number }>('/api/support/unread'), refetchInterval: 45_000 }).data?.unread ?? 0;
+  return (
+    <Tooltip content={unread ? 'Customer care replied' : 'Contact customer care'} side="bottom">
+      <Link
+        to={unread ? '/help' : careLink(pathname)}
+        aria-label={unread ? `Customer care, ${unread} new ${unread === 1 ? 'reply' : 'replies'}` : 'Contact customer care'}
+        className="group/care relative grid h-11 w-11 place-items-center rounded-[var(--radius-control)] border border-line bg-surface text-ink-2 transition-transform duration-200 hover:bg-sunken active:scale-95"
+      >
+        <Headset className="h-[18px] w-[18px] transition-transform duration-300 group-hover/care:-rotate-12" />
+        {unread > 0 && (
+          <span key={unread} className="tnum absolute -right-1 -top-1 grid h-5 min-w-5 animate-check place-items-center rounded-full bg-accent px-1 text-[11px] font-bold text-white ring-2 ring-ground">
+            {unread}
+          </span>
+        )}
+      </Link>
+    </Tooltip>
+  );
+}
+
 function TopBar({ onSearch, onMenu }: { onSearch: () => void; onMenu: () => void }) {
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   return (
@@ -298,6 +326,7 @@ function TopBar({ onSearch, onMenu }: { onSearch: () => void; onMenu: () => void
         </span>
       </button>
       <div className="ml-auto flex items-center gap-2.5">
+        <CareButton />
         <NotificationsButton />
         <CreateMenu />
       </div>

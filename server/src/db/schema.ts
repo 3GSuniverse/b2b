@@ -1054,6 +1054,99 @@ export const tripFollowups = pgTable(
 );
 
 // ---------------------------------------------------------------------
+//  Customer care — Dhrona's own support team helping agencies.
+//  Care staff are platform people, not agency users: their own table, sessions and cookie.
+// ---------------------------------------------------------------------
+
+export const ticketStatus = pgEnum('ticket_status', [
+  'OPEN', // the agency is waiting for customer care
+  'WAITING', // customer care replied; waiting for the agency
+  'RESOLVED',
+]);
+export const ticketPriority = pgEnum('ticket_priority', ['LOW', 'NORMAL', 'HIGH', 'URGENT']);
+
+export const careStaff = pgTable('care_staff', {
+  id: id(),
+  email: text().notNull().unique(), // lower-cased
+  name: text().notNull(),
+  passwordHash: text().notNull(),
+  // LEAD can reassign anyone's requests; AGENT works the queue
+  role: text().notNull().default('AGENT'),
+  disabledAt: ts(),
+  lastLoginAt: ts(),
+  createdAt: createdAt(),
+});
+
+export const careSessions = pgTable(
+  'care_sessions',
+  {
+    id: id(),
+    tokenHash: text().notNull().unique(),
+    staffId: text()
+      .notNull()
+      .references(() => careStaff.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    lastSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.staffId)],
+);
+
+/** What the agency user was looking at when they asked for help. */
+export interface TicketContext {
+  page?: string;
+  userAgent?: string;
+  screen?: string;
+}
+
+export const supportTickets = pgTable(
+  'support_tickets',
+  {
+    id: id(),
+    // The number people quote on the phone: "request 1042"
+    number: integer().notNull().generatedAlwaysAsIdentity({ startWith: 1001 }),
+    tenantId: tenantRef(),
+    userId: text().references(() => users.id, { onDelete: 'set null' }), // who asked
+    subject: text().notNull(),
+    category: text().notNull(), // billing | whatsapp | email | customers | trips | account | bug | idea | other
+    priority: ticketPriority().notNull().default('NORMAL'),
+    status: ticketStatus().notNull().default('OPEN'),
+    assigneeId: text().references(() => careStaff.id, { onDelete: 'set null' }),
+    context: jsonb().$type<TicketContext>().notNull().default({}),
+    // Unread flags for each side: a reply lights the other side's badge
+    agencyUnread: boolean().notNull().default(false),
+    careUnread: boolean().notNull().default(true),
+    lastMessageAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    firstResponseAt: ts(),
+    resolvedAt: ts(),
+    rating: integer(), // 1 to 5, given by the agency once solved
+    ratingNote: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex().on(t.number), index().on(t.status, t.lastMessageAt), index().on(t.tenantId, t.createdAt), index().on(t.assigneeId)],
+);
+
+export const supportMessages = pgTable(
+  'support_messages',
+  {
+    id: id(),
+    ticketId: text()
+      .notNull()
+      .references(() => supportTickets.id, { onDelete: 'cascade' }),
+    author: text().notNull(), // AGENCY | CARE | SYSTEM
+    userId: text().references(() => users.id, { onDelete: 'set null' }),
+    staffId: text().references(() => careStaff.id, { onDelete: 'set null' }),
+    body: text().notNull(),
+    attachments: jsonb().$type<AttachmentRef[]>().notNull().default([]),
+    // A note only customer care sees
+    internal: boolean().notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.ticketId, t.createdAt)],
+);
+
+// ---------------------------------------------------------------------
 //  Relations (for the relational query API)
 // ---------------------------------------------------------------------
 
@@ -1216,3 +1309,7 @@ export type Sender = typeof senders.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type SendingDomain = typeof sendingDomains.$inferSelect;
 export type MailboxConnection = typeof mailboxConnections.$inferSelect;
+
+export const careSessionsRelations = relations(careSessions, ({ one }) => ({
+  staff: one(careStaff, { fields: [careSessions.staffId], references: [careStaff.id] }),
+}));

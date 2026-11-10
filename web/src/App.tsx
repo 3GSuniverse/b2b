@@ -32,6 +32,10 @@ const EmailHubPage = lazy(() => import('./pages/channel').then((m) => ({ default
 const WhatsAppHubPage = lazy(() => import('./pages/channel').then((m) => ({ default: m.WhatsAppHubPage })));
 const SettingsPage = lazy(() => import('./pages/settings').then((m) => ({ default: m.SettingsPage })));
 const AgencyPage = lazy(() => import('./pages/agency').then((m) => ({ default: m.AgencyPage })));
+const HelpPage = lazy(() => import('./pages/help').then((m) => ({ default: m.HelpPage })));
+const NewRequestPage = lazy(() => import('./pages/help').then((m) => ({ default: m.NewRequestPage })));
+const RequestPage = lazy(() => import('./pages/help').then((m) => ({ default: m.RequestPage })));
+const CareApp = lazy(() => import('./pages/care/app').then((m) => ({ default: m.CareApp })));
 const AgencyBillingPage = lazy(() => import('./pages/agency').then((m) => ({ default: m.AgencyBillingPage })));
 
 function PageFallback() {
@@ -53,6 +57,8 @@ export function App() {
       <Route path="/delivery" element={<Suspense fallback={null}><DeliveryPage /></Suspense>} />
       <Route path="/contact" element={<Suspense fallback={null}><ContactPage /></Suspense>} />
       <Route path="/about" element={<Suspense fallback={null}><AboutPage /></Suspense>} />
+      {/* Dhrona's own customer care team: a separate app with its own sign-in */}
+      <Route path="/care/*" element={<Suspense fallback={null}><CareApp /></Suspense>} />
       <Route element={<AuthShell />}>
         <Route path="/signin" element={<SignInPage />} />
         <Route path="/signin/:agency" element={<SignInPage />} />
@@ -91,6 +97,9 @@ export function App() {
         <Route path="agency/billing" element={<Suspense fallback={<PageFallback />}><AgencyBillingPage /></Suspense>} />
         <Route path="settings/billing" element={<Navigate to="/agency/billing" replace />} />
         <Route path="settings" element={<Navigate to="/settings/company" replace />} />
+        <Route path="help" element={<Suspense fallback={<PageFallback />}><HelpPage /></Suspense>} />
+        <Route path="help/new" element={<Suspense fallback={<PageFallback />}><NewRequestPage /></Suspense>} />
+        <Route path="help/:id" element={<Suspense fallback={<PageFallback />}><RequestPage /></Suspense>} />
         <Route path="settings/:section" element={<Suspense fallback={<PageFallback />}><SettingsPage /></Suspense>} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

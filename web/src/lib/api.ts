@@ -26,7 +26,9 @@ async function request<T>(method: string, path: string, body?: Body): Promise<T>
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    if (res.status === 401 && !path.startsWith('/api/auth/')) {
+    if (res.status === 401 && path.startsWith('/api/care/')) {
+      if (!path.startsWith('/api/care/auth/')) window.dispatchEvent(new CustomEvent('care-session-ended'));
+    } else if (res.status === 401 && !path.startsWith('/api/auth/')) {
       window.dispatchEvent(new CustomEvent('session-ended'));
     }
     throw new ApiError(res.status, data.error ?? 'error', data.message ?? 'Something went wrong. Please try again.', data.details);

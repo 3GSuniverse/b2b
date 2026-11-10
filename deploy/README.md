@@ -120,6 +120,19 @@ drona feature whatsapp-web owner@kurukshetra-travels.in on
 
 New sign-ups get the trial automatically: every feature, 200 emails, WhatsApp Web up to 100 messages a day. Agencies pay online in Plan & billing. For one that pays you offline, run `drona plan <their email> professional <logins>` (or `basic` / `ultra`; add the number of days if it isn't 30).
 
+## 8. Customer care
+
+Every agency login has **Customer care** (the headset at the top, and in the profile menu) to send a request. Your support team answers them at **/care** on the same site, with everything about the agency beside each request: plan and payments, logins and devices, WhatsApp and email health, recent broadcasts and errors.
+
+Make a login for each person in your support team:
+
+```bash
+drona care add support@yourcompany.in "Ravi Kumar" lead
+drona care add priya@yourcompany.in "Priya Sharma"
+```
+
+Each command prints a password once. They sign in at `https://<your site>/care`. A team lead can move anyone's request; an agent can take unassigned requests and their own.
+
 ## Everyday commands
 
 | Command | What it does |
@@ -135,6 +148,10 @@ New sign-ups get the trial automatically: every feature, 200 emails, WhatsApp We
 | `drona plan <email> paid [emails]` | Everything, with no end date (the company owner's email, or the company slug) |
 | `drona plan <email> trial <days>` | Restart or extend a trial |
 | `drona feature whatsapp-web <email> on\|off` | Allow WhatsApp Web after the trial (for a company you trust) |
+| `drona care add <email> "<name>" [lead]` | A customer care login (prints a one-time password). Add `lead` for a team lead, who can move anyone's requests |
+| `drona care password <email>` | A new password for a customer care login |
+| `drona care off <email>` / `on <email>` | Switch a customer care login off (signs them out) or back on |
+| `drona care list` | Everyone in customer care |
 
 Off-server backups: create a Cloud Storage bucket, set `BACKUP_BUCKET=gs://your-bucket` in `deploy/.env`, and give the VM's service account *Storage Object Creator* on it. Each nightly backup is then copied there too.
 

@@ -41,6 +41,9 @@ import { webhookRoutes, type WebhookOptions } from './modules/webhooks/routes.js
 import { webRoutes } from './modules/web/routes.js';
 import { blockedOnLinksHost, NOT_A_LINK_PAGE } from './lib/links.js';
 import { whatsappRoutes } from './modules/whatsapp/routes.js';
+import { careAuthRoutes } from './modules/care/staff.js';
+import { careRoutes } from './modules/care/care-routes.js';
+import { supportRoutes } from './modules/care/agency-routes.js';
 
 export interface AppOptions {
   webhooks?: WebhookOptions;
@@ -140,6 +143,9 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(inboxRoutes);
   await app.register(whatsappRoutes);
   await app.register(notificationRoutes);
+  await app.register(supportRoutes);
+  await app.register(careAuthRoutes, { rateLimitMax: opts.authRateLimit });
+  await app.register(careRoutes);
   await app.register(unsubscribeRoutes);
   await app.register(webhookRoutes, opts.webhooks ?? {});
   await app.register(webRoutes, { root: opts.webRoot });

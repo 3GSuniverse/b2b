@@ -163,14 +163,14 @@ export async function readAttachment(tenantId: string, id: string) {
 
 /**
  * Uploads nobody ended up using (attached, then removed before saving) are deleted after a week.
- * Anything a broadcast, template, automation or message points to is kept.
+ * Anything a broadcast, template, automation, message or customer care request points to is kept.
  */
 export async function removeUnusedAttachments(now = new Date()) {
   const before = new Date(now.getTime() - 7 * 86_400_000);
   const used = (table: string) => sql`exists (select 1 from ${sql.identifier(table)} x where x.attachments @> jsonb_build_array(jsonb_build_object('id', ${attachments.id})))`;
   const gone = await db
     .delete(attachments)
-    .where(and(lt(attachments.createdAt, before), sql`not ${used('campaigns')}`, sql`not ${used('templates')}`, sql`not ${used('automations')}`, sql`not ${used('messages')}`))
+    .where(and(lt(attachments.createdAt, before), sql`not ${used('campaigns')}`, sql`not ${used('templates')}`, sql`not ${used('automations')}`, sql`not ${used('messages')}`, sql`not ${used('support_messages')}`))
     .returning({ id: attachments.id });
   return gone.length;
 }

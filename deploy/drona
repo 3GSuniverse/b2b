@@ -11,6 +11,7 @@
 #   drona restore <file>    put a backup back (asks first)
 #   drona plan <owner email> [basic|professional|ultra <logins> [days] | paid [emails] | trial <days>]
 #   drona feature whatsapp-web <owner email> on|off
+#   drona care add <email> "<name>" [lead] | password | off | on <email> | list   customer care staff
 #   drona move-from-hayate  one time only, on a server first installed under the old name
 set -euo pipefail
 
@@ -354,7 +355,11 @@ case "${1:-help}" in
     shift
     compose exec -T api node dist/cli/feature.js "$@"
     ;;
+  care)
+    shift
+    compose exec -T api node dist/cli/care.js "$@"
+    ;;
   *)
-    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
     ;;
 esac
