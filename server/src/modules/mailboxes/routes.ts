@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { env, isProd } from '../../config/env.js';
 import { decryptSecret, encryptSecret } from '../../lib/crypto.js';
 import { AppError } from '../../lib/http.js';
-import { requireAuth, requireRole, tenantOf } from '../auth/guard.js';
+import { requireAuth, viewerOf } from '../auth/guard.js';
 import { buildAuthUrl, createPkce, googleConfig } from './google.js';
 import { completeGoogleConnect, createOAuthState, disconnectMailbox, listMailboxes, readOAuthState } from './service.js';
 
@@ -16,8 +16,9 @@ function backToApp(reply: FastifyReply, params: Record<string, string>) {
 }
 
 export async function mailboxRoutes(app: FastifyInstance) {
-  // Step 1 — the dashboard sends the browser here; we bounce it to Google's consent screen
-  app.get('/api/integrations/gmail/connect', { preHandler: requireRole('ADMIN') }, async (req, reply) => {
+  // Step 1 — the dashboard sends the browser here; we bounce it to Google's consent screen.
+  // Every login can connect: each employee sends from the Gmail their company gave them.
+  app.get('/api/integrations/gmail/connect', { preHandler: requireAuth }, async (req, reply) => {
     googleConfig(); // fail early with a clear message if not configured
     const nonce = randomBytes(16).toString('base64url');
     const { verifier, challenge } = createPkce();
@@ -29,7 +30,7 @@ export async function mailboxRoutes(app: FastifyInstance) {
       sameSite: 'lax',
       maxAge: 600,
     });
-    const state = createOAuthState(tenantOf(req), req.auth!.userId, nonce);
+    const state = createOAuthState(req.auth!.tenantId, req.auth!.userId, nonce);
     return reply.redirect(buildAuthUrl({ state, challenge }), 302);
   });
 
@@ -64,10 +65,12 @@ export async function mailboxRoutes(app: FastifyInstance) {
     },
   );
 
-  app.get('/api/mailboxes', { preHandler: requireAuth }, async (req) => ({ mailboxes: await listMailboxes(tenantOf(req)) }));
+  // Your own Gmail; owners and managers see everyone's
+  app.get('/api/mailboxes', { preHandler: requireAuth }, async (req) => ({ mailboxes: await listMailboxes(viewerOf(req)) }));
 
-  app.delete<{ Params: { id: string } }>('/api/mailboxes/:id', { preHandler: requireRole('ADMIN') }, async (req, reply) => {
-    await disconnectMailbox(tenantOf(req), req.params.id);
+  // Your own; owners and managers can remove anyone's (e.g. when someone leaves)
+  app.delete<{ Params: { id: string } }>('/api/mailboxes/:id', { preHandler: requireAuth }, async (req, reply) => {
+    await disconnectMailbox(viewerOf(req), req.params.id);
     return reply.code(204).send();
   });
 }

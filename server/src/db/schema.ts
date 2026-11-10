@@ -1190,6 +1190,7 @@ export const sendersRelations = relations(senders, ({ one }) => ({
 
 export const mailboxConnectionsRelations = relations(mailboxConnections, ({ one, many }) => ({
   tenant: one(tenants, { fields: [mailboxConnections.tenantId], references: [tenants.id] }),
+  connectedBy: one(users, { fields: [mailboxConnections.connectedById], references: [users.id] }),
   senders: many(senders),
 }));
 

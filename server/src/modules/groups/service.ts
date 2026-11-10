@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { auditLogs, messages, senders, suppressions, tenants, tripTravellers, trips, type Trip } from '../../db/schema.js';
 import { decryptSecret, encryptSecret } from '../../lib/crypto.js';
 import { db } from '../../lib/db.js';
+import { senderFor } from '../senders/service.js';
 import { AppError } from '../../lib/http.js';
 import { enqueueEmails, enqueueWhatsApp } from '../../queues/index.js';
 import { normalizePhone } from '../contacts/normalize.js';
@@ -383,8 +384,7 @@ export async function broadcast(actor: Actor, groupId: string, input: z.infer<ty
   const bookings = await db.query.trips.findMany({ where: and(eq(trips.groupId, groupId), inArray(trips.status, ['QUOTED', 'BOOKED'])), with: { contact: true } });
   const whatsappUp = whatsappWebAllowed(tenant) && (await whatsappReady(tenant.id, [actor.userId], { fallback: false }));
   const sender =
-    (await db.query.senders.findFirst({ where: and(eq(senders.tenantId, tenant.id), eq(senders.isDefault, true)) })) ??
-    (await db.query.senders.findFirst({ where: eq(senders.tenantId, tenant.id), orderBy: [asc(senders.createdAt)] }));
+    await senderFor(tenant.id, [actor.userId]);
   const sent = { whatsapp: [] as string[], email: [] as string[] };
   const skipped: string[] = [];
   const seen = new Set<string>();

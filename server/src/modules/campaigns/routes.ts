@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { db } from '../../lib/db.js';
 import { parseBody } from '../../lib/http.js';
 import { countEmailAudience, countWhatsAppAudience } from '../audience/resolve.js';
-import { requireAuth, tenantOf } from '../auth/guard.js';
+import { requireAuth, tenantOf, viewerOf } from '../auth/guard.js';
+import { assertCanUseSender } from '../senders/service.js';
 import {
   audienceSchema,
   campaignBody,
@@ -44,14 +45,18 @@ export async function campaignRoutes(app: FastifyInstance) {
 
   app.post('/api/campaigns', { preHandler: requireAuth }, async (req, reply) => {
     const body = parseBody(campaignBody, req.body);
+    if (body.senderId) await assertCanUseSender(viewerOf(req), body.senderId);
     return reply.code(201).send({ campaign: await createCampaign(tenantOf(req), req.auth!.userId, body) });
   });
 
   app.get<IdParams>('/api/campaigns/:id', { preHandler: requireAuth }, async (req) => ({ campaign: await getCampaign(tenantOf(req), req.params.id) }));
 
-  app.patch<IdParams>('/api/campaigns/:id', { preHandler: requireAuth }, async (req) => ({
-    campaign: await updateCampaign(tenantOf(req), req.params.id, parseBody(campaignBody.partial(), req.body)),
-  }));
+  app.patch<IdParams>('/api/campaigns/:id', { preHandler: requireAuth }, async (req) => {
+    const body = parseBody(campaignBody.partial(), req.body);
+    // Employees send from the agency's addresses or their own Gmail, not a colleague's
+    if (body.senderId) await assertCanUseSender(viewerOf(req), body.senderId);
+    return { campaign: await updateCampaign(tenantOf(req), req.params.id, body) };
+  });
 
   app.delete<IdParams>('/api/campaigns/:id', { preHandler: requireAuth }, async (req, reply) => {
     await deleteCampaign(tenantOf(req), req.params.id);

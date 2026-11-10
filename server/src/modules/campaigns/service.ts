@@ -2,6 +2,7 @@ import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { campaigns, contacts, lists, messageEvents, messages, senders, templates, trackedLinks, type Audience } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
+import { senderFor } from '../senders/service.js';
 import { AppError } from '../../lib/http.js';
 import type { EnqueueFn } from '../../queues/index.js';
 import { tenants } from '../../db/schema.js';
@@ -183,11 +184,8 @@ export async function createCampaign(tenantId: string, userId: string, input: z.
     content = { subject: content.subject ?? t.subject, previewText: content.previewText ?? t.previewText, html: t.html, text: t.text };
     if (!input.attachments) files = t.attachments;
   }
-  let senderId = input.senderId ?? null;
-  if (!senderId) {
-    const def = await db.query.senders.findFirst({ where: and(eq(senders.tenantId, tenantId), eq(senders.isDefault, true)), columns: { id: true } });
-    senderId = def?.id ?? null;
-  }
+  // New email broadcasts go from the employee's own Gmail if they connected one, else the agency's default
+  const senderId = input.senderId ?? (await senderFor(tenantId, [userId]))?.id ?? null;
   const [row] = await db
     .insert(campaigns)
     .values({ tenantId, name: input.name, senderId, templateId: input.templateId ?? null, audience: input.audience ?? null, attachments: files, createdById: userId, ...content })

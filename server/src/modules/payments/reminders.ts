@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { env } from '../../config/env.js';
 import { auditLogs, messages, senders, suppressions, tenants, tripDues, tripReminders, trips, type Tenant } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
+import { senderFor } from '../senders/service.js';
 import { logger } from '../../lib/logger.js';
 import { enqueueEmails, enqueueWhatsApp } from '../../queues/index.js';
 import { escapeHtml, renderString } from '../email/render.js';
@@ -112,8 +113,7 @@ export async function runPaymentReminders(
       // What can we send with, right now?
       const whatsappUp = whatsappWebAllowed(tenant, now) && (await whatsappReady(tenantId));
       const sender =
-        (await db.query.senders.findFirst({ where: and(eq(senders.tenantId, tenantId), eq(senders.isDefault, true)) })) ??
-        (await db.query.senders.findFirst({ where: eq(senders.tenantId, tenantId), orderBy: [asc(senders.createdAt)] }));
+        await senderFor(tenantId);
 
       const rows = await db.query.trips.findMany({
         where: and(eq(trips.tenantId, tenantId), inArray(trips.id, tripIds), eq(trips.status, 'BOOKED')),
@@ -193,7 +193,7 @@ export async function runPaymentReminders(
               tenantId,
               tripId: trip.id,
               contactId: c!.id,
-              senderId: channel === 'EMAIL' ? sender!.id : null,
+              senderId: channel === 'EMAIL' ? ((await senderFor(tenantId, [trip.assignedToId, trip.createdById])) ?? sender)!.id : null,
               channel,
               toAddress: channel === 'EMAIL' ? c!.email!.toLowerCase() : c!.phone!,
               subject: channel === 'EMAIL' ? `${kind === 'BEFORE' ? 'Payment reminder' : 'Payment overdue'}: ${trip.title}` : null,

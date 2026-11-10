@@ -230,6 +230,8 @@ export interface Sender {
   domain: { id: string; domain: string } | null;
   mailbox: { id: string; status: string; dailyLimit: number } | null;
   readyToSend: boolean;
+  /** The employee whose Gmail it is; null for the agency's shared domain addresses */
+  ownerId: string | null;
 }
 export interface Mailbox {
   id: string;
@@ -240,6 +242,9 @@ export interface Mailbox {
   lastError: string | null;
   dailyLimit: number;
   sentLast24h: number;
+  connectedById?: string | null;
+  /** Who connected it (owners and managers see everyone's) */
+  connectedBy?: string | null;
 }
 
 export interface Template {

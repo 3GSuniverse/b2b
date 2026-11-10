@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { auditLogs, messages, quotes, senders, suppressions, tenants, tripFollowups, trips, type Contact, type Tenant, type TripMessageSettings } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
+import { senderFor } from '../senders/service.js';
 import { AppError, parseBody } from '../../lib/http.js';
 import { logger } from '../../lib/logger.js';
 import { enqueueEmails, enqueueWhatsApp } from '../../queues/index.js';
@@ -217,8 +218,7 @@ export async function runTripFollowups(
 
       const whatsappUp = whatsappWebAllowed(tenant, now) && (await whatsappReady(tenant.id));
       const sender =
-        (await db.query.senders.findFirst({ where: and(eq(senders.tenantId, tenant.id), eq(senders.isDefault, true)) })) ??
-        (await db.query.senders.findFirst({ where: eq(senders.tenantId, tenant.id), orderBy: [asc(senders.createdAt)] }));
+        await senderFor(tenant.id);
 
       for (const { kind, where } of wanted) {
         const rows = await db.query.trips.findMany({
@@ -269,7 +269,7 @@ export async function runTripFollowups(
               tenantId: tenant.id,
               tripId: trip.id,
               contactId: c!.id,
-              senderId: channel === 'EMAIL' ? sender!.id : null,
+              senderId: channel === 'EMAIL' ? ((await senderFor(tenant.id, [trip.assignedToId, trip.createdById])) ?? sender)!.id : null,
               channel,
               toAddress: channel === 'EMAIL' ? c!.email!.toLowerCase() : c!.phone!,
               subject: channel === 'EMAIL' ? SUBJECT[kind](trip) : null,

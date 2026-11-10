@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
-import { campaigns, mailboxConnections, messages, senders } from '../src/db/schema.js';
+import { campaigns, mailboxConnections, messages, senders, tenants } from '../src/db/schema.js';
 import { decryptSecret } from '../src/lib/crypto.js';
 import { closeDatabase, db } from '../src/lib/db.js';
 import { closeRedis } from '../src/lib/redis.js';
@@ -10,7 +10,7 @@ import { buildMime, encodeHeader } from '../src/modules/mailboxes/mime.js';
 import { MemoryEmailProvider } from '../src/modules/email/memory-provider.js';
 import { DeferSend, processSendJob } from '../src/modules/sending/send-message.js';
 import { CampaignError, startCampaign } from '../src/modules/sending/start-campaign.js';
-import { api, signup } from './api-helpers.js';
+import { api, employee, signup } from './api-helpers.js';
 import { FakeGoogle, mimePart } from './fake-google.js';
 import { fakeQueue, makeContact, resetDb } from './helpers.js';
 
@@ -50,6 +50,39 @@ async function connectGmail(cookie: string, opts: { tamperState?: boolean; state
   });
   return { start, googleUrl, pkce, back, backUrl: new URL(back.headers.location as string) };
 }
+
+describe('every employee connects their own Gmail', () => {
+  it('employees connect and remove their own; others can’t use or remove it; the owner sees all', async () => {
+    const owner = await signup(app);
+    await db.update(tenants).set({ plan: 'PAID', planId: 'basic', seats: 3, paidUntil: new Date(Date.now() + 20 * 86_400_000) }).where(eq(tenants.id, owner.json.tenant.id));
+    const ravi = await employee(app, owner, 'ravi');
+    const priya = await employee(app, owner, 'priya');
+
+    google.email = 'ravi.kt@gmail.com';
+    expect((await connectGmail(ravi.cookie)).backUrl.searchParams.get('gmail')).toBe('connected');
+    google.email = 'priya.kt@gmail.com';
+    expect((await connectGmail(priya.cookie)).backUrl.searchParams.get('gmail')).toBe('connected');
+
+    const r = api(app, ravi.cookie);
+    const p = api(app, priya.cookie);
+    const raviBoxes = (await r.get('/api/mailboxes')).json().mailboxes;
+    expect(raviBoxes.map((m: { email: string }) => m.email)).toEqual(['ravi.kt@gmail.com']);
+    expect((await r.get('/api/senders')).json().senders.map((x: { fromEmail: string }) => x.fromEmail)).toEqual(['ravi.kt@gmail.com']);
+    expect((await api(app, owner.cookie).get('/api/mailboxes')).json().mailboxes).toHaveLength(2);
+
+    // Priya can't send from, rename or remove Ravi's Gmail
+    const raviSender = (await r.get('/api/senders')).json().senders[0].id;
+    expect((await p.post('/api/campaigns', { name: 'x', senderId: raviSender })).statusCode).toBe(404);
+    expect((await p.patch(`/api/senders/${raviSender}`, { fromName: 'Not Ravi' })).statusCode).toBe(403);
+    expect((await p.del(`/api/mailboxes/${raviBoxes[0].id}`)).statusCode).toBe(404);
+    // A new broadcast of Ravi's goes from his own Gmail by default
+    expect((await r.post('/api/campaigns', { name: 'Goa' })).json().campaign.sender.id).toBe(raviSender);
+    expect((await r.patch(`/api/senders/${raviSender}`, { fromName: 'Ravi from KT' })).json().sender.fromName).toBe('Ravi from KT');
+    expect((await p.del(`/api/senders/${raviSender}`)).statusCode).toBe(403);
+    expect((await r.del(`/api/senders/${raviSender}`)).statusCode).toBe(204);
+    expect((await r.del(`/api/mailboxes/${raviBoxes[0].id}`)).statusCode).toBe(204);
+  });
+});
 
 describe('Connect Gmail', () => {
   it('sends the user to Google asking only for send permission, with PKCE', async () => {

@@ -303,12 +303,11 @@ function EmailReady({ h }: { h: Hub }) {
         </div>
         <ProgressBar value={e.quota.used} max={e.quota.limit} label="Emails used this month" tone={e.quota.used / Math.max(1, e.quota.limit) > 0.9 ? 'warm' : 'accent'} />
       </div>
-      {!ok && user.role !== 'MEMBER' && (
+      {!ok && (
         <Link to="/email/setup" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:text-accent-strong">
-          Set up sending <ArrowRight className="h-3.5 w-3.5" />
+          {user.role === 'MEMBER' ? 'Connect your Gmail' : 'Set up sending'} <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       )}
-      {!ok && user.role === 'MEMBER' && <p className="text-[13px] text-muted">Ask your agency owner to set up the sending address.</p>}
     </Panel>
   );
 }
@@ -403,7 +402,8 @@ export function EmailHubPage() {
     { id: 'broadcasts', label: 'Broadcasts', icon: Megaphone, count: h.data ? h.data.broadcasts.drafts + h.data.broadcasts.scheduled : undefined },
     { id: 'automatic', label: 'Automatic emails', icon: Clock3, count: h.data?.automations.on },
     { id: 'templates', label: 'Designs', icon: FileText },
-    { id: 'setup', label: 'Sending setup', icon: Send, show: admin },
+    // Everyone: each employee connects their own Gmail here; domains are for owners and managers
+    { id: 'setup', label: admin ? 'Sending setup' : 'My Gmail', icon: Send },
   ];
   if (!tabs.some((t) => t.id === tab && t.show !== false)) return <Navigate to="/email" replace />;
   return (
@@ -412,26 +412,28 @@ export function EmailHubPage() {
       {tab === 'broadcasts' && <CampaignsPage channel="EMAIL" embedded />}
       {tab === 'automatic' && <AutomationsPage channel="EMAIL" embedded />}
       {tab === 'templates' && <TemplatesPage embedded />}
-      {tab === 'setup' && <EmailSetup />}
+      {tab === 'setup' && <EmailSetup admin={admin} />}
     </HubFrame>
   );
 }
 
-function EmailSetup() {
+function EmailSetup({ admin }: { admin: boolean }) {
   const [params, setParams] = useSearchParams();
-  const part = params.get('part') === 'domains' ? 'domains' : 'senders';
+  const part = admin && params.get('part') === 'domains' ? 'domains' : 'senders';
   const setPart = (p: 'senders' | 'domains') => setParams(p === 'domains' ? { part: p } : {}, { replace: true });
   return (
     <>
-      <Segmented
-        label="Sending setup"
-        value={part}
-        onChange={setPart}
-        options={[
-          { value: 'senders', label: 'Sending addresses' },
-          { value: 'domains', label: 'Domains' },
-        ]}
-      />
+      {admin && (
+        <Segmented
+          label="Sending setup"
+          value={part}
+          onChange={setPart}
+          options={[
+            { value: 'senders', label: 'Sending addresses' },
+            { value: 'domains', label: 'Domains' },
+          ]}
+        />
+      )}
       {part === 'senders' ? <Senders /> : <Domains />}
       <p className="flex items-center gap-1.5 text-xs text-muted">
         <Globe className="h-3.5 w-3.5" /> Customers see your agency’s name and address on every email, never {BRAND.name}.

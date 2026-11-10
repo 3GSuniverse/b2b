@@ -3,6 +3,7 @@ import { campaigns, mailboxConnections, messages, senders, tenants } from '../..
 import { decryptSecret, encryptSecret, signToken, verifyToken } from '../../lib/crypto.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
+import { seesAll, type Viewer } from '../auth/guard.js';
 import { exchangeCode, GMAIL_SEND_SCOPE, revokeToken } from './google.js';
 
 const STATE_PURPOSE = 'gmail-oauth';
@@ -121,26 +122,26 @@ export async function senderUsageLast24h(senderId: string, now = new Date()) {
   return { sent: row?.n ?? 0, oldest: row?.oldest ?? null };
 }
 
-export async function listMailboxes(tenantId: string) {
+export async function listMailboxes(v: Viewer) {
   const rows = await db.query.mailboxConnections.findMany({
-    where: eq(mailboxConnections.tenantId, tenantId),
-    with: { senders: { columns: { id: true } } },
+    where: and(eq(mailboxConnections.tenantId, v.tenantId), seesAll(v) ? undefined : eq(mailboxConnections.connectedById, v.userId)),
+    with: { senders: { columns: { id: true } }, connectedBy: { columns: { name: true } } },
     orderBy: [asc(mailboxConnections.createdAt)],
   });
   return Promise.all(
     rows.map(async (c) => {
       const used = c.senders[0] ? (await senderUsageLast24h(c.senders[0].id)).sent : 0;
-      return connectionDto(c, used);
+      return { ...connectionDto(c, used), connectedById: c.connectedById, connectedBy: c.connectedBy?.name ?? null };
     }),
   );
 }
 
-export async function disconnectMailbox(tenantId: string, id: string) {
+export async function disconnectMailbox(v: Viewer, id: string) {
   const c = await db.query.mailboxConnections.findFirst({
-    where: and(eq(mailboxConnections.id, id), eq(mailboxConnections.tenantId, tenantId)),
+    where: and(eq(mailboxConnections.id, id), eq(mailboxConnections.tenantId, v.tenantId)),
     with: { senders: { columns: { id: true } } },
   });
-  if (!c) throw new AppError(404, 'mailbox_not_found', 'Mailbox not found');
+  if (!c || (!seesAll(v) && c.connectedById !== v.userId)) throw new AppError(404, 'mailbox_not_found', 'Mailbox not found');
 
   const senderIds = c.senders.map((s) => s.id);
   if (senderIds.length) {

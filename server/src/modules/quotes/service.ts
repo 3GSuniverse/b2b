@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { auditLogs, messages, packages, quotes, rateItems, senders, tenants, tripDues, trips, type Quote, type QuoteLine } from '../../db/schema.js';
 import { env } from '../../config/env.js';
 import { db } from '../../lib/db.js';
+import { senderFor } from '../senders/service.js';
 import { AppError } from '../../lib/http.js';
 import { enqueueEmails } from '../../queues/index.js';
 import { addDays, formatInr, localDate, rupeesToPaise, suggestSchedule } from '../trips/money.js';
@@ -255,8 +256,7 @@ export async function sendQuote(actor: Actor, id: string, via: 'EMAIL' | 'MANUAL
     if (!c?.email) throw new AppError(400, 'no_email', 'This customer has no email address. Send the link on WhatsApp instead.');
     if (c.emailStatus === 'BOUNCED' || c.emailStatus === 'COMPLAINED') throw new AppError(400, 'email_blocked', 'This customer’s email address doesn’t accept mail. Send the link on WhatsApp instead.');
     const sender =
-      (await db.query.senders.findFirst({ where: and(eq(senders.tenantId, actor.tenantId), eq(senders.isDefault, true)) })) ??
-      (await db.query.senders.findFirst({ where: eq(senders.tenantId, actor.tenantId), orderBy: [asc(senders.createdAt)] }));
+      await senderFor(actor.tenantId, [actor.userId, trip.assignedToId]);
     if (!sender) throw new AppError(400, 'no_sender', 'Set up a sending address in Settings first, or send the link on WhatsApp.');
     const tenant = (await db.query.tenants.findFirst({ where: eq(tenants.id, actor.tenantId) }))!;
     const [msg] = await db

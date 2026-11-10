@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, Wallet, Plane, KeyRound, CheckCircle2, Circle, Globe, Lock, Mail, MoreHorizontal, Plus, RefreshCw, Send, Star, Trash2, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, NavLink, Navigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { BRAND, planName } from '@/lib/brand';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -279,6 +279,10 @@ function GoogleMark() {
 
 function SenderRow({ s, mailbox, onEdit, onRemove }: { s: Sender; mailbox?: Mailbox; onEdit: () => void; onRemove: () => void }) {
   const qc = useQueryClient();
+  const { user } = useSession();
+  const admin = user.role !== 'MEMBER';
+  // Employees manage only their own Gmail; the agency's addresses are for owners and managers
+  const mine = s.ownerId === user.id;
   const makeDefault = useMutation({
     mutationFn: () => api.patch(`/api/senders/${s.id}`, { isDefault: true }),
     onSuccess: () => {
@@ -300,6 +304,15 @@ function SenderRow({ s, mailbox, onEdit, onRemove }: { s: Sender; mailbox?: Mail
               Default
             </Badge>
           )}
+          {mine ? (
+            <Badge tone="blue" className="px-2 text-[11px]">
+              Yours
+            </Badge>
+          ) : admin && mailbox?.connectedBy ? (
+            <Badge tone="grey" className="px-2 text-[11px]">
+              {mailbox.connectedBy}’s
+            </Badge>
+          ) : null}
         </span>
         <span className="truncate text-[13px] text-muted">
           {s.fromEmail}
@@ -323,14 +336,14 @@ function SenderRow({ s, mailbox, onEdit, onRemove }: { s: Sender; mailbox?: Mail
           {s.kind === 'GMAIL' ? 'Disconnected' : 'Domain not verified'}
         </Badge>
       )}
-      <Menu
+      {(admin || mine) && <Menu
         trigger={
           <button type="button" className="grid h-9 w-9 place-items-center rounded-lg text-muted hover:bg-hover hover:text-ink" aria-label={`Options for ${s.fromEmail}`}>
             <MoreHorizontal className="h-4 w-4" />
           </button>
         }
       >
-        {!s.isDefault && (
+        {!s.isDefault && admin && (
           <MenuItem icon={<Star />} onSelect={() => makeDefault.mutate()}>
             Make default
           </MenuItem>
@@ -341,7 +354,7 @@ function SenderRow({ s, mailbox, onEdit, onRemove }: { s: Sender; mailbox?: Mail
         <MenuItem icon={<Trash2 />} danger onSelect={onRemove}>
           Remove
         </MenuItem>
-      </Menu>
+      </Menu>}
       {mailbox?.status !== 'ACTIVE' && mailbox?.lastError && <p className="basis-full pl-14 text-xs text-warm-strong">{mailbox.lastError}</p>}
     </li>
   );
@@ -349,9 +362,11 @@ function SenderRow({ s, mailbox, onEdit, onRemove }: { s: Sender; mailbox?: Mail
 
 export function Senders() {
   const qc = useQueryClient();
+  const { user } = useSession();
+  const admin = user.role !== 'MEMBER';
   const [params, setParams] = useSearchParams();
   const senders = useQuery({ queryKey: ['senders'], queryFn: () => api.get<{ senders: Sender[] }>('/api/senders') });
-  const domains = useQuery({ queryKey: ['domains'], queryFn: () => api.get<{ domains: Domain[] }>('/api/domains') });
+  const domains = useQuery({ queryKey: ['domains'], queryFn: () => api.get<{ domains: Domain[] }>('/api/domains'), enabled: admin });
   const mailboxes = useQuery({ queryKey: ['mailboxes'], queryFn: () => api.get<{ mailboxes: Mailbox[] }>('/api/mailboxes') });
   const ready = domains.data?.domains.filter((d) => d.readyToSend) ?? [];
 
@@ -404,7 +419,14 @@ export function Senders() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PanelHeader title="Sending addresses" description="Who your emails are from. Customers see this name and address in their inbox, and replies go to you." />
+      <PanelHeader
+        title="Sending addresses"
+        description={
+          admin
+            ? 'Who your emails are from. Each employee connects their own Gmail; your company’s domain addresses are shared by everyone.'
+            : 'Connect the Gmail your company gave you. Your broadcasts and replies go out from it. You can also use your company’s shared addresses.'
+        }
+      />
 
       {senders.isPending ? (
         <Skeleton className="h-32 rounded-[var(--radius-panel)]" />
@@ -424,8 +446,8 @@ export function Senders() {
         </Panel>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Panel className="flex flex-col gap-4 p-5 sm:p-6">
+      <div className={cn('grid gap-4', admin && 'md:grid-cols-2')}>
+        {admin && <Panel className="flex flex-col gap-4 p-5 sm:p-6">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-accent-soft text-accent">
               <Globe className="h-5 w-5" />
@@ -449,14 +471,14 @@ export function Senders() {
               {domains.data?.domains.length ? 'Finish verifying your domain first' : 'Verify your domain first'}
             </NavLink>
           )}
-        </Panel>
+        </Panel>}
         <Panel className="flex flex-col gap-4 p-5 sm:p-6">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-[12px] border border-line">
               <GoogleMark />
             </span>
             <div className="flex flex-col">
-              <span className="text-[15px] font-semibold">A Gmail or Google Workspace account</span>
+              <span className="text-[15px] font-semibold">{admin ? 'A Gmail or Google Workspace account' : 'Your Gmail or Google Workspace account'}</span>
               <span className="text-xs text-muted">Quickest to set up</span>
             </div>
           </div>
@@ -643,11 +665,13 @@ function Company() {
 export function SettingsPage() {
   const { section } = useParams();
   const { user } = useSession();
+  const { search } = useLocation();
   const sections = SECTIONS.filter((x) => x.id !== 'api-keys' || user.role !== 'MEMBER');
+  // Email setup lives under Email now; everyone connects their own Gmail there (Google sends people back here)
+  if (section === 'senders') return <Navigate to={`/email/setup${search}`} replace />;
   if (user.role === 'MEMBER') return <Navigate to="/" replace />;
   if (section === 'account') return <Navigate to="/settings/company" replace />;
   if (section === 'whatsapp') return <Navigate to="/whatsapp" replace />; // it has its own page now
-  if (section === 'senders') return <Navigate to="/email/setup" replace />; // email setup lives under Email now
   if (section === 'domains') return <Navigate to="/email/setup?part=domains" replace />;
   if (!sections.some((s) => s.id === section)) return <Navigate to="/settings/company" replace />;
   const content: Record<Section, ReactNode> = { payments: <PaymentSettingsPanel />, 'trip-messages': <TripMessagesSettings />, company: <Company />, 'api-keys': <ApiKeysSettings /> };
