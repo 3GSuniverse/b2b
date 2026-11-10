@@ -7,7 +7,7 @@ import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { formatInr, localDate, tripMoney } from '../trips/money.js';
 import { useAi } from '../plans/entitlements.js';
-import { getClient } from './quote-draft.js';
+import { getClient, replyModel } from './quote-draft.js';
 
 /**
  * Drona AI, "Suggest a reply": reads the WhatsApp conversation and writes the agency's answer.
@@ -82,7 +82,7 @@ export async function suggestReply(v: Viewer, chatId: string, input: z.infer<typ
   const tenant = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }))!;
   const contact = await db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, tenantId), eq(contacts.phone, chat.phone)) });
   const [history, theirTrips, offers] = await Promise.all([
-    db.select().from(waChatMessages).where(eq(waChatMessages.chatId, chat.id)).orderBy(desc(waChatMessages.at)).limit(24),
+    db.select().from(waChatMessages).where(eq(waChatMessages.chatId, chat.id)).orderBy(desc(waChatMessages.at)).limit(12),
     contact
       ? db.query.trips.findMany({ where: and(eq(trips.tenantId, tenantId), eq(trips.contactId, contact.id)), with: { dues: true, payments: true }, orderBy: [desc(trips.createdAt)], limit: 3 })
       : Promise.resolve([]),
@@ -98,7 +98,7 @@ export async function suggestReply(v: Viewer, chatId: string, input: z.infer<typ
     .map((m) => {
       const who = m.direction === 'IN' ? 'Customer' : m.source === 'broadcast' ? 'Agency (broadcast offer)' : m.source === 'automatic' ? 'Agency (automatic message)' : 'Agency';
       const media = m.mediaKind ? `[${m.mediaKind}${m.mediaName ? `: ${m.mediaName}` : ''}] ` : '';
-      return `${who}, ${m.at.toISOString().slice(0, 16).replace('T', ' ')}: ${media}${(m.body ?? '').slice(0, 1200)}`;
+      return `${who}, ${m.at.toISOString().slice(0, 16).replace('T', ' ')}: ${media}${(m.body ?? '').slice(0, 600)}`;
     })
     .join('\n');
   const tripLines = theirTrips.map((t) => {
@@ -112,7 +112,7 @@ export async function suggestReply(v: Viewer, chatId: string, input: z.infer<typ
       (p) =>
         `- ${p.name}${p.destination ? ` (${p.destination})` : ''}: ${p.nights} nights, ${formatInr(p.pricePerAdult)} per adult${p.pricePerChild !== null ? `, ${formatInr(p.pricePerChild)} per child` : ''}${p.summary ? `. ${p.summary}` : ''}${p.inclusions.length ? `. Includes: ${p.inclusions.slice(0, 6).join(', ')}` : ''}`,
     ),
-    9000,
+    5000,
   );
 
   const system = `You are a senior travel consultant at ${tenant.name}, a travel agency in India, replying to a customer on WhatsApp on behalf of the agency.
@@ -142,7 +142,7 @@ ${input.hint ? `\nThe employee's instruction for this reply: ${input.hint}\n` : 
 Answer the customer's latest message${input.hint ? ', following the employee’s instruction' : ''}.
 Return exactly: {"situation": one of ${SITUATIONS.join('|')}, "language": "the language you replied in", "reply": "the WhatsApp message", "needsHuman": true if a person must check or act before or after sending, "note": "one short line for the employee, or null"}`;
 
-  const text = await ai.complete({ system, prompt, maxTokens: 900 });
+  const text = await ai.complete({ system, prompt, maxTokens: 700, model: replyModel() });
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   let parsed: z.infer<typeof answer> | null = null;

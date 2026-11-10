@@ -55,7 +55,11 @@ const schema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   AI_PROVIDER: z.enum(['anthropic', 'openai']).optional(),
-  AI_MODEL: z.string().optional(), // default: claude-sonnet-5-5 or gpt-5-mini
+  AI_MODEL: z.string().optional(), // quote drafts. default: claude-sonnet-5-5 or gpt-5-mini
+  // WhatsApp reply suggestions are short, so they use a cheaper model. default: claude-haiku-5-5 or gpt-5-mini
+  AI_REPLY_MODEL: z.string().optional(),
+  // Every Drona AI answer across all agencies in 24 hours; past it, AI pauses for everyone. Unset = only the plan limits apply
+  AI_GLOBAL_PER_DAY: z.coerce.number().int().min(1).optional(),
   // Drona AI answers (replies and quote drafts) a day during a free trial; paid plans get theirs from the plan
   TRIAL_AI_PER_DAY: z.coerce.number().int().min(0).default(30),
 });

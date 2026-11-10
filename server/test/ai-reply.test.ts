@@ -59,6 +59,27 @@ describe('Drona AI: suggested replies on WhatsApp', () => {
     expect(prompt).toContain('Customer, ');
     expect(prompt).toContain('కేరళ ప్యాకేజీ ధర ఎంత?');
     expect(prompt).toContain('mention the December offer');
+    // Short replies run on the cheap model with a small output cap
+    expect(calls[0]).toMatchObject({ model: 'claude-haiku-5-5', maxTokens: 700 });
+  });
+
+  it('a server-wide daily cap pauses AI for everyone, whatever their plans allow', async () => {
+    const a = await signup(app);
+    const b = await signup(app);
+    const lineA = await makeLine(a.json.tenant.id, { userId: a.json.user.id });
+    const lineB = await makeLine(b.json.tenant.id, { userId: b.json.user.id });
+    const chatA = await recordIncoming(a.json.tenant.id, lineA.id, { phone: '+919000000010', text: 'Hi', waId: 'g1', at: new Date() });
+    const chatB = await recordIncoming(b.json.tenant.id, lineB.id, { phone: '+919000000011', text: 'Hi', waId: 'g2', at: new Date() });
+    const { env } = await import('../src/config/env.js');
+    env.AI_GLOBAL_PER_DAY = 1;
+    try {
+      expect((await api(app, a.cookie).post(`/api/inbox/${chatA}/suggest`, {})).statusCode).toBe(200);
+      const r = await api(app, b.cookie).post(`/api/inbox/${chatB}/suggest`, {});
+      expect(r.statusCode).toBe(503);
+      expect(r.json().error).toBe('ai_busy');
+    } finally {
+      env.AI_GLOBAL_PER_DAY = undefined;
+    }
   });
 
   it('says so when there is nothing to answer, a bad answer, or no AI set up', async () => {

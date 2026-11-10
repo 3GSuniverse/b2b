@@ -15,15 +15,16 @@ import { useAi } from '../plans/entitlements.js';
  */
 
 export interface AiClient {
-  complete(input: { system: string; prompt: string; maxTokens: number }): Promise<string>;
+  /** `model` overrides the default (replies use a cheaper one than quote drafts) */
+  complete(input: { system: string; prompt: string; maxTokens: number; model?: string }): Promise<string>;
 }
 
 const anthropic: AiClient = {
-  async complete({ system, prompt, maxTokens }) {
+  async complete({ system, prompt, maxTokens, model }) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: env.AI_MODEL ?? 'claude-sonnet-5-5', max_tokens: maxTokens, system, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: model ?? env.AI_MODEL ?? 'claude-sonnet-5-5', max_tokens: maxTokens, system, messages: [{ role: 'user', content: prompt }] }),
       signal: AbortSignal.timeout(90_000),
     });
     const data = (await res.json().catch(() => ({}))) as { content?: { type: string; text?: string }[]; error?: { message?: string } };
@@ -33,8 +34,8 @@ const anthropic: AiClient = {
 };
 
 const openai: AiClient = {
-  async complete({ system, prompt, maxTokens }) {
-    const model = env.AI_MODEL ?? 'gpt-5-mini';
+  async complete({ system, prompt, maxTokens, model: wanted }) {
+    const model = wanted ?? env.AI_MODEL ?? 'gpt-5-mini';
     // GPT-5 and o-series models think before answering; that thinking counts toward the token limit
     const reasoning = /^(gpt-5|o\d)/.test(model);
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -58,6 +59,11 @@ const openai: AiClient = {
 };
 
 export const providers = { anthropic, openai }; // exported for tests
+
+/** The model for short WhatsApp replies: cheap and fast. Quote drafts keep the stronger default. */
+export function replyModel() {
+  return env.AI_REPLY_MODEL ?? (aiProvider() === 'openai' ? 'gpt-5-mini' : 'claude-haiku-5-5');
+}
 
 let client: AiClient | null = null;
 export function setAiClient(c: AiClient | null) {
