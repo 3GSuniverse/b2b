@@ -141,8 +141,8 @@ export const listCampaignsQuery = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-export async function listCampaigns(tenantId: string, q: z.infer<typeof listCampaignsQuery>) {
-  const where = and(eq(campaigns.tenantId, tenantId), q.status ? eq(campaigns.status, q.status) : undefined, q.channel ? eq(campaigns.channel, q.channel) : undefined);
+export async function listCampaigns(tenantId: string, q: z.infer<typeof listCampaignsQuery>, onlyUserId?: string) {
+  const where = and(eq(campaigns.tenantId, tenantId), onlyUserId ? eq(campaigns.createdById, onlyUserId) : undefined, q.status ? eq(campaigns.status, q.status) : undefined, q.channel ? eq(campaigns.channel, q.channel) : undefined);
   const [rows, [{ total } = { total: 0 }]] = await Promise.all([
     db.query.campaigns.findMany({
       where,

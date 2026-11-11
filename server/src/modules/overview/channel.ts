@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { automations, campaigns, contacts, senders, tenants } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
-import { requireAuth, tenantOf } from '../auth/guard.js';
+import { requireAuth, seesAll, viewerOf } from '../auth/guard.js';
 import { isDomainReady } from '../domains/service.js';
 import { monthStartSql } from '../sending/start-campaign.js';
 import { AUTOMATIC, classified, feedTitle, type FeedRow } from './communication.js';
@@ -14,14 +14,14 @@ import { AUTOMATIC, classified, feedTitle, type FeedRow } from './communication.
  */
 export type Channel = 'EMAIL' | 'WHATSAPP';
 
-export async function getChannelHub(tenantId: string, channel: Channel, now = new Date()) {
+export async function getChannelHub(tenantId: string, channel: Channel, now = new Date(), onlyUserId?: string) {
   const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
   if (!tenant) throw new AppError(404, 'tenant_not_found', 'Account not found');
   const tz = tenant.timezone;
   const month = monthStartSql(now, tz);
   const lastMonth = sql`(${month} - interval '1 month')`;
   const since = new Date(now.getTime() - 15 * 86_400_000).toISOString();
-  const inChannel = sql`(${classified(tenantId)}) c where c.channel = ${channel}`;
+  const inChannel = sql`(${classified(tenantId, onlyUserId)}) c where c.channel = ${channel}`;
 
   const [cur, prev, daily, drafts, scheduled, next, autos, reach, mySenders] = await Promise.all([
     db
@@ -80,7 +80,7 @@ export async function getChannelHub(tenantId: string, channel: Channel, now = ne
            c.reminder_kind, c.followup_kind, c.subject, c.to_address,
            a.name as automation_name, cp.name as campaign_name,
            ct.first_name, ct.last_name, t.id as trip_id, t.title as trip_title
-    from (${classified(tenantId)}) c
+    from (${classified(tenantId, onlyUserId)}) c
     left join automations a on a.id = c.automation_id
     left join campaigns cp on cp.id = c.campaign_id
     left join contacts ct on ct.id = c.contact_id
@@ -137,7 +137,8 @@ export async function channelRoutes(app: FastifyInstance) {
   app.get<{ Params: { channel: string } }>('/api/channels/:channel', { preHandler: requireAuth }, async (req) => {
     const c = req.params.channel.toUpperCase();
     if (c !== 'EMAIL' && c !== 'WHATSAPP') throw new AppError(404, 'not_found', 'Unknown channel');
-    return getChannelHub(tenantOf(req), c);
+    const v = viewerOf(req);
+    return getChannelHub(v.tenantId, c, new Date(), seesAll(v) ? undefined : v.userId);
   });
 }
 

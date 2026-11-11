@@ -19,7 +19,13 @@ export type MessageSource = (typeof SOURCES)[number];
 export const AUTOMATIC = sql`('automation', 'payment_reminder', 'trip_message')`;
 
 /** messages, each with its source, plus the names the activity feed needs */
-export const classified = (tenantId: string) => sql`
+/** Employees see only what they sent themselves; owners and managers see everyone's */
+export const mineOnly = (userId?: string) =>
+  userId
+    ? sql` and (m.sent_by_id = ${userId} or m.whatsapp_session_id in (select id from whatsapp_sessions where user_id = ${userId}) or m.campaign_id in (select id from campaigns where created_by_id = ${userId}))`
+    : sql``;
+
+export const classified = (tenantId: string, onlyUserId?: string) => sql`
   select m.*,
          case
            when m.automation_id is not null then 'automation'
@@ -33,7 +39,7 @@ export const classified = (tenantId: string) => sql`
   from messages m
   left join trip_reminders r on r.message_id = m.id
   left join trip_followups f on f.message_id = m.id
-  where m.tenant_id = ${tenantId}`;
+  where m.tenant_id = ${tenantId}${mineOnly(onlyUserId)}`;
 
 const FOLLOWUP_TITLE: Record<string, string> = {
   PRE_TRIP: 'Pre-trip details',
@@ -76,7 +82,7 @@ export function feedTitle(r: FeedRow) {
   }
 }
 
-export async function getCommunication(tenantId: string, monthStart: ReturnType<typeof sql>, timezone: string, now = new Date()) {
+export async function getCommunication(tenantId: string, monthStart: ReturnType<typeof sql>, timezone: string, now = new Date(), onlyUserId?: string) {
   const lastMonthStart = sql`(${monthStart} - interval '1 month')`;
   const since30 = new Date(now.getTime() - 31 * 86_400_000).toISOString();
 
@@ -89,14 +95,14 @@ export async function getCommunication(tenantId: string, monthStart: ReturnType<
                count(*) filter (where sent_at is not null and source in ${AUTOMATIC})::int as automatic,
                count(*) filter (where delivered_at is not null)::int as delivered,
                count(*) filter (where first_opened_at is not null)::int as opened
-        from (${classified(tenantId)}) c
+        from (${classified(tenantId, onlyUserId)}) c
         where queued_at >= ${monthStart}`)
       .then((r) => r.rows[0]!),
     db
       .execute<{ sent: number; automatic: number }>(sql`
         select count(*) filter (where sent_at is not null)::int as sent,
                count(*) filter (where sent_at is not null and source in ${AUTOMATIC})::int as automatic
-        from (${classified(tenantId)}) c
+        from (${classified(tenantId, onlyUserId)}) c
         where queued_at >= ${lastMonthStart} and queued_at < ${monthStart}`)
       .then((r) => r.rows[0]!),
     // Last 30 days by day, split into automatic, broadcasts and the rest
@@ -114,7 +120,7 @@ export async function getCommunication(tenantId: string, monthStart: ReturnType<
                count(*) filter (where source in ${AUTOMATIC}) as automatic,
                count(*) filter (where source = 'broadcast') as broadcast,
                count(*) filter (where source = 'direct') as direct
-        from (${classified(tenantId)}) c
+        from (${classified(tenantId, onlyUserId)}) c
         where sent_at >= ${since30}::timestamptz
         group by 1
       ) s on s.day = d.day
@@ -125,7 +131,7 @@ export async function getCommunication(tenantId: string, monthStart: ReturnType<
              c.reminder_kind, c.followup_kind, c.subject, c.to_address,
              a.name as automation_name, cp.name as campaign_name,
              ct.first_name, ct.last_name, t.id as trip_id, t.title as trip_title
-      from (${classified(tenantId)}) c
+      from (${classified(tenantId, onlyUserId)}) c
       left join automations a on a.id = c.automation_id
       left join campaigns cp on cp.id = c.campaign_id
       left join contacts ct on ct.id = c.contact_id

@@ -1,10 +1,10 @@
-import { and, asc, count, desc, eq, gte, isNotNull, lt, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { campaigns, contacts, messages, senders, sendingDomains, tenants, users } from '../../db/schema.js';
+import { auditLogs, campaigns, contacts, messages, whatsappSessions, senders, sendingDomains, tenants, users } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { countEmailAudience } from '../audience/resolve.js';
-import { requireAuth, tenantOf } from '../auth/guard.js';
+import { requireAuth, seesAll, tenantOf, viewerOf } from '../auth/guard.js';
 import { campaignDto } from '../campaigns/service.js';
 import { isDomainReady } from '../domains/service.js';
 import { unreadCount } from '../notifications/service.js';
@@ -20,7 +20,16 @@ function greeting(now: Date, timezone: string) {
 }
 
 /** Everything the Overview screen shows, in one request. */
-export async function getOverview(tenantId: string, userId: string, now = new Date()) {
+export async function getOverview(tenantId: string, userId: string, now = new Date(), onlyMine = false) {
+  // Employees see the numbers and campaigns of their own work only
+  const mineMsgs = onlyMine
+    ? or(
+        eq(messages.sentById, userId),
+        inArray(messages.whatsappSessionId, db.select({ id: whatsappSessions.id }).from(whatsappSessions).where(eq(whatsappSessions.userId, userId))),
+        inArray(messages.campaignId, db.select({ id: campaigns.id }).from(campaigns).where(eq(campaigns.createdById, userId))),
+      )
+    : undefined;
+  const mineCampaigns = onlyMine ? eq(campaigns.createdById, userId) : undefined;
   const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
   if (!tenant) throw new AppError(404, 'tenant_not_found', 'Account not found');
   const tz = tenant.timezone;
@@ -37,7 +46,7 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
         queued: sql<number>`count(*)::int`,
       })
       .from(messages)
-      .where(and(eq(messages.tenantId, tenantId), gte(messages.queuedAt, from), to ? lt(messages.queuedAt, to) : undefined))
+      .where(and(eq(messages.tenantId, tenantId), mineMsgs, gte(messages.queuedAt, from), to ? lt(messages.queuedAt, to) : undefined))
       .then((r) => r[0]!);
 
   const [user, cur, prev, unsubs, daily, health, recent, upcoming, audienceRows, domains, readySenders, unread, communication] = await Promise.all([
@@ -66,20 +75,21 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
                count(*) filter (where ${messages.firstClickedAt} is not null) as clicked
         from ${messages}
         where ${messages.tenantId} = ${tenantId}
+          ${onlyMine ? sql`and (${messages.sentById} = ${userId} or ${messages.whatsappSessionId} in (select id from whatsapp_sessions where user_id = ${userId}) or ${messages.campaignId} in (select id from campaigns where created_by_id = ${userId}))` : sql``}
           and ${messages.sentAt} >= ${new Date(now.getTime() - 31 * 86_400_000).toISOString()}::timestamptz
         group by 1
       ) s on s.day = d.day
       order by d.day`),
     tenantHealth(tenantId, now),
     db.query.campaigns.findMany({
-      where: and(eq(campaigns.tenantId, tenantId)),
+      where: and(eq(campaigns.tenantId, tenantId), mineCampaigns),
       with: { sender: true },
       columns: { html: false, text: false },
       orderBy: [desc(campaigns.updatedAt)],
       limit: 5,
     }),
     db.query.campaigns.findFirst({
-      where: and(eq(campaigns.tenantId, tenantId), eq(campaigns.status, 'SCHEDULED'), isNotNull(campaigns.scheduledAt)),
+      where: and(eq(campaigns.tenantId, tenantId), eq(campaigns.status, 'SCHEDULED'), isNotNull(campaigns.scheduledAt), mineCampaigns),
       orderBy: [asc(campaigns.scheduledAt)],
       columns: { id: true, name: true, scheduledAt: true, audience: true },
     }),
@@ -87,7 +97,7 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
     db.select().from(sendingDomains).where(eq(sendingDomains.tenantId, tenantId)),
     db.query.senders.findMany({ where: eq(senders.tenantId, tenantId), with: { domain: true, connection: true } }),
     unreadCount(tenantId),
-    getCommunication(tenantId, thisMonth, tz, now),
+    getCommunication(tenantId, thisMonth, tz, now, onlyMine ? userId : undefined),
   ]);
 
   // Campaigns that started in the chart window, so the chart can name its peaks
@@ -170,6 +180,9 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
 }
 
 export async function overviewRoutes(app: FastifyInstance) {
-  app.get('/api/overview', { preHandler: requireAuth }, async (req) => getOverview(tenantOf(req), req.auth!.userId));
+  app.get('/api/overview', { preHandler: requireAuth }, async (req) => {
+    const v = viewerOf(req);
+    return getOverview(v.tenantId, v.userId, new Date(), !seesAll(v));
+  });
 }
 
