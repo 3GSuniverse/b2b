@@ -58,6 +58,10 @@ type ChatRow = {
   name: string | null;
   /** Whose number the chat is on */
   employee: string | null;
+  /** Ticked: Drona AI answers this chat by itself */
+  autopilot: boolean;
+  /** Drona AI handed this chat to a person */
+  needsYou: boolean;
 };
 type ThreadMessage = {
   id: string;
@@ -75,7 +79,7 @@ type ThreadMessage = {
   campaignName: string | null;
 };
 type Thread = {
-  chat: { id: string; phone: string; done: boolean; unread: number; aiDraft: { text: string; note: string | null } | null };
+  chat: { id: string; phone: string; done: boolean; unread: number; aiDraft: { text: string; note: string | null } | null; autopilot: boolean; handoff: { at: string; note: string | null } | null };
   contact: { id: string; name: string | null; email: string | null; whatsappStatus: string } | null;
   messages: ThreadMessage[];
 };
@@ -175,15 +179,9 @@ export function InboxTab() {
           ) : (
             <ul className="stagger">
               {list.data.chats.map((c) => (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => select(c.id)}
-                    className={cn(
-                      'flex w-full items-center gap-3 border-b border-line-soft px-3.5 py-3 text-left transition-colors hover:bg-sunken',
-                      open === c.id && 'bg-success-soft/50 hover:bg-success-soft/60',
-                    )}
-                  >
+                <li key={c.id} className={cn('flex items-stretch border-b border-line-soft transition-colors hover:bg-sunken', open === c.id && 'bg-success-soft/50 hover:bg-success-soft/60')}>
+                  <AutopilotTick chatId={c.id} on={c.autopilot} />
+                  <button type="button" onClick={() => select(c.id)} className="flex min-w-0 flex-1 items-center gap-3 py-3 pr-3.5 text-left">
                     <span className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-full text-sm font-bold', c.name ? 'bg-success-soft text-success-strong' : 'bg-sunken text-muted')}>
                       {c.name ? c.name.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() : <Smartphone className="h-4 w-4" />}
                     </span>
@@ -197,6 +195,7 @@ export function InboxTab() {
                           {c.lastDirection === 'OUT' && <span className="text-faint">You: </span>}
                           {c.lastPreview || ' '}
                         </span>
+                        {c.needsYou && <span className="shrink-0 rounded-full bg-warm-soft px-2 py-0.5 text-[11px] font-bold text-warm-strong">Needs you</span>}
                         {showEmployee && c.employee && <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent-strong">{c.employee}</span>}
                         {c.unread > 0 && <span className="tnum grid h-5 min-w-5 place-items-center rounded-full bg-success px-1.5 text-[11px] font-bold text-white">{c.unread}</span>}
                         {c.done && !c.unread && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" aria-label="Done" />}
@@ -326,6 +325,7 @@ function Conversation({ id, onBack }: { id: string; onBack: () => void }) {
             <UserPlus className="h-4 w-4" /> <span className="hidden sm:inline">Save as customer</span>
           </button>
         )}
+        <AutopilotTick chatId={t.chat.id} on={t.chat.autopilot} pill />
         <button
           type="button"
           onClick={() => done.mutate(!t.chat.done)}
@@ -361,7 +361,16 @@ function Conversation({ id, onBack }: { id: string; onBack: () => void }) {
             <Sparkles className="h-3.5 w-3.5" /> Drona AI writes replies like these on the Professional plan
           </Link>
         )}
-        {t.chat.aiDraft && !text.trim() && (
+        {t.chat.handoff && !text.trim() && (
+          <div className="mb-2.5 flex flex-col gap-1 rounded-[16px] bg-[linear-gradient(120deg,#fff4e6,#ffe3ec)] p-3 animate-[rise-in_400ms_both]">
+            <span className="flex items-center gap-1.5 text-[12.5px] font-bold text-warm-strong">
+              <TriangleAlert className="h-3.5 w-3.5" /> Drona AI handed this chat to you
+            </span>
+            {t.chat.handoff.note && <p className="text-[13px] text-ink">{t.chat.handoff.note}</p>}
+            <p className="text-[12px] text-muted">The customer was told you’ll get back shortly. Drona AI stays quiet here until you reply.</p>
+          </div>
+        )}
+        {t.chat.aiDraft && !t.chat.handoff && !text.trim() && (
           <div className="mb-2.5 flex flex-col gap-2 rounded-[16px] bg-[linear-gradient(120deg,#fff4e6,#ecebfd)] p-3 animate-[rise-in_400ms_both]">
             <span className="flex items-center gap-1.5 text-[12.5px] font-bold text-warm-strong">
               <TriangleAlert className="h-3.5 w-3.5" /> Drona AI held this reply for you
@@ -648,8 +657,8 @@ function TeachDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
     <Dialog
       open={open}
       onOpenChange={(o) => !o && onClose()}
-      title={tx("Teach Drona AI about your agency")}
-      description={tx("Everything here is used in every reply it writes. Your packages and each customer’s trips are read automatically; add what they don’t say.")}
+      title={tx("Your business details")}
+      description={tx("Just the facts customers ask about. Drona AI already knows how to talk to them.")}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -661,6 +670,17 @@ function TeachDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
         </>
       }
     >
+      <Link
+        to="/trips/packages"
+        onClick={onClose}
+        className="mb-3 flex items-center gap-3 rounded-[14px] bg-[linear-gradient(120deg,#ecebfd,#ddf5ea)] p-3 transition-transform hover:-translate-y-0.5"
+      >
+        <Sparkles className="h-5 w-5 shrink-0 text-accent" />
+        <span className="flex flex-col">
+          <span className="text-[13.5px] font-bold">Add what you sell: name, price and description</span>
+          <span className="text-[12px] text-ink-2">Drona AI answers prices and suggests the right package from your Packages page.</span>
+        </span>
+      </Link>
       <label className="mb-3 flex flex-col gap-1.5">
         <span className="text-[13px] font-semibold">Replies are written in</span>
         <select
@@ -683,11 +703,60 @@ function TeachDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
         placeholder={`Office hours: 9 am to 8 pm, Monday to Saturday.
 Payment: UPI to 98480 12345 or bank transfer. 25% advance to confirm.
 Cancellation: full refund up to 30 days before travel, 50% up to 15 days.
-Pickup for Tirupati trips is from our office at Benz Circle.
-Always offer to call the customer for group bookings.`}
+Pickup for Tirupati trips is from our office at Benz Circle.`}
         className="w-full rounded-[12px] border border-line bg-surface px-3.5 py-3 text-[13px] leading-relaxed outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
       />
       <p className="mt-1.5 text-right text-[11px] text-muted">{value.length} / 4,000</p>
     </Dialog>
+  );
+}
+
+/** The Autopilot tick for one chat: ticked, Drona AI answers this customer by itself. */
+function AutopilotTick({ chatId, on, pill }: { chatId: string; on: boolean; pill?: boolean }) {
+  const qc = useQueryClient();
+  const flip = useMutation({
+    mutationFn: (next: boolean) => api.put<{ autopilot: boolean }>(`/api/inbox/${chatId}/autopilot`, { on: next }),
+    onSuccess: (r) => {
+      void qc.invalidateQueries({ queryKey: ['inbox'] });
+      void qc.invalidateQueries({ queryKey: ['ai', 'autopilot'] });
+      toast.success(r.autopilot ? 'Autopilot on for this chat. Drona AI will answer by itself ✨' : 'Autopilot off for this chat');
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Couldn’t change Autopilot'),
+  });
+  if (pill)
+    return (
+      <button
+        type="button"
+        aria-pressed={on}
+        disabled={flip.isPending}
+        onClick={() => flip.mutate(!on)}
+        className={cn(
+          'inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors',
+          on ? 'bg-[linear-gradient(120deg,#0e9466,#4a3fd1)] text-white' : 'border border-line hover:bg-sunken',
+        )}
+      >
+        {flip.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+        <span className="hidden sm:inline">{on ? 'Autopilot on' : 'Autopilot'}</span>
+      </button>
+    );
+  return (
+    <label className="flex shrink-0 cursor-pointer items-center pl-3 pr-1" title={on ? 'Autopilot on: Drona AI answers this chat' : 'Tick to let Drona AI answer this chat'}>
+      <input
+        type="checkbox"
+        checked={on}
+        disabled={flip.isPending}
+        onChange={(e) => flip.mutate(e.target.checked)}
+        aria-label="Autopilot for this chat"
+        className="peer sr-only"
+      />
+      <span
+        className={cn(
+          'grid h-6 w-6 place-items-center rounded-[8px] border-2 transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40',
+          on ? 'border-transparent bg-[linear-gradient(135deg,#0e9466,#4a3fd1)] text-white' : 'border-line bg-surface text-transparent hover:border-accent',
+        )}
+      >
+        {flip.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted" /> : <Bot className="h-3.5 w-3.5" />}
+      </span>
+    </label>
   );
 }

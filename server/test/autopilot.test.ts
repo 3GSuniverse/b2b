@@ -68,21 +68,50 @@ describe('Drona AI Autopilot', () => {
     expect(await runAutopilot({ chatId, at: at.getTime() })).toBe('skipped_answered');
   });
 
-  it('holds back anything a person should check, and tells the employee', async () => {
+  it('sends a short holding message, hands the chat to the employee, and stays quiet until they reply', async () => {
     const { tenantId, line, c } = await setup();
     await c.put('/api/ai/autopilot', { on: true });
-    answer = { situation: 'payment', language: 'English', reply: 'Thank you Sir, we will confirm your payment shortly.', needsHuman: true, note: 'Check the UPI payment of ₹15,000' };
+    answer = { situation: 'payment', language: 'English', reply: 'Thank you Sir 🙏\nLet me check the payment with our team and confirm shortly.\nExtra line\nAnother extra line', needsHuman: true, note: 'Check the UPI payment of ₹15,000' };
     const at = new Date();
     const chatId = await recordIncoming(tenantId, line.id, { phone: '+919848012345', text: 'I paid 15000 by UPI', waId: 'b1', at });
-    expect(await runAutopilot({ chatId, at: at.getTime() })).toBe('held');
-    expect(await db.select().from(waChatMessages).where(eq(waChatMessages.source, 'autopilot'))).toHaveLength(0);
+    expect(await runAutopilot({ chatId, at: at.getTime() })).toBe('handed_off');
+    const [sent] = await db.select().from(waChatMessages).where(eq(waChatMessages.source, 'autopilot'));
+    expect(sent!.body.split('\n')).toHaveLength(3); // never longer than a person types
     const thread = (await c.get(`/api/inbox/${chatId}`)).json();
-    expect(thread.chat.aiDraft).toEqual({ text: 'Thank you Sir, we will confirm your payment shortly.', note: 'Check the UPI payment of ₹15,000' });
+    expect(thread.chat.handoff.note).toBe('Check the UPI payment of ₹15,000');
     const [n] = await db.select().from(notifications).where(eq(notifications.tenantId, tenantId));
     expect(n!.title).toContain('+919848012345');
-    // The employee answers: the draft goes away
+    // The customer writes again: the AI waits for the person
+    const at2 = new Date(Date.now() + 1000);
+    await recordIncoming(tenantId, line.id, { phone: '+919848012345', text: 'Hello?', waId: 'b2', at: at2 });
+    expect(await runAutopilot({ chatId, at: at2.getTime() })).toBe('skipped_handoff');
+    // The employee answers: the chat is back to normal
     await c.post(`/api/inbox/${chatId}/reply`, { text: 'Received, thank you!' });
-    expect((await db.query.waChats.findFirst({ where: eq(waChats.id, chatId) }))!.aiDraft).toBeNull();
+    expect((await db.query.waChats.findFirst({ where: eq(waChats.id, chatId) }))!.handoffAt).toBeNull();
+  });
+
+  it('answers only the chats ticked in the inbox, several at once', async () => {
+    const { tenantId, line, c } = await setup();
+    const at = new Date();
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) ids.push(await recordIncoming(tenantId, line.id, { phone: `+91984801234${i}`, text: 'Hi', waId: `t${i}`, at }));
+    const other = await recordIncoming(tenantId, line.id, { phone: '+919848099999', text: 'Hi', waId: 'tx', at });
+    for (const id of ids) expect((await c.put(`/api/inbox/${id}/autopilot`, { on: true })).statusCode).toBe(200);
+    const list = (await c.get('/api/inbox')).json().chats as { id: string; autopilot: boolean }[];
+    expect(list.filter((x) => x.autopilot)).toHaveLength(5);
+    const results = await Promise.all(ids.map((chatId) => runAutopilot({ chatId, at: at.getTime() })));
+    expect(results).toEqual(['sent', 'sent', 'sent', 'sent', 'sent']);
+    expect(await runAutopilot({ chatId: other, at: at.getTime() })).toBe('skipped_off');
+    expect((await c.get('/api/ai/autopilot')).json().chats).toBe(5);
+  });
+
+  it('asks the AI for short, human-sized messages', async () => {
+    const { tenantId, line, c } = await setup();
+    const at = new Date();
+    const chatId = await recordIncoming(tenantId, line.id, { phone: '+919848012345', text: 'Hi', waId: 's1', at });
+    await c.put(`/api/inbox/${chatId}/autopilot`, { on: true });
+    await runAutopilot({ chatId, at: at.getTime() });
+    expect(calls[0]!.system).toContain('1 or 2 short lines');
   });
 
   it('answers once for several quick messages, and stays quiet when the employee is chatting', async () => {

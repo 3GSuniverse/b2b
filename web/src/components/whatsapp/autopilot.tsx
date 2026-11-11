@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn';
 import { n } from '@/lib/format';
 import { useSession } from '@/lib/session';
 
-type Autopilot = { linked: boolean; connected: boolean; on: boolean; aiReady: boolean; allowed: boolean; today: { sent: number; waiting: number } };
+type Autopilot = { linked: boolean; connected: boolean; on: boolean; aiReady: boolean; allowed: boolean; chats: number; today: { sent: number; waiting: number } };
 
 /**
  * The Autopilot switch at the top of WhatsApp. On: Drona AI answers this employee's customers by
@@ -28,7 +28,7 @@ export function AutopilotBar() {
   const a = q.data;
   // Owners don't chat with customers themselves; Autopilot lives on each employee's own number
   if (!a || !a.aiReady || (!a.linked && user.role === 'OWNER')) return null;
-  const on = a.on && a.connected;
+  const on = (a.on || a.chats > 0) && a.connected;
   const blocked = !a.linked || !a.allowed;
 
   return (
@@ -47,7 +47,7 @@ export function AutopilotBar() {
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <h2 className="flex items-center gap-2 text-[16px] font-extrabold tracking-[-0.01em]">
             Drona AI Autopilot
-            <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide', on ? 'bg-white/20' : 'bg-line-soft text-muted')}>{on ? 'On' : 'Off'}</span>
+            <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide', on ? 'bg-white/20' : 'bg-line-soft text-muted')}>{a.on ? 'All chats' : a.chats ? `${a.chats} chat${a.chats > 1 ? 's' : ''}` : 'Off'}</span>
           </h2>
           <p className={cn('text-[13px] leading-relaxed', on ? 'text-white/85' : 'text-muted')}>
             {!a.linked ? (
@@ -59,25 +59,27 @@ export function AutopilotBar() {
                 Autopilot comes with Drona AI. <Link to="/agency/billing" className="font-semibold text-accent underline underline-offset-4">See plans</Link>
               </>
             ) : on ? (
-              'Answering your customers in seconds. Payments, bookings, changes and complaints wait for you as drafts.'
+              a.on
+                ? 'Answering every customer by itself in seconds. Anything it can’t handle comes to you with a notification.'
+                : 'Answering the ticked chats by itself. Tick more in the inbox, or switch on for all chats.'
             ) : a.on && !a.connected ? (
               'Waiting for your WhatsApp to reconnect.'
             ) : (
-              'Switch it on and Drona AI answers your customers by itself within seconds, even at night. You stay in charge of anything important.'
+              'Tick chats in the inbox, or switch on for all chats, and Drona AI answers by itself within seconds, even at night. Anything it can’t handle comes to you.'
             )}
           </p>
         </div>
         {a.linked && (a.on || a.today.sent > 0 || a.today.waiting > 0) && (
           <div className="flex gap-2">
             <Stat on={on} icon={<Zap />} value={n(a.today.sent)} label="answered today" />
-            <Stat on={on} icon={<Hand />} value={n(a.today.waiting)} label="waiting for you" hot={a.today.waiting > 0} />
+            <Stat on={on} icon={<Hand />} value={n(a.today.waiting)} label="need you" hot={a.today.waiting > 0} />
           </div>
         )}
         <button
           type="button"
           role="switch"
           aria-checked={a.on}
-          aria-label="Drona AI Autopilot"
+          aria-label="Drona AI Autopilot for all chats"
           disabled={blocked || flip.isPending}
           onClick={() => flip.mutate(!a.on)}
           className={cn(

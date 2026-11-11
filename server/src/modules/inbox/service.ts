@@ -149,7 +149,7 @@ export async function recordFromPhone(tenantId: string, sessionId: string, m: In
     .onConflictDoNothing()
     .returning({ id: waChatMessages.id });
   // The employee answered from the phone: any Autopilot draft for this chat is no longer needed
-  if (row) await db.update(waChats).set({ aiDraft: null, aiDraftNote: null }).where(eq(waChats.id, chatId));
+  if (row) await db.update(waChats).set({ aiDraft: null, aiDraftNote: null, handoffAt: null, handoffNote: null }).where(eq(waChats.id, chatId));
   if (row) await touch(chatId, 'OUT', m.text, m.mediaKind, m.at);
 }
 
@@ -196,6 +196,8 @@ export async function listChats(v: Viewer, q: z.infer<typeof listQuery>) {
       lastPreview: waChats.lastPreview,
       lastDirection: waChats.lastDirection,
       unread: waChats.unread,
+      autopilot: waChats.autopilot,
+      needsYou: sql<boolean>`${waChats.handoffAt} is not null`,
       done: sql<boolean>`${waChats.doneAt} is not null`,
       contactId: contacts.id,
       name: nameSql,
@@ -266,7 +268,7 @@ export async function getThread(v: Viewer, chatId: string) {
       .limit(300),
   ]);
   return {
-    chat: { id: chat.id, phone: chat.phone, done: !!chat.doneAt, unread: chat.unread, aiDraft: chat.aiDraft ? { text: chat.aiDraft, note: chat.aiDraftNote } : null },
+    chat: { id: chat.id, phone: chat.phone, done: !!chat.doneAt, unread: chat.unread, aiDraft: chat.aiDraft ? { text: chat.aiDraft, note: chat.aiDraftNote } : null, autopilot: chat.autopilot, handoff: chat.handoffAt ? { at: chat.handoffAt, note: chat.handoffNote } : null },
     contact: contact ? { id: contact.id, name: [contact.firstName, contact.lastName].filter(Boolean).join(' ') || null, email: contact.email, whatsappStatus: contact.whatsappStatus } : null,
     messages: rows.reverse(),
   };
@@ -289,7 +291,7 @@ export async function reply(v: Viewer, chatId: string, text: string, enqueue = (
     .insert(waChatMessages)
     .values({ tenantId, chatId, direction: 'OUT', source: 'reply', body: text, messageId: m!.id, sentById: userId, at: now })
     .returning({ id: waChatMessages.id });
-  await db.update(waChats).set({ unread: 0, aiDraft: null, aiDraftNote: null }).where(eq(waChats.id, chatId));
+  await db.update(waChats).set({ unread: 0, aiDraft: null, aiDraftNote: null, handoffAt: null, handoffNote: null }).where(eq(waChats.id, chatId));
   await touch(chatId, 'OUT', text, null, now);
   await enqueue([m!.id]);
   return { id: row!.id, messageId: m!.id };

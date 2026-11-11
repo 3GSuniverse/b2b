@@ -4,7 +4,7 @@ import { parseBody } from '../../lib/http.js';
 import { requireAuth, requireRole, tenantOf, viewerOf } from '../auth/guard.js';
 import { aiNotesBody, getAiNotes, setAiNotes, suggestBody, suggestReply } from '../ai/reply-draft.js';
 import { askBuddy, buddyBody } from '../ai/buddy.js';
-import { autopilotBody, getAutopilot, setAutopilot } from '../ai/autopilot.js';
+import { autopilotBody, getAutopilot, setAutopilot, setChatAutopilot } from '../ai/autopilot.js';
 import { getThread, listChats, listQuery, markRead, reply, replyBody, setDone, unreadCount } from './service.js';
 
 type Id = { Params: { id: string } };
@@ -29,6 +29,7 @@ export async function inboxRoutes(app: FastifyInstance) {
   // Drona AI Autopilot on the employee's own WhatsApp number
   app.get('/api/ai/autopilot', auth, async (req) => getAutopilot(viewerOf(req)));
   app.put('/api/ai/autopilot', auth, async (req) => setAutopilot(viewerOf(req), parseBody(autopilotBody, req.body).on));
+  app.put<Id>('/api/inbox/:id/autopilot', auth, async (req) => setChatAutopilot(viewerOf(req), req.params.id, parseBody(autopilotBody, req.body).on));
   app.post<Id>('/api/inbox/:id/read', auth, async (req) => {
     await markRead(viewerOf(req), req.params.id);
     return { ok: true };

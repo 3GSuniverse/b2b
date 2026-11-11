@@ -111,7 +111,7 @@ whatsappWorker.on('failed', (job, err) => {
   if (job.attemptsMade >= (job.opts.attempts ?? 1)) void markMessageFailed(job.data.messageId, `gave_up: ${err.message}`.slice(0, 500));
 });
 
-// Drona AI Autopilot: a few answers at once is plenty; each one waits on the AI service anyway
+// Drona AI Autopilot: many chats answered at once; each one mostly waits on the AI service
 const autopilotWorker = new Worker<AutopilotJob>(
   QUEUES.autopilot,
   async (job) => {
@@ -119,7 +119,7 @@ const autopilotWorker = new Worker<AutopilotJob>(
     logger.debug({ chatId: job.data.chatId, result }, 'autopilot');
     return result;
   },
-  { connection: createRedis(), concurrency: 4 },
+  { connection: createRedis(), concurrency: 12 },
 );
 autopilotWorker.on('failed', (job, err) => logger.warn({ chatId: job?.data.chatId, err: err.message }, 'autopilot answer failed'));
 

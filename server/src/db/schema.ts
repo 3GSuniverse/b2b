@@ -1246,6 +1246,11 @@ export const waChats = pgTable(
     // Autopilot held a reply back for a person to check: the draft waits here until someone answers
     aiDraft: text(),
     aiDraftNote: text(),
+    // Ticked in the inbox: Drona AI answers this customer by itself
+    autopilot: boolean().notNull().default(false),
+    // The AI couldn't handle something: a person takes over (Autopilot waits) until someone replies
+    handoffAt: timestamp({ withTimezone: true }),
+    handoffNote: text(),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex().on(t.sessionId, t.phone), index().on(t.tenantId, t.lastMessageAt)],
