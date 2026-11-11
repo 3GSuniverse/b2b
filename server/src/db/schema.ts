@@ -1340,3 +1340,94 @@ export type MailboxConnection = typeof mailboxConnections.$inferSelect;
 export const careSessionsRelations = relations(careSessions, ({ one }) => ({
   staff: one(careStaff, { fields: [careSessions.staffId], references: [careStaff.id] }),
 }));
+
+// ---------------------------------------------------------------------
+//  AI Caller: Drona's voice assistant that phones customers and answers their calls
+// ---------------------------------------------------------------------
+
+export const callSettings = pgTable('call_settings', {
+  tenantId: text()
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  enabled: boolean().notNull().default(false),
+  agentName: text().notNull().default('Asha'),
+  language: text().$type<'en' | 'te' | 'hi'>().notNull().default('en'),
+  purpose: text().$type<'SALES' | 'SUPPORT' | 'BOTH'>().notNull().default('BOTH'),
+  greeting: text(),
+  // What the caller should focus on (offers to mention, things to avoid). Checked for misuse on every save.
+  instructions: text(),
+  // The agency's Dhrona calling number (E.164), set up by the Drona team: calls forwarded to it are answered
+  callFrom: text().unique(),
+  hoursFrom: text().notNull().default('09:00'),
+  hoursTo: text().notNull().default('20:00'),
+  // Set by a safety alert; calling stays off until the Drona team looks at it
+  suspendedAt: ts(),
+  suspendedReason: text(),
+  updatedAt: updatedAt(),
+});
+
+export const calls = pgTable(
+  'calls',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    userId: text().references(() => users.id, { onDelete: 'set null' }),
+    direction: text().$type<'IN' | 'OUT'>().notNull(),
+    phone: text().notNull(), // E.164, the customer
+    status: text().$type<'QUEUED' | 'RINGING' | 'IN_PROGRESS' | 'COMPLETED' | 'NO_ANSWER' | 'FAILED'>().notNull().default('QUEUED'),
+    purpose: text().$type<'SALES' | 'SUPPORT' | 'BOTH'>().notNull().default('BOTH'),
+    outcome: text().$type<'INTERESTED' | 'NOT_INTERESTED' | 'CALLBACK' | 'NEEDS_HUMAN' | 'WRONG_NUMBER' | 'ANSWERED'>(),
+    summary: text(),
+    transcript: jsonb().$type<{ from: 'agent' | 'customer'; text: string }[]>().notNull().default([]),
+    script: text(), // what the agency asked the caller to talk about on this call
+    providerCallId: text(),
+    seconds: integer().notNull().default(0),
+    minutesBilled: integer().notNull().default(0),
+    createdAt: createdAt(),
+    endedAt: ts(),
+  },
+  (t) => [index().on(t.tenantId, t.createdAt), index().on(t.tenantId, t.phone)],
+);
+
+// Minutes bought or granted (+) and used (-). The balance is their sum.
+export const callWalletEntries = pgTable(
+  'call_wallet_entries',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    minutes: integer().notNull(),
+    reason: text().notNull(), // "grant", "call", "refund"
+    callId: text().references(() => calls.id, { onDelete: 'set null' }),
+    note: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.tenantId)],
+);
+
+// People who said "don't call me again" (or were added by the agency). Never called again.
+export const callOptouts = pgTable(
+  'call_optouts',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    phone: text().notNull(),
+    reason: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex().on(t.tenantId, t.phone)],
+);
+
+// Every time someone tried to misuse the caller, and what Drona did about it
+export const callViolations = pgTable(
+  'call_violations',
+  {
+    id: id(),
+    tenantId: tenantRef(),
+    userId: text().references(() => users.id, { onDelete: 'set null' }),
+    kind: text().notNull(), // "collect_secrets", "impersonation", "threat", "scam", "optout_number", "outside_hours"
+    severity: text().$type<'SEVERE' | 'MILD'>().notNull(),
+    detail: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.tenantId, t.createdAt)],
+);

@@ -5,13 +5,14 @@ import { useSession } from '@/lib/session';
 import type { Entitlements } from '@/lib/types';
 import { tx } from '../lib/words';
 
-export type PlanFeature = 'automations' | 'groups' | 'ai' | 'leadApi';
+export type PlanFeature = 'automations' | 'groups' | 'ai' | 'leadApi' | 'calls';
 
 const NEEDS: Record<PlanFeature, { plan: string; what: string }> = {
   automations: { plan: 'Professional', what: 'Automatic messages' },
   groups: { plan: 'Professional', what: 'Group departures' },
   ai: { plan: 'Professional', what: 'Drona AI' },
   leadApi: { plan: 'Ultra Premium', what: 'The leads API' },
+  calls: { plan: 'Professional', what: 'AI Caller' },
 };
 
 /** Whether the agency's plan has this feature (true when the server doesn't say, so nothing is hidden by mistake). */

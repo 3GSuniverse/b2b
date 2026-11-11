@@ -62,6 +62,16 @@ const schema = z.object({
   AI_GLOBAL_PER_DAY: z.coerce.number().int().min(1).optional(),
   // Drona AI answers (replies and quote drafts) a day during a free trial; paid plans get theirs from the plan
   TRIAL_AI_PER_DAY: z.coerce.number().int().min(0).default(30),
+
+  // AI Caller. Speech-to-text and the voice come from Sarvam AI (Indian languages, no GPU needed here)
+  SARVAM_API_KEY: z.string().optional(),
+  CALL_STT_MODEL: z.string().default('saarika:v2.5'),
+  CALL_TTS_MODEL: z.string().default('bulbul:v2'),
+  CALL_TTS_VOICE: z.string().default('anushka'),
+  // The phone line (Exotel's Voicebot applet) connects to /api/calls/stream?token=<this>. Without it, calls are refused.
+  CALL_STREAM_TOKEN: z.string().min(24).optional(),
+  // Longest a single call may run, in minutes
+  CALL_MAX_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
 });
 
 const parsed = schema.safeParse(process.env);

@@ -18,15 +18,16 @@ export function planOf(t: TenantPlanFields): { id: PlanId; seats: number; source
   return { id: 'ultra', seats: MANUAL_PAID_SEATS, source: 'operator' };
 }
 
-export type Feature = 'automations' | 'groups' | 'ai' | 'leadApi';
+export type Feature = 'automations' | 'groups' | 'ai' | 'leadApi' | 'calls';
 const FEATURE_NAMES: Record<Feature, string> = {
   automations: 'Automatic messages',
   groups: 'Group departures',
   ai: 'Drona AI',
   leadApi: 'The leads API',
+  calls: 'AI Caller',
 };
 /** The smallest plan that has each feature. */
-export const FEATURE_PLAN: Record<Feature, PlanId> = { automations: 'professional', groups: 'professional', ai: 'professional', leadApi: 'ultra' };
+export const FEATURE_PLAN: Record<Feature, PlanId> = { automations: 'professional', groups: 'professional', ai: 'professional', leadApi: 'ultra', calls: 'professional' };
 
 /** What the agency's plan allows. */
 export function entitlements(t: TenantPlanFields) {
@@ -39,6 +40,7 @@ export function entitlements(t: TenantPlanFields) {
     automations: def.automations,
     groups: def.groups,
     leadApi: def.leadApi,
+    calls: def.calls,
     ai: def.aiPerLogin > 0,
     aiPerDay: p.source === 'trial' ? env.TRIAL_AI_PER_DAY : aiPerDayFor(p.id, p.seats),
     domains: def.domains,

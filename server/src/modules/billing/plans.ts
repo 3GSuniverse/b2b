@@ -18,6 +18,7 @@ export const BILLING_PLANS = {
     automations: false,
     groups: false,
     leadApi: false,
+    calls: false, // AI Caller
     prioritySupport: false,
   },
   professional: {
@@ -31,6 +32,7 @@ export const BILLING_PLANS = {
     automations: true,
     groups: true,
     leadApi: false,
+    calls: true,
     prioritySupport: false,
   },
   ultra: {
@@ -44,6 +46,7 @@ export const BILLING_PLANS = {
     automations: true,
     groups: true,
     leadApi: true,
+    calls: true,
     prioritySupport: true,
   },
 } as const;

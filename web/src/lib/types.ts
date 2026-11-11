@@ -16,6 +16,7 @@ export interface Entitlements {
   automations: boolean;
   groups: boolean;
   leadApi: boolean;
+  calls: boolean;
   ai: boolean;
   aiPerDay: number;
   domains: number;

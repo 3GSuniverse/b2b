@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, ChevronDown, Clock3, Headset, KeyRound, Mail, FileText, LayoutDashboard, LogOut, Megaphone, Menu as MenuIcon, MessageCircle, MessageSquarePlus, Plane, Plus, Repeat2, Search, Settings, UserPlus, Users } from 'lucide-react';
+import { Building2, ChevronDown, Clock3, Headset, KeyRound, Mail, FileText, LayoutDashboard, LogOut, Megaphone, Menu as MenuIcon, MessageCircle, MessageSquarePlus, PhoneCall, Plane, Plus, Repeat2, Search, Settings, UserPlus, Users } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -26,6 +26,7 @@ const NAV: NavDef[] = [
   { to: '/', label: 'Home', icon: LayoutDashboard, end: true, anim: 'nav-pop' },
   { to: '/email', label: 'Email', icon: Mail, group: 'Send to customers', anim: 'nav-shout', also: ['/templates'], section: 'email', dot: '#8f86ff' },
   { to: '/whatsapp', label: 'WhatsApp', icon: MessageCircle, anim: 'nav-wiggle', section: 'whatsapp', dot: '#25c48a' },
+  { to: '/calls', label: 'AI Caller', icon: PhoneCall, anim: 'nav-wiggle', dot: '#ff8a1f' },
   { to: '/trips', label: tx("Trips"), icon: Plane, group: 'Your work', anim: 'nav-fly', also: ['/groups'] },
   { to: '/contacts', label: 'Customers', icon: Users, anim: 'nav-hop' },
   { to: '/agency', label: tx("Agency"), icon: Building2, group: tx('Your agency'), anim: 'nav-pop', roles: ['OWNER'] },
