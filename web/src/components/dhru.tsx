@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn';
 import { useSession } from '@/lib/session';
 
 /**
- * Dhru: Dhrona's little helper. He floats in the corner of every page, blinks, follows the
+ * Dhru: Dhrona's little robot helper. He hovers in the corner of every page, blinks, follows the
  * pointer with his eyes, waves when you come close, naps when you're away, and thinks while
  * Drona AI works on your question. Click him to chat: he shows where things are, explains
  * features and drafts emails and WhatsApp messages.
@@ -35,90 +35,99 @@ const store = {
   },
 };
 
-/** Dhru himself. `look` is where his eyes point, -1..1 on each axis. */
+/** Dhru himself: a small hovering robot. `look` is where his eyes point, -1..1 on each axis. */
 export function DhruFigure({ mood, look = { x: 0, y: 0 }, blink, size = 76 }: { mood: Mood; look?: { x: number; y: number }; blink?: boolean; size?: number }) {
-  const closed = blink || mood === 'sleep';
-  const ex = mood === 'thinking' ? 0.4 : look.x;
-  const ey = mood === 'thinking' ? -1 : mood === 'sorry' ? 0.6 : look.y;
-  const px = ex * 2.6;
-  const py = ey * 2.2;
-  const happyEyes = mood === 'happy' || mood === 'excited';
+  const E = '#5ff2c2';
+  const lx = mood === 'thinking' ? 3 : mood === 'sorry' ? 0 : look.x * 3.2;
+  const ly = mood === 'thinking' ? -3 : mood === 'sorry' ? 2 : look.y * 2.6;
+  const closed = mood === 'sleep' || (blink && mood !== 'happy' && mood !== 'excited');
+  const waving = mood === 'wave' || mood === 'excited';
+  const line = { stroke: E, strokeLinecap: 'round' as const, fill: 'none' };
   return (
-    <svg width={size} height={size * 1.08} viewBox="0 0 100 108" aria-hidden className="overflow-visible">
+    <svg width={size} height={size * 1.12} viewBox="-6 -10 112 122" aria-hidden className="overflow-visible">
       <defs>
-        <radialGradient id="dhru-body" cx="38%" cy="30%" r="75%">
-          <stop offset="0%" stopColor="#8f86ff" />
-          <stop offset="55%" stopColor="#5b4fe0" />
+        <linearGradient id="dhru-head" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#e9e7fc" />
+        </linearGradient>
+        <linearGradient id="dhru-visor" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#2a2670" />
+          <stop offset="100%" stopColor="#15123a" />
+        </linearGradient>
+        <linearGradient id="dhru-suit" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#5b4fe0" />
           <stop offset="100%" stopColor="#3b31b4" />
-        </radialGradient>
-        <radialGradient id="dhru-belly" cx="50%" cy="40%" r="60%">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
-          <stop offset="100%" stopColor="#ecebfd" stopOpacity="0.9" />
-        </radialGradient>
+        </linearGradient>
       </defs>
-      {/* The feather tuft: a nod to Drona, the archer's teacher */}
-      <g className="dhru-tuft">
-        <path d="M50 20 C46 10 48 3 55 0 C54 7 57 11 53 20 Z" fill="#ff8a1f" />
-        <path d="M51 19 C49 12 50 7 54 3" stroke="#ffb067" strokeWidth="1.4" fill="none" strokeLinecap="round" />
-        <path d="M49 21 C42 15 38 10 39 4 C44 8 47 12 50 19 Z" fill="#ffb067" />
+      {/* Antenna with an arrow tip: a nod to Drona, the archer's teacher */}
+      <g className="dhru-tuft" style={{ transformOrigin: '50px 16px', transformBox: 'view-box' }}>
+        <path d="M50 16 L50 6" stroke="#8f86ff" strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M50 -2 L55 5 L50 3.5 L45 5 Z" fill="#ff8a1f" />
       </g>
-      {/* Arms */}
-      <g style={{ transformOrigin: '22px 62px', animation: mood === 'wave' || mood === 'excited' ? 'dhru-wave 1.2s ease-in-out' : undefined }}>
-        <path d="M24 60 C14 58 9 52 10 46" stroke="#4a3fd1" strokeWidth="7" strokeLinecap="round" fill="none" />
-        <circle cx="10" cy="45" r="4.6" fill="#5b4fe0" />
+      {/* Ear pods */}
+      <rect x="9" y="28" width="9" height="18" rx="4.5" fill="#4a3fd1" />
+      <rect x="82" y="28" width="9" height="18" rx="4.5" fill="#4a3fd1" />
+      {/* Head and visor */}
+      <rect x="15" y="14" width="70" height="50" rx="22" fill="url(#dhru-head)" />
+      <rect x="23" y="21" width="54" height="36" rx="16" fill="url(#dhru-visor)" />
+      <rect x="28" y="24" width="18" height="4" rx="2" fill="#fff" opacity="0.14" />
+      <g opacity={mood === 'sleep' ? 0.65 : 1}>
+        {closed ? (
+          <g {...line} strokeWidth="2.6">
+            <path d="M34 37 Q39 41 44 37" />
+            <path d="M56 37 Q61 41 66 37" />
+          </g>
+        ) : mood === 'happy' || mood === 'excited' ? (
+          <g {...line} strokeWidth="3.4">
+            <path d="M34 39 Q39 30 44 39" />
+            <path d="M56 39 Q61 30 66 39" />
+          </g>
+        ) : (
+          <g>
+            <rect x={35 + lx} y={30 + ly} width="8" height={mood === 'sorry' ? 9 : 12} rx="4" fill={E} />
+            <rect x={57 + lx} y={30 + ly} width="8" height={mood === 'sorry' ? 9 : 12} rx="4" fill={E} />
+            <rect x={37 + lx} y={32 + ly} width="2.5" height="3.5" rx="1.2" fill="#fff" />
+            <rect x={59 + lx} y={32 + ly} width="2.5" height="3.5" rx="1.2" fill="#fff" />
+            {mood === 'sorry' && (
+              <g {...line} strokeWidth="2">
+                <path d="M33 27 L42 29" />
+                <path d="M67 27 L58 29" />
+              </g>
+            )}
+          </g>
+        )}
+        {mood === 'happy' || mood === 'excited' ? (
+          <path d="M43 45 Q50 54 57 45 Z" fill={E} />
+        ) : mood === 'thinking' ? (
+          <g fill={E}>
+            <circle cx="44" cy="48" r="1.8" className="animate-pulse" />
+            <circle cx="50" cy="48" r="1.8" opacity="0.6" className="animate-pulse [animation-delay:150ms]" />
+            <circle cx="56" cy="48" r="1.8" opacity="0.3" className="animate-pulse [animation-delay:300ms]" />
+          </g>
+        ) : mood === 'sleep' ? (
+          <ellipse cx="50" cy="48" rx="2.4" ry="1.6" fill={E} />
+        ) : mood === 'sorry' ? (
+          <path d="M45 49 Q50 45 55 49" {...line} strokeWidth="2.4" />
+        ) : (
+          <path d="M45 47 Q50 51 55 47" {...line} strokeWidth="2.4" />
+        )}
       </g>
-      <path d="M76 62 C85 64 89 70 88 76" stroke="#4a3fd1" strokeWidth="7" strokeLinecap="round" fill="none" />
-      <circle cx="88" cy="77" r="4.6" fill="#5b4fe0" />
-      {/* Feet */}
-      <ellipse cx="38" cy="99" rx="9" ry="5" fill="#3b31b4" />
-      <ellipse cx="62" cy="99" rx="9" ry="5" fill="#3b31b4" />
-      {/* Body */}
-      <path d="M50 18 C76 18 88 38 88 60 C88 84 72 99 50 99 C28 99 12 84 12 60 C12 38 24 18 50 18 Z" fill="url(#dhru-body)" />
-      <ellipse cx="50" cy="74" rx="22" ry="18" fill="url(#dhru-belly)" />
-      <ellipse cx="34" cy="32" rx="9" ry="5" fill="#fff" opacity="0.22" transform="rotate(-25 34 32)" />
-      {/* Saffron scarf */}
-      <path d="M24 74 C36 82 64 82 76 74 L74 80 C62 87 38 87 26 80 Z" fill="#ff8a1f" />
-      <path d="M64 81 L70 94 L62 92 Z" fill="#e2731a" />
-      {/* Face */}
-      {closed ? (
-        <g stroke="#17153b" strokeWidth="2.6" strokeLinecap="round" fill="none">
-          <path d="M33 51 Q38 55 43 51" />
-          <path d="M57 51 Q62 55 67 51" />
-        </g>
-      ) : happyEyes ? (
-        <g stroke="#17153b" strokeWidth="2.8" strokeLinecap="round" fill="none">
-          <path d="M33 53 Q38 46 43 53" />
-          <path d="M57 53 Q62 46 67 53" />
-        </g>
-      ) : (
-        <g>
-          <ellipse cx="38" cy="51" rx="7.5" ry="8.5" fill="#fff" />
-          <ellipse cx="62" cy="51" rx="7.5" ry="8.5" fill="#fff" />
-          <circle cx={38 + px} cy={52 + py} r="4.6" fill="#17153b" />
-          <circle cx={62 + px} cy={52 + py} r="4.6" fill="#17153b" />
-          <circle cx={39.6 + px} cy={50.2 + py} r="1.6" fill="#fff" />
-          <circle cx={63.6 + px} cy={50.2 + py} r="1.6" fill="#fff" />
-          {mood === 'sorry' && (
-            <g stroke="#17153b" strokeWidth="2" strokeLinecap="round">
-              <path d="M31 41 L42 44" />
-              <path d="M69 41 L58 44" />
-            </g>
-          )}
-        </g>
-      )}
-      <ellipse cx="29" cy="62" rx="5" ry="3" fill="#ff8aa8" opacity="0.65" />
-      <ellipse cx="71" cy="62" rx="5" ry="3" fill="#ff8aa8" opacity="0.65" />
-      {mood === 'excited' || mood === 'happy' ? (
-        <path d="M43 61 Q50 70 57 61 Q50 64 43 61 Z" fill="#17153b" />
-      ) : mood === 'sorry' ? (
-        <path d="M45 65 Q50 61 55 65" stroke="#17153b" strokeWidth="2.4" strokeLinecap="round" fill="none" />
-      ) : mood === 'thinking' ? (
-        <circle cx="53" cy="64" r="2.2" fill="#17153b" />
-      ) : mood === 'sleep' ? (
-        <ellipse cx="50" cy="64" rx="2.4" ry="1.6" fill="#17153b" />
-      ) : (
-        <path d="M44 62 Q50 67 56 62" stroke="#17153b" strokeWidth="2.4" strokeLinecap="round" fill="none" />
-      )}
+      <ellipse cx="29" cy="47" rx="3.6" ry="2.2" fill="#ff8aa8" opacity="0.55" />
+      <ellipse cx="71" cy="47" rx="3.6" ry="2.2" fill="#ff8aa8" opacity="0.55" />
+      {/* Body with the Dhrona dot */}
+      <path d="M36 66 H64 Q66 66 65.5 68 L62 84 Q61 87 58 87 H42 Q39 87 38 84 L34.5 68 Q34 66 36 66 Z" fill="url(#dhru-suit)" />
+      <circle cx="50" cy="75" r="4.2" fill="#ff8a1f" />
+      <circle cx="50" cy="75" r="1.6" fill="#fff" />
+      {/* Floating hands */}
+      <g style={{ transformOrigin: '20px 72px', transformBox: 'view-box', animation: waving ? 'dhru-wave-hand 1.3s ease-in-out' : undefined }}>
+        <ellipse cx="20" cy="73" rx="6" ry="7" fill="#f7f6ff" stroke="#dcd9f6" strokeWidth="1.2" />
+      </g>
+      <ellipse cx="80" cy="73" rx="6" ry="7" fill="#f7f6ff" stroke="#dcd9f6" strokeWidth="1.2" />
+      {/* Jet */}
+      <g className="dhru-jet" style={{ transformOrigin: '50px 89px', transformBox: 'view-box' }}>
+        <path d="M44 89 Q50 104 56 89 Z" fill="#ff8a1f" />
+        <path d="M47 89 Q50 97 53 89 Z" fill="#ffd28a" />
+      </g>
     </svg>
   );
 }

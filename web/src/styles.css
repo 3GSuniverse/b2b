@@ -427,9 +427,12 @@ tbody > tr {
 @keyframes dhru-tuft { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(8deg); } }
 @keyframes dhru-orbit { to { transform: rotate(360deg); } }
 @keyframes dhru-hop { 0%, 100% { transform: translateX(0) rotate(0); } 20% { transform: translateX(-10px) rotate(-6deg); } 40% { transform: translateX(-10px) rotate(4deg); } 70% { transform: translateX(0) rotate(-3deg); } }
+@keyframes dhru-jet { 0%, 100% { transform: scaleY(1); opacity: 0.95; } 50% { transform: scaleY(1.35); opacity: 0.65; } }
+@keyframes dhru-wave-hand { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-14px) rotate(-20deg); } 50% { transform: translateY(-10px) rotate(10deg); } 75% { transform: translateY(-14px) rotate(-20deg); } }
+.dhru-jet { animation: dhru-jet 0.35s ease-in-out infinite; }
 .dhru-float { animation: dhru-float 3.2s ease-in-out infinite; }
 .dhru-shadow { animation: dhru-shadow 3.2s ease-in-out infinite; transform-origin: center; }
 .dhru-tuft { animation: dhru-tuft 2.4s ease-in-out infinite; transform-origin: 50% 100%; transform-box: fill-box; }
 @media (prefers-reduced-motion: reduce) {
-  .dhru-float, .dhru-shadow, .dhru-tuft { animation: none; }
+  .dhru-float, .dhru-shadow, .dhru-tuft, .dhru-jet { animation: none; }
 }
