@@ -95,14 +95,14 @@ export async function useAi(tenantId: string) {
   const [{ used } = { used: 0 }] = await db
     .select({ used: count() })
     .from(auditLogs)
-    .where(and(eq(auditLogs.tenantId, tenantId), inArray(auditLogs.action, ['ai.reply', 'ai.draft']), gte(auditLogs.createdAt, new Date(Date.now() - 86_400_000))));
+    .where(and(eq(auditLogs.tenantId, tenantId), inArray(auditLogs.action, ['ai.reply', 'ai.draft', 'ai.buddy']), gte(auditLogs.createdAt, new Date(Date.now() - 86_400_000))));
   if (used >= limit) throw new AppError(429, 'ai_limit', `You’ve used today’s ${limit} Drona AI answers. More tomorrow.`);
   // A ceiling on the whole server's AI bill, whatever the plans allow
   if (env.AI_GLOBAL_PER_DAY) {
     const [{ all } = { all: 0 }] = await db
       .select({ all: count() })
       .from(auditLogs)
-      .where(and(inArray(auditLogs.action, ['ai.reply', 'ai.draft']), gte(auditLogs.createdAt, new Date(Date.now() - 86_400_000))));
+      .where(and(inArray(auditLogs.action, ['ai.reply', 'ai.draft', 'ai.buddy']), gte(auditLogs.createdAt, new Date(Date.now() - 86_400_000))));
     if (all >= env.AI_GLOBAL_PER_DAY) throw new AppError(503, 'ai_busy', 'Drona AI is very busy right now. Try again in a little while.');
   }
   return { limit, used };

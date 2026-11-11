@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Dhru } from './dhru';
 import { Building2, ChevronDown, Clock3, Headset, KeyRound, Mail, FileText, LayoutDashboard, LogOut, Megaphone, Menu as MenuIcon, MessageCircle, MessageSquarePlus, PhoneCall, Plane, Plus, Repeat2, Search, Settings, UserPlus, Users } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -438,6 +439,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
         </div>
       </div>
       <CommandPalette open={palette} onOpenChange={setPalette} />
+      <Dhru />
       <Sheet open={mobileNav} onOpenChange={setMobileNav} title={<Logo />} width="max-w-[300px]" tone="nav">
         <div className="flex h-full flex-col gap-6">
           <NavItems onNavigate={() => setMobileNav(false)} />
