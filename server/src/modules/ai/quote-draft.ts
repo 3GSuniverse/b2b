@@ -20,12 +20,24 @@ export interface AiClient {
   complete(input: { system: string; prompt: string; maxTokens: number; model?: string; think?: number }): Promise<string>;
 }
 
+/** A request to the AI service. Network failures and timeouts become a clear message instead of "Something went wrong". */
+async function aiFetch(url: string, init: RequestInit) {
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    const e = err as Error & { cause?: { code?: string } };
+    const why = e.name === 'TimeoutError' ? 'it took too long to answer' : (e.cause?.code ?? e.message);
+    console.error(`[ai] couldn't reach ${new URL(url).host}:`, e.cause ?? e);
+    throw new AppError(502, 'ai_unreachable', `Couldn’t reach the AI service (${why}). Try again in a moment.`);
+  }
+}
+
 const anthropic: AiClient = {
   async complete({ system, prompt, maxTokens, model, think }) {
     // Claude's extended thinking needs at least 1,024 tokens of budget
     const budget = think && think >= 1024 ? think : 0;
     const thinking = budget ? { thinking: { type: 'enabled', budget_tokens: budget } } : {};
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await aiFetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model: model ?? env.AI_MODEL ?? 'claude-sonnet-5-5', max_tokens: maxTokens + budget, ...thinking, system, messages: [{ role: 'user', content: prompt }] }),
@@ -42,7 +54,7 @@ const openai: AiClient = {
     const model = wanted ?? env.AI_MODEL ?? 'gpt-5-mini';
     // GPT-5 and o-series models think before answering; that thinking counts toward the token limit
     const reasoning = /^(gpt-5|o\d)/.test(model);
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    const res = await aiFetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${env.OPENAI_API_KEY!}` },
       body: JSON.stringify({
@@ -66,7 +78,7 @@ const openai: AiClient = {
 async function geminiCall(url: string, headers: Record<string, string>, { system, prompt, maxTokens, model, think }: { system: string; prompt: string; maxTokens: number; model: string; think?: number }) {
   // 2.5 models bill thinking as output: off unless asked for, then capped at the budget given
   const thinking = /^gemini-2\.5/.test(model) ? { thinkingConfig: { thinkingBudget: think ?? 0 } } : {};
-  const res = await fetch(url, {
+  const res = await aiFetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify({
