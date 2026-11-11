@@ -17,10 +17,11 @@ import { cn } from '@/lib/cn';
 import { ago, dateRange, dateTime, inr, phone as fmtPhone, tripLength } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import type { PaymentMethod, TripDetail, TripStatus } from '@/lib/types';
+import { tx } from '../lib/words';
 
 // ---------------------------------------------------------------- Status changes
 
-const LOST_REASONS = ['Price too high', 'Booked with another agency', 'Plans changed', 'Stopped replying'];
+const LOST_REASONS = ['Price too high', tx('Booked with another agency'), 'Plans changed', 'Stopped replying'];
 const CANCEL_REASONS = ['Family emergency', 'Health reasons', 'Dates changed', 'Travel advisory'];
 
 function ReasonDialog({ trip, to, onClose, onDone }: { trip: TripDetail; to: 'LOST' | 'CANCELLED' | null; onClose: () => void; onDone: (t: TripDetail) => void }) {
@@ -28,7 +29,7 @@ function ReasonDialog({ trip, to, onClose, onDone }: { trip: TripDetail; to: 'LO
   const m = useMutation({
     mutationFn: () => api.patch<{ trip: TripDetail }>(`/api/trips/${trip.id}`, { status: to, lostReason: reason.trim() || null }),
     onSuccess: ({ trip: t }) => {
-      toast.success(to === 'LOST' ? 'Marked as lost' : 'Trip cancelled');
+      toast.success(to === 'LOST' ? 'Marked as lost' : tx('Trip cancelled'));
       setReason('');
       onDone(t);
     },
@@ -39,23 +40,23 @@ function ReasonDialog({ trip, to, onClose, onDone }: { trip: TripDetail; to: 'LO
     <Dialog
       open={!!to}
       onOpenChange={(o) => !o && onClose()}
-      title={to === 'LOST' ? 'Mark this enquiry as lost?' : 'Cancel this trip?'}
+      title={to === 'LOST' ? 'Mark this enquiry as lost?' : tx('Cancel this trip?')}
       description={
         to === 'LOST'
           ? 'It leaves the board. You can reopen it any time.'
-          : `Reminders for this trip stop.${trip.money.paid > 0 ? ` ${inr(trip.money.paid)} has been received; settle any refund with the customer and record it in the notes.` : ''}`
+          : tx(`Reminders for this trip stop.${trip.money.paid > 0 ? ` ${inr(trip.money.paid)} has been received; settle any refund with the customer and record it in the notes.` : ''}`)
       }
       footer={
         <>
           <Button onClick={onClose}>Go back</Button>
           <Button variant={to === 'CANCELLED' ? 'danger' : 'primary'} loading={m.isPending} onClick={() => m.mutate()}>
-            {to === 'LOST' ? 'Mark as lost' : 'Cancel trip'}
+            {to === 'LOST' ? 'Mark as lost' : tx('Cancel trip')}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
-        <Field label="Reason" hint="Optional. Helps you see why trips are lost.">
+        <Field label="Reason" hint={tx("Optional. Helps you see why trips are lost.")}>
           {(p) => <Input {...p} autoFocus value={reason} onChange={(e) => setReason(e.target.value)} />}
         </Field>
         <div className="flex flex-wrap gap-2">
@@ -130,7 +131,7 @@ function StatusActions({ trip, onChange, onAsk }: { trip: TripDetail; onChange: 
           )}
           {canCancel && (
             <MenuItem danger icon={<X />} onSelect={() => onAsk('CANCELLED')}>
-              Cancel trip…
+              {tx("Cancel trip…")}
             </MenuItem>
           )}
         </Menu>
@@ -196,15 +197,15 @@ function CustomerPanel({ trip }: { trip: TripDetail }) {
 
 function DetailsPanel({ trip, onEdit }: { trip: TripDetail; onEdit: () => void }) {
   const rows = [
-    { icon: MapPin, label: 'Destination', value: trip.destination, empty: 'Destination not set' },
+    { icon: MapPin, label: tx("Destination"), value: trip.destination, empty: tx("Destination not set") },
     { icon: CalendarDays, label: 'Dates', value: dateRange(trip.startDate, trip.endDate) && `${dateRange(trip.startDate, trip.endDate)}${tripLength(trip.startDate, trip.endDate) ? ` · ${tripLength(trip.startDate, trip.endDate)}` : ''}`, empty: 'Dates not set' },
-    { icon: Users, label: 'Travellers', value: travellers(trip), empty: '' },
-    { icon: Wallet, label: 'Their budget', value: trip.budget ? `Budget ${inr(trip.budget)}` : null, empty: 'Budget not given' },
+    { icon: Users, label: tx("Travellers"), value: travellers(trip), empty: '' },
+    { icon: Wallet, label: 'Their budget', value: trip.budget ? tx(`Budget ${inr(trip.budget)}`) : null, empty: 'Budget not given' },
   ];
   return (
     <Panel className="flex flex-col gap-4 p-5">
       <PanelHeader
-        title="Trip"
+        title={tx("Trip")}
         action={
           <Button size="sm" variant="ghost" onClick={onEdit}>
             <Pencil className="h-3.5 w-3.5" />
@@ -225,7 +226,7 @@ function DetailsPanel({ trip, onEdit }: { trip: TripDetail; onEdit: () => void }
         <Link to={`/trips/packages/${trip.package.id}`} className="flex items-center gap-2.5 rounded-[12px] bg-accent-soft px-3 py-2.5 text-[13px] text-accent-strong hover:underline">
           <PackageIcon className="h-4 w-4 shrink-0" aria-hidden />
           <span className="min-w-0 truncate">
-            Package: <span className="font-semibold">{trip.package.name}</span>
+            {tx("Package:")} <span className="font-semibold">{trip.package.name}</span>
           </span>
         </Link>
       )}
@@ -267,7 +268,7 @@ function describe(a: TripDetail['activity'][number]) {
       return { created: `Quote${v} started`, sent: `Quote${v} sent${m.via === 'EMAIL' ? ' by email' : ''} · ${m.total}`, accepted: `Customer accepted quote${v} · ${m.total}`, declined: `Customer asked for changes to quote${v}${m.note ? `: “${m.note}”` : ''}` }[m.step as string] ?? 'Quote updated';
     }
     case 'trip.followup':
-      return `${{ PRE_TRIP: '“Trip starts soon” message', REVIEW: 'Review request', WHERE_NEXT: '“Where next?” message', QUOTE_FOLLOWUP: 'Quote follow-up' }[m.kind as string] ?? 'Message'} sent by ${m.channel === 'WHATSAPP' ? 'WhatsApp' : 'email'}`;
+      return tx(`${{ PRE_TRIP: '“Trip starts soon” message', REVIEW: 'Review request', WHERE_NEXT: '“Where next?” message', QUOTE_FOLLOWUP: 'Quote follow-up' }[m.kind as string] ?? 'Message'} sent by ${m.channel === 'WHATSAPP' ? 'WhatsApp' : 'email'}`);
     case 'trip.reminder':
       return `Payment reminder sent for ${m.label} by ${m.channel === 'WHATSAPP' ? 'WhatsApp' : 'email'}`;
     default:
@@ -317,7 +318,7 @@ export function TripPage() {
     mutationFn: (to: TripStatus) => api.patch<{ trip: TripDetail }>(`/api/trips/${id}`, { status: to }),
     onSuccess: ({ trip }) => {
       update(trip);
-      toast.success(`Marked as ${STATUS[trip.status].label.toLowerCase()}`);
+      toast.success(tx(`Marked as ${STATUS[trip.status].label.toLowerCase()}`));
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -325,7 +326,7 @@ export function TripPage() {
     mutationFn: () => api.del(`/api/trips/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['trips'] });
-      toast.success('Trip deleted');
+      toast.success(tx("Trip deleted"));
       nav('/trips');
     },
     onError: (e: Error) => {
@@ -337,9 +338,9 @@ export function TripPage() {
   if (q.isError) {
     return (
       <Panel className="p-10 text-center">
-        <p className="text-sm text-muted">This trip doesn’t exist, or it belongs to another company.</p>
+        <p className="text-sm text-muted">{tx("This trip doesn’t exist, or it belongs to another company.")}</p>
         <Link to="/trips" className="mt-3 inline-block text-sm font-semibold text-accent hover:underline">
-          Back to trips
+          {tx("Back to trips")}
         </Link>
       </Panel>
     );
@@ -362,7 +363,7 @@ export function TripPage() {
       <header className="flex flex-col gap-4">
         <Link to="/trips" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
           <ArrowLeft className="h-4 w-4" aria-hidden />
-          Trips
+          {tx("Trips")}
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-2">
@@ -372,7 +373,7 @@ export function TripPage() {
             </h1>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-muted">
               <TripStatusBadge status={trip.status} />
-              {[trip.customer.name, dateRange(trip.startDate, trip.endDate), trip.statusChangedAt && `${STATUS[trip.status].label} ${ago(trip.statusChangedAt)}`]
+              {[trip.customer.name, dateRange(trip.startDate, trip.endDate), trip.statusChangedAt && tx(`${STATUS[trip.status].label} ${ago(trip.statusChangedAt)}`)]
                 .filter(Boolean)
                 .join(' · ')}
             </div>
@@ -392,7 +393,7 @@ export function TripPage() {
               </MenuItem>
               {user.role !== 'MEMBER' && (
                 <MenuItem danger icon={<Trash2 />} onSelect={() => setDeleting(true)}>
-                  Delete trip
+                  {tx("Delete trip")}
                 </MenuItem>
               )}
             </Menu>
@@ -443,14 +444,14 @@ export function TripPage() {
       <Dialog
         open={deleting}
         onOpenChange={setDeleting}
-        title={`Delete #${trip.number} ${trip.title}?`}
-        description={trip.payments.length ? 'This trip has payments recorded, so it can’t be deleted. Cancel it instead.' : 'The enquiry and its schedule are removed for good. The customer stays in your customers list.'}
+        title={tx(`Delete #${trip.number} ${trip.title}?`)}
+        description={trip.payments.length ? tx('This trip has payments recorded, so it can’t be deleted. Cancel it instead.') : 'The enquiry and its schedule are removed for good. The customer stays in your customers list.'}
         footer={
           <>
             <Button onClick={() => setDeleting(false)}>Keep it</Button>
             {!trip.payments.length && (
               <Button variant="danger" loading={del.isPending} onClick={() => del.mutate()}>
-                Delete trip
+                {tx("Delete trip")}
               </Button>
             )}
           </>

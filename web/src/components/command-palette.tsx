@@ -8,6 +8,7 @@ import { api, qs } from '@/lib/api';
 import type { Campaign, Contact, TripSummary } from '@/lib/types';
 import { useSession } from '@/lib/session';
 import { Avatar, Kbd } from './ui/display';
+import { tx } from '../lib/words';
 
 function Item({ onSelect, icon, children, hint, value }: { onSelect: () => void; icon: ReactNode; children: ReactNode; hint?: ReactNode; value?: string }) {
   return (
@@ -69,20 +70,20 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(23_21_59/0.32)] backdrop-blur-[2px] animate-in data-[state=closed]:animate-out" />
         <DialogPrimitive.Content className="fixed left-1/2 top-[12vh] z-50 w-[calc(100vw-32px)] max-w-xl -translate-x-1/2 overflow-hidden rounded-[18px] border border-line bg-surface shadow-[var(--shadow-pop)] animate-pop data-[state=closed]:animate-pop-out focus:outline-none">
           <DialogPrimitive.Title className="sr-only">Search and commands</DialogPrimitive.Title>
-          <DialogPrimitive.Description className="sr-only">Type to find pages, customers, trips and broadcasts</DialogPrimitive.Description>
+          <DialogPrimitive.Description className="sr-only">{tx("Type to find pages, customers, trips and broadcasts")}</DialogPrimitive.Description>
           <Command label="Search and commands" shouldFilter={true} loop>
             <div className="flex items-center gap-3 border-b border-line-soft px-4">
               <Search className="h-4 w-4 text-muted" aria-hidden />
               <Command.Input
                 value={search}
                 onValueChange={setSearch}
-                placeholder="Search customers, trips, broadcasts, or type a command…"
+                placeholder={tx("Search customers, trips, broadcasts, or type a command…")}
                 className="h-14 flex-1 bg-transparent text-[15px] outline-none placeholder:text-faint"
               />
               <Kbd>Esc</Kbd>
             </div>
             <Command.List className="h-[calc(var(--cmdk-list-height)+16px)] max-h-[min(60vh,440px)] overflow-y-auto p-2 transition-[height] duration-200 ease-out">
-              <Command.Empty className="px-3 py-8 text-center text-sm text-muted">No matches. Try a name, a phone number, a trip number or a page.</Command.Empty>
+              <Command.Empty className="px-3 py-8 text-center text-sm text-muted">{tx("No matches. Try a name, a phone number, a trip number or a page.")}</Command.Empty>
 
               <Command.Group heading="Actions" className={groupClass}>
                 <Item icon={<MessageSquarePlus />} onSelect={() => go('/trips?new=1')}>New enquiry</Item>
@@ -99,7 +100,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 <Item icon={<LayoutDashboard />} onSelect={() => go('/')}>Home</Item>
                 <Item icon={<Mail />} onSelect={() => go('/email')}>Email</Item>
                 <Item icon={<MessageCircle />} onSelect={() => go('/whatsapp')}>WhatsApp</Item>
-                <Item icon={<Plane />} onSelect={() => go('/trips')}>Trips</Item>
+                <Item icon={<Plane />} onSelect={() => go('/trips')}>{tx("Trips")}</Item>
                 <Item icon={<Users />} onSelect={() => go('/contacts')}>Customers</Item>
                 <Item icon={<Megaphone />} onSelect={() => go('/email/broadcasts')}>Email broadcasts</Item>
                 <Item icon={<Megaphone />} onSelect={() => go('/whatsapp/broadcasts')}>WhatsApp broadcasts</Item>
@@ -107,13 +108,13 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 <Item icon={<Clock3 />} onSelect={() => go('/whatsapp/automatic')}>Automatic WhatsApp messages</Item>
                 <Item icon={<FileText />} onSelect={() => go('/email/templates')}>Email designs</Item>
                 <Item icon={<Smartphone />} onSelect={() => go('/whatsapp/setup')}>Linked WhatsApp number</Item>
-                {user.role === 'OWNER' && <Item icon={<Building2 />} onSelect={() => go('/agency')}>Agency</Item>}
+                {user.role === 'OWNER' && <Item icon={<Building2 />} onSelect={() => go('/agency')}>{tx("Agency")}</Item>}
                 {user.role === 'OWNER' && <Item icon={<CreditCard />} onSelect={() => go('/agency/billing')}>Plan & billing</Item>}
                 {user.role !== 'MEMBER' && <Item icon={<Settings />} onSelect={() => go('/settings/company')}>Settings</Item>}
               </Command.Group>
 
               {!!trips.data?.trips.length && (
-                <Command.Group heading="Trips" className={groupClass}>
+                <Command.Group heading={tx("Trips")} className={groupClass}>
                   {trips.data.trips.map((t) => (
                     <Item key={t.id} value={`trip ${t.number} ${t.title} ${t.customer.name} ${t.destination ?? ''}`} icon={<Plane />} onSelect={() => go(`/trips/${t.id}`)} hint={`#${t.number}`}>
                       {t.title}, {t.customer.name}

@@ -9,6 +9,7 @@ import { sanitizeRupees } from '@/components/trips/shared';
 import { api, ApiError } from '@/lib/api';
 import { inr, rupeesInput } from '@/lib/format';
 import type { Package, PackageDetail } from '@/lib/types';
+import { tx } from '../../lib/words';
 
 export function usePackages() {
   return useQuery({ queryKey: ['packages'], queryFn: () => api.get<{ packages: Package[] }>('/api/packages').then((r) => r.packages), staleTime: 60_000 });
@@ -24,7 +25,7 @@ export function PackageSelect({ value, onChange, id, ...rest }: { value: string;
       value={value}
       onChange={(e) => onChange(e.target.value, q.data?.find((p) => p.id === e.target.value) ?? null)}
     >
-      <option value="">No package (custom trip)</option>
+      <option value="">{tx("No package (custom trip)")}</option>
       {(q.data ?? []).map((p) => (
         <option key={p.id} value={p.id}>
           {p.name} · {inr(p.pricePerAdult)}/adult
@@ -67,7 +68,7 @@ export function PackageSheet({ pkg, open, onClose, onSaved }: { pkg: PackageDeta
     },
     onSuccess: ({ package: p }) => {
       qc.invalidateQueries({ queryKey: ['packages'] });
-      toast.success(pkg ? 'Package saved' : 'Package added');
+      toast.success(pkg ? tx('Package saved') : tx('Package added'));
       onSaved(p);
     },
   });
@@ -87,14 +88,14 @@ export function PackageSheet({ pkg, open, onClose, onSaved }: { pkg: PackageDeta
     <Sheet
       open={open}
       onOpenChange={(o) => !o && onClose()}
-      title={pkg ? `Edit ${pkg.name}` : 'New package'}
-      description="A trip you sell again and again. Choose it on an enquiry and the price, dates and quote fill in."
+      title={pkg ? `Edit ${pkg.name}` : tx('New package')}
+      description={tx("A trip you sell again and again. Choose it on an enquiry and the price, dates and quote fill in.")}
       width="max-w-[640px]"
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
-            {pkg ? 'Save package' : 'Add package'}
+            {pkg ? tx('Save package') : tx('Add package')}
           </Button>
         </>
       }
@@ -110,14 +111,14 @@ export function PackageSheet({ pkg, open, onClose, onSaved }: { pkg: PackageDeta
           {(p) => <Input {...p} autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Kerala 4N/5D" />}
         </Field>
         <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-4">
-          <Field label="Destination" error={err('destination')}>
+          <Field label={tx("Destination")} error={err('destination')}>
             {(p) => <Input {...p} value={f.destination} onChange={(e) => setF({ ...f, destination: e.target.value })} placeholder="Kerala" />}
           </Field>
           <Field label="Nights" error={err('nights')}>
             {(p) => <Input {...p} type="number" min={0} max={60} value={f.nights} onChange={(e) => setF({ ...f, nights: e.target.value })} />}
           </Field>
         </div>
-        <Field label="In one line" hint="Shown on quotes and in the package list." error={err('summary')}>
+        <Field label="In one line" hint={tx("Shown on quotes and in the package list.")} error={err('summary')}>
           {(p) => <Input {...p} value={f.summary} onChange={(e) => setF({ ...f, summary: e.target.value })} placeholder="Munnar hills, a night on an Alleppey houseboat, and Kochi" />}
         </Field>
         <div className="grid gap-4 sm:grid-cols-3">

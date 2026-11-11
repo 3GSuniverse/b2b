@@ -122,7 +122,7 @@ export async function publicPaymentRoutes(app: FastifyInstance) {
     const m = tripMoney({ price: trip.price, dues: trip.dues as DueInput[], payments: trip.payments }, today);
     const first = trip.contact?.firstName ?? trip.customerName.split(' ')[0];
     const contactPhone = s.contactPhone;
-    const brand = `<div class="brand"><span>${e(tenant.name)}</span><small>Trip #${trip.number}</small></div>`;
+    const brand = `<div class="brand"><span>${e(tenant.name)}</span><small>${tenant.businessType === 'TRAVEL' ? 'Trip' : 'Order'} #${trip.number}</small></div>`;
     const head = `<div class="card"><h1>${e(trip.title)}</h1><div class="meta">${[e(first ? `For ${trip.customerName}` : ''), e(range(trip.startDate, trip.endDate)), `${trip.adults + trip.children} traveller${trip.adults + trip.children === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}</div></div>`;
 
     if (trip.status === 'LOST' || trip.status === 'CANCELLED') {
@@ -134,9 +134,9 @@ export async function publicPaymentRoutes(app: FastifyInstance) {
     const dueClass = m.overdue > 0 ? 'overdue' : nowPaise === 0 && m.price > 0 ? 'paid' : '';
     let dueCard: string;
     if (m.price > 0 && m.balance <= 0) {
-      dueCard = `<div class="card paid"><div class="due-label">All paid</div><div class="amount">${formatInr(m.paid)}</div><div class="meta">Received in full. Thank you, and have a wonderful trip!</div></div>`;
+      dueCard = `<div class="card paid"><div class="due-label">All paid</div><div class="amount">${formatInr(m.paid)}</div><div class="meta">Received in full. Thank you${tenant.businessType === 'TRAVEL' ? ', and have a wonderful trip' : ''}!</div></div>`;
     } else if (nowPaise === 0) {
-      dueCard = `<div class="card"><div class="due-label">Nothing to pay right now</div><div class="meta">${e(tenant.name)} will let you know the amount once your trip is confirmed.</div></div>`;
+      dueCard = `<div class="card"><div class="due-label">Nothing to pay right now</div><div class="meta">${e(tenant.name)} will let you know the amount once your ${tenant.businessType === 'TRAVEL' ? 'trip' : 'order'} is confirmed.</div></div>`;
     } else {
       const label = m.overdue > 0 ? 'Overdue' : m.nextDue ? `${m.nextDue.label} · due ${d(m.nextDue.dueDate)}` : 'Balance';
       let pay = '';
@@ -203,7 +203,7 @@ export async function publicPaymentRoutes(app: FastifyInstance) {
     <dt>Paid by</dt><dd>${METHOD[p.method]}${p.reference ? `<br><span style="color:var(--muted);font-size:13px">${e(p.reference)}</span>` : ''}</dd>
   </dl>
   <div class="box"><div class="due-label">Amount received</div><div class="amount" style="font-size:32px">${formatInr(p.amount)}</div><div class="words">${rupeesInWords(p.amount)}</div></div>
-  ${m.price > 0 ? `<dl><dt>Trip total</dt><dd>${formatInr(m.price)}</dd><dt>Paid so far</dt><dd>${formatInr(m.paid)}</dd><dt>Balance today</dt><dd style="font-weight:600">${formatInr(Math.max(0, m.balance))}</dd></dl>` : ''}
+  ${m.price > 0 ? `<dl><dt>${tenant.businessType === 'TRAVEL' ? 'Trip' : 'Order'} total</dt><dd>${formatInr(m.price)}</dd><dt>Paid so far</dt><dd>${formatInr(m.paid)}</dd><dt>Balance today</dt><dd style="font-weight:600">${formatInr(Math.max(0, m.balance))}</dd></dl>` : ''}
   <p class="note">This is a payment receipt, not a tax invoice.</p>
 </div>
 <div class="stack noprint"><button class="btn" type="button" data-print>Print or save as PDF</button><a class="btn secondary" href="/p/${trip.publicToken}">See your trip and payments</a></div>`;

@@ -6,11 +6,12 @@ import { DispatchPanel } from '@/components/auth/dispatch-panel';
 import { Logo } from '@/components/shell';
 import { Button } from '@/components/ui/button';
 import { Segmented } from '@/components/ui/controls';
-import { Field, Input } from '@/components/ui/field';
+import { Field, Input, NativeSelect } from '@/components/ui/field';
 import { api, ApiError } from '@/lib/api';
 import { BRAND } from '@/lib/brand';
 import { takeoff } from '@/lib/celebrate';
 import type { Me } from '@/lib/types';
+import { BUSINESS_TYPES } from '@/lib/words';
 
 function PasswordInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const [show, setShow] = useState(false);
@@ -197,17 +198,19 @@ export function SignInPage() {
 
 export function SignUpPage() {
   const done = useAfterAuth();
-  const [form, setForm] = useState({ companyName: '', name: '', email: '', password: '' });
+  const [form, setForm] = useState({ companyName: '', businessType: 'TRAVEL', name: '', email: '', password: '' });
+  const travel = form.businessType === 'TRAVEL';
+  const noun = travel ? 'agency' : 'business';
   const m = useMutation({ mutationFn: () => api.post<Me>('/api/auth/signup', form), onSuccess: done });
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
   const submit = (e: FormEvent) => {
     e.preventDefault();
     m.mutate();
   };
   return (
     <AuthLayout
-      title="Set up your agency"
-      subtitle={`Create the agency owner’s login. You’ll add your employees next. ${BRAND.trialDays} days free, no card needed.`}
+      title={`Set up your ${noun}`}
+      subtitle={`Create the ${noun} owner’s login. You’ll add your employees next. ${BRAND.trialDays} days free, no card needed.`}
       footer={
         <>
           Already have an account? <Link to="/signin" className="font-semibold text-accent hover:text-accent-strong">Sign in</Link>
@@ -216,8 +219,19 @@ export function SignUpPage() {
     >
       <form onSubmit={submit} className="flex flex-col gap-5" noValidate>
         <FormError error={m.error} />
-        <Field label="Agency name" error={fieldErr(m.error, 'companyName')}>
-          {(p) => <Input {...p} autoComplete="organization" autoFocus value={form.companyName} onChange={set('companyName')} placeholder="Kurukshetra Travels" />}
+        <Field label="What kind of business is it?" error={fieldErr(m.error, 'businessType')}>
+          {(p) => (
+            <NativeSelect {...p} value={form.businessType} onChange={set('businessType')}>
+              {BUSINESS_TYPES.map((b) => (
+                <option key={b.value} value={b.value}>
+                  {b.label}
+                </option>
+              ))}
+            </NativeSelect>
+          )}
+        </Field>
+        <Field label={travel ? 'Agency name' : 'Business name'} error={fieldErr(m.error, 'companyName')}>
+          {(p) => <Input {...p} autoComplete="organization" autoFocus value={form.companyName} onChange={set('companyName')} placeholder={travel ? 'Kurukshetra Travels' : 'Your business name'} />}
         </Field>
         <Field label="Your name" error={fieldErr(m.error, 'name')}>
           {(p) => <Input {...p} autoComplete="name" value={form.name} onChange={set('name')} />}
@@ -229,7 +243,7 @@ export function SignUpPage() {
           {(p) => <PasswordInput {...p} autoComplete="new-password" value={form.password} onChange={set('password')} />}
         </Field>
         <Button type="submit" variant="primary" size="lg" loading={m.isPending} className="mt-1 w-full">
-          Create agency
+          {travel ? 'Create agency' : 'Create business'}
         </Button>
         <p className="-mt-1 text-center text-xs leading-relaxed text-muted">
           By starting a trial you agree to the <Link to="/terms" className="font-medium text-ink-2 underline underline-offset-2 hover:text-ink">Terms</Link> and{' '}

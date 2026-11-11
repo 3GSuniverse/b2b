@@ -190,6 +190,13 @@
       "when": 1794383729357,
       "tag": "0026_automations_notifications_per_employee",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794384347568,
+      "tag": "0027_business_type",
+      "breakpoints": true
     }
   ]
 }

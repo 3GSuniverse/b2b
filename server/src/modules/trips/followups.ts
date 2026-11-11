@@ -183,6 +183,7 @@ export async function runTripFollowups(
     .where(
       and(
         eq(tenants.status, 'ACTIVE'),
+        eq(tenants.businessType, 'TRAVEL'), // pre-trip, review and where-next messages are for travel agencies
         or(
           sql`(${tenants.tripMessageSettings} -> 'preTrip' ->> 'enabled')::boolean`,
           sql`(${tenants.tripMessageSettings} -> 'review' ->> 'enabled')::boolean`,

@@ -17,6 +17,7 @@ import { Button, LinkButton } from './ui/button';
 import { Field, Input } from './ui/field';
 import { Avatar, Badge, Kbd, ProgressBar } from './ui/display';
 import { Dialog, Menu, MenuItem, MenuSeparator, Sheet, Tooltip } from './ui/overlay';
+import { tx } from '../lib/words';
 
 // The sidebar: home, the two master tabs (Email, WhatsApp), the day-to-day work, then the agency
 type Role = 'OWNER' | 'ADMIN' | 'MEMBER';
@@ -25,9 +26,9 @@ const NAV: NavDef[] = [
   { to: '/', label: 'Home', icon: LayoutDashboard, end: true, anim: 'nav-pop' },
   { to: '/email', label: 'Email', icon: Mail, group: 'Send to customers', anim: 'nav-shout', also: ['/templates'], section: 'email', dot: '#8f86ff' },
   { to: '/whatsapp', label: 'WhatsApp', icon: MessageCircle, anim: 'nav-wiggle', section: 'whatsapp', dot: '#25c48a' },
-  { to: '/trips', label: 'Trips', icon: Plane, group: 'Your work', anim: 'nav-fly', also: ['/groups'] },
+  { to: '/trips', label: tx("Trips"), icon: Plane, group: 'Your work', anim: 'nav-fly', also: ['/groups'] },
   { to: '/contacts', label: 'Customers', icon: Users, anim: 'nav-hop' },
-  { to: '/agency', label: 'Agency', icon: Building2, group: 'Your agency', anim: 'nav-pop', roles: ['OWNER'] },
+  { to: '/agency', label: tx("Agency"), icon: Building2, group: tx('Your agency'), anim: 'nav-pop', roles: ['OWNER'] },
   { to: '/settings', label: 'Settings', icon: Settings, anim: 'nav-spin', roles: ['OWNER', 'ADMIN'] },
 ];
 
@@ -69,7 +70,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   }).data?.chats;
   const nav = NAV.filter((x) => !x.roles || x.roles.includes(user.role as Role));
   // The agency group needs a heading only when it has something in it
-  const groups = nav.map((x, i) => (x.roles && !nav.slice(0, i).some((y) => y.roles) ? { ...x, group: 'Your agency' } : x));
+  const groups = nav.map((x, i) => (x.roles && !nav.slice(0, i).some((y) => y.roles) ? { ...x, group: tx('Your agency') } : x));
   const { pathname } = useLocation();
   // The highlight slides from item to item instead of jumping
   const { ref, box, animate } = useSlidingIndicator<HTMLElement>('[data-lit=true]', 'y', [pathname, section]);
@@ -104,7 +105,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
             {group && <span className="px-3 pb-1 pt-4 text-[12px] font-semibold text-nav-muted">{group}</span>}
             <NavLink to={to} end={end} onClick={onNavigate} data-lit={lit} className={item(lit)}>
               <Icon className={cn(icon, anim, lit && 'text-highlight')} aria-hidden />
-              {label}
+              {tx(label)}
               {to === '/whatsapp' && waUnread ? (
                 <span className="tnum ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-[#25c48a] px-1.5 text-[11px] font-bold text-white" aria-label={`${waUnread} unread`}>
                   {waUnread}
@@ -169,10 +170,10 @@ function AccountMenu() {
     >
       <div className="px-2.5 py-2">
         <p className="text-[13px] font-semibold">{user.name}</p>
-        <p className="text-xs text-muted">{user.role === 'OWNER' ? `Agency owner · ${user.email}` : `@${user.username} at ${tenant.loginCode}`}</p>
+        <p className="text-xs text-muted">{user.role === 'OWNER' ? tx(`Agency owner · ${user.email}`) : `@${user.username} at ${tenant.loginCode}`}</p>
       </div>
       <MenuSeparator />
-      {user.role === 'OWNER' && <MenuItem icon={<Building2 />} onSelect={() => nav('/agency')}>Agency, logins and plan</MenuItem>}
+      {user.role === 'OWNER' && <MenuItem icon={<Building2 />} onSelect={() => nav('/agency')}>{tx("Agency, logins and plan")}</MenuItem>}
       {user.role !== 'MEMBER' && <MenuItem icon={<Settings />} onSelect={() => nav('/settings/company')}>Settings</MenuItem>}
       <MenuItem icon={<Headset />} onSelect={() => nav(careLink(loc.pathname))}>Contact customer care</MenuItem>
       <MenuSeparator />
@@ -248,7 +249,7 @@ function Sidebar() {
 function CreateMenu() {
   const nav = useNavigate();
   const items = [
-    { icon: <MessageSquarePlus />, label: 'New enquiry', note: 'A trip someone asked about', to: '/trips?new=1' },
+    { icon: <MessageSquarePlus />, label: 'New enquiry', note: tx("A trip someone asked about"), to: '/trips?new=1' },
     { icon: <Mail />, label: 'Email broadcast', note: 'One email to many customers', to: '/campaigns/new' },
     { icon: <MessageCircle />, label: 'WhatsApp broadcast', note: 'One WhatsApp message to many customers', to: '/campaigns/new?channel=WHATSAPP' },
     { icon: <Repeat2 />, label: 'Automatic message', note: 'Birthdays, anniversaries, any date', to: '/automations?new=1' },
@@ -320,7 +321,7 @@ function TopBar({ onSearch, onMenu }: { onSearch: () => void; onMenu: () => void
         className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[var(--radius-control)] border border-line bg-surface px-3.5 text-left text-sm text-faint hover:border-[#cfcde6] sm:max-w-80"
       >
         <Search className="h-4 w-4 shrink-0 text-muted" aria-hidden />
-        <span className="min-w-0 flex-1 truncate">Search customers, trips, broadcasts…</span>
+        <span className="min-w-0 flex-1 truncate">{tx("Search customers, trips, broadcasts…")}</span>
         <span className="hidden sm:inline">
           <Kbd>{isMac ? '⌘' : 'Ctrl'} K</Kbd>
         </span>
@@ -347,7 +348,7 @@ export function TrialBanner() {
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <strong className="text-[15px] font-semibold">{p.planId ? 'Your plan has ended' : 'Your free trial has ended'}</strong>
           <span className="text-[13px] text-white/70">
-            {p.planId ? 'Sending is off until you renew.' : 'Sending is off and WhatsApp has been unlinked.'} Your customers, trips, templates and reports are safe.{' '}
+            {p.planId ? 'Sending is off until you renew.' : 'Sending is off and WhatsApp has been unlinked.'} {tx("Your customers, trips, templates and reports are safe.")}{' '}
             {owner ? `${p.planId ? 'Renew' : 'Choose a plan'} to pick up where you left off.` : ''}
           </span>
         </div>
@@ -356,7 +357,7 @@ export function TrialBanner() {
             {p.planId ? 'Renew' : 'Choose a plan'}
           </Link>
         ) : (
-          <span className="text-[13px] font-semibold text-white/85">Ask your agency owner to {p.planId ? 'renew' : 'choose a plan'}.</span>
+          <span className="text-[13px] font-semibold text-white/85">{tx("Ask your agency owner to")} {p.planId ? 'renew' : 'choose a plan'}.</span>
         )}
       </div>
     );

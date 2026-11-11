@@ -12,6 +12,7 @@ import { inr, phone as fmtPhone, rupeesInput } from '@/lib/format';
 import { PackageSelect, usePackages } from '@/components/packages/package-sheet';
 import type { Contact, TripDetail, TripSource } from '@/lib/types';
 import { SOURCES, sanitizeRupees, useTeam } from './shared';
+import { tx } from '../../lib/words';
 
 type Picked = { id: string; name: string; phone: string | null; email: string | null };
 
@@ -108,8 +109,8 @@ function TripFieldsForm({ f, setF, err, showPrice }: { f: TripFields; setF: (f: 
     <>
       {(packages.data?.length ?? 0) > 0 && (
         <Field
-          label="Package"
-          hint={picked ? `${picked.nights}N/${picked.nights + 1}D · ${inr(picked.pricePerAdult)} per adult${picked.pricePerChild !== null ? `, ${inr(picked.pricePerChild)} per child` : ''}. The price and return date fill in.` : 'Or leave it as a custom trip.'}
+          label={tx("Package")}
+          hint={picked ? `${picked.nights}N/${picked.nights + 1}D · ${inr(picked.pricePerAdult)} per adult${picked.pricePerChild !== null ? `, ${inr(picked.pricePerChild)} per child` : ''}. The price and return date fill in.` : tx('Or leave it as a custom trip.')}
           error={err('packageId')}
         >
           {(p) => (
@@ -133,11 +134,11 @@ function TripFieldsForm({ f, setF, err, showPrice }: { f: TripFields; setF: (f: 
         </Field>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Destination" error={err('destination')}>
+        <Field label={tx("Destination")} error={err('destination')}>
           {(p) => <Input {...p} value={f.destination} onChange={(e) => setF({ ...f, destination: e.target.value })} placeholder="Kashmir" />}
         </Field>
-        <Field label="Trip name" hint={f.title ? undefined : `Leave empty for “${f.destination ? `${f.destination} trip` : 'Trip for …'}”`} error={err('title')}>
-          {(p) => <Input {...p} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="Family trip, Dec" />}
+        <Field label={tx("Trip name")} hint={f.title ? undefined : tx(`Leave empty for “${f.destination ? `${f.destination} trip` : 'Trip for …'}”`)} error={err('title')}>
+          {(p) => <Input {...p} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder={tx("Family trip, Dec")} />}
         </Field>
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -262,7 +263,7 @@ export function NewTripSheet({ open, onClose, onCreated, contact }: { open: bool
         ...fieldsPayload(f),
       }),
     onSuccess: ({ trip }) => {
-      toast.success(`Enquiry #${trip.number} added`);
+      toast.success(tx(`Enquiry #${trip.number} added`));
       onCreated(trip);
     },
   });
@@ -338,7 +339,7 @@ export function NewTripSheet({ open, onClose, onCreated, contact }: { open: bool
         </section>
         <div className="h-px bg-line-soft" />
         <section className="flex flex-col gap-4">
-          <h3 className="text-[13px] font-semibold">The trip</h3>
+          <h3 className="text-[13px] font-semibold">{tx("The trip")}</h3>
           <TripFieldsForm f={f} setF={setF} err={err} showPrice={false} />
         </section>
         <button type="submit" hidden />
@@ -370,7 +371,7 @@ export function EditTripSheet({ trip, open, onClose, onSaved }: { trip: TripDeta
   const m = useMutation({
     mutationFn: () => api.patch<{ trip: TripDetail }>(`/api/trips/${trip.id}`, { ...fieldsPayload(f), title: f.title.trim() || trip.title, price: f.price.trim() || '0' }),
     onSuccess: ({ trip: t }) => {
-      toast.success('Trip saved');
+      toast.success(tx("Trip saved"));
       onSaved(t);
     },
   });
@@ -379,7 +380,7 @@ export function EditTripSheet({ trip, open, onClose, onSaved }: { trip: TripDeta
     <Sheet
       open={open}
       onOpenChange={(o) => !o && onClose()}
-      title={`Edit #${trip.number}`}
+      title={tx(`Edit #${trip.number}`)}
       width="max-w-[560px]"
       footer={
         <>

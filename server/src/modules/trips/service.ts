@@ -226,7 +226,13 @@ export async function syncContactTripFields(tenantId: string, contactId: string 
 
   const attrs = { ...(contact.attributes as Record<string, unknown>) };
   if (pick) {
-    await Promise.all([ensureField(db, tenantId, 'Trip date', 'DATE'), ensureField(db, tenantId, 'Return date', 'DATE'), ensureField(db, tenantId, 'Destination', 'TEXT')]);
+    // Same keys for everyone (automations rely on them); other kinds of business see order words
+    const travel = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId), columns: { businessType: true } }))?.businessType === 'TRAVEL';
+    await Promise.all([
+      ensureField(db, tenantId, travel ? 'Trip date' : 'Order date', 'DATE', 'trip_date'),
+      ensureField(db, tenantId, travel ? 'Return date' : 'Delivery date', 'DATE', 'return_date'),
+      ensureField(db, tenantId, travel ? 'Destination' : 'Product', 'TEXT', 'destination'),
+    ]);
     attrs.trip_date = pick.startDate;
     attrs.return_date = pick.endDate ?? pick.startDate;
     if (pick.destination) attrs.destination = pick.destination;

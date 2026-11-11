@@ -10,6 +10,7 @@ import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useSession } from '@/lib/session';
 import { ReminderText } from './payment-settings';
+import { tx } from '../../lib/words';
 
 type Kind = 'PRE_TRIP' | 'REVIEW' | 'WHERE_NEXT' | 'QUOTE_FOLLOWUP';
 interface One {
@@ -77,7 +78,7 @@ export function TripMessagesSettings() {
     onSuccess: ({ settings }) => {
       qc.setQueryData(['trip-messages'], settings);
       setD(pick(settings));
-      toast.success('Trip messages saved');
+      toast.success(tx("Trip messages saved"));
     },
   });
   if (!q.data || !d) return <Skeleton className="h-96 rounded-[var(--radius-panel)]" />;
@@ -89,8 +90,8 @@ export function TripMessagesSettings() {
   return (
     <div className="flex flex-col gap-5">
       <PanelHeader
-        title="Trip messages"
-        description="Sent by themselves around each booked trip, at 10 am. The trip-starting message goes to every traveller; the review request and “where next?” only go to people who agreed to hear offers from you."
+        title={tx("Trip messages")}
+        description={tx("Sent by themselves around each booked trip, at 10 am. The trip-starting message goes to every traveller; the review request and “where next?” only go to people who agreed to hear offers from you.")}
         action={
           <div className="w-full sm:w-72">
             <Field label="Send by">
@@ -122,8 +123,8 @@ export function TripMessagesSettings() {
 
       <MessageCard
         icon={<Plane className="h-5 w-5" />}
-        title="Before the trip"
-        description="A warm “your trip starts soon” a few days before departure. Customers notice."
+        title={tx("Before the trip")}
+        description={tx("A warm “your trip starts soon” a few days before departure. Customers notice.")}
         enabled={d.preTrip.enabled}
         onToggle={(v) => set('preTrip', { enabled: v })}
         canEdit={canEdit}
@@ -137,7 +138,7 @@ export function TripMessagesSettings() {
       <MessageCard
         icon={<Star className="h-5 w-5" />}
         title="Ask for a Google review"
-        description="The day after they’re back, while the trip is fresh. Reviews are how small agencies win new customers."
+        description={tx("The day after they’re back, while the trip is fresh. Reviews are how small agencies win new customers.")}
         enabled={d.review.enabled}
         onToggle={(v) => set('review', { enabled: v })}
         canEdit={canEdit}
@@ -156,7 +157,7 @@ export function TripMessagesSettings() {
       <MessageCard
         icon={<Sunrise className="h-5 w-5" />}
         title="“Where next?”"
-        description="A few months after they’re back, an invitation to plan the next trip. Repeat customers cost nothing to find."
+        description={tx("A few months after they’re back, an invitation to plan the next trip. Repeat customers cost nothing to find.")}
         enabled={d.whereNext.enabled}
         onToggle={(v) => set('whereNext', { enabled: v })}
         canEdit={canEdit}

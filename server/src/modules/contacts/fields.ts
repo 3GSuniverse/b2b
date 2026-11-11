@@ -19,8 +19,8 @@ export async function listFields(tenantId: string) {
 }
 
 /** Creates a field, or returns the existing one with the same key. */
-export async function ensureField(dbx: Tx | typeof db, tenantId: string, label: string, type: FieldType = 'TEXT') {
-  const key = fieldKey(label);
+export async function ensureField(dbx: Tx | typeof db, tenantId: string, label: string, type: FieldType = 'TEXT', fixedKey?: string) {
+  const key = fixedKey ?? fieldKey(label);
   if (!key || RESERVED_KEYS.has(key)) {
     throw new AppError(400, 'reserved_field', `"${label}" is a built-in field and can't be used as a custom field name`);
   }

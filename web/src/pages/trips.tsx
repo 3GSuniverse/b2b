@@ -16,6 +16,7 @@ import { dateRange, inr, inrShort, n } from '@/lib/format';
 import type { Contact, GroupSummary, TripStats, TripStatus, TripSummary } from '@/lib/types';
 import { CountUp } from '@/lib/motion';
 import { usePlanAllows } from '@/components/plan-lock';
+import { tx } from '../lib/words';
 
 type View = 'board' | 'list';
 type ListTab = 'OPEN' | 'overdue' | 'due' | 'COMPLETED' | 'CLOSED' | 'ALL';
@@ -54,7 +55,7 @@ function StatsStrip({ onShowOverdue }: { onShowOverdue: () => void }) {
           icon: <AlertCircle />,
           chip: (s.overdue > 0 ? 'red' : 'green') as ChipTone,
           value: <CountUp value={s.overdue} format={inr} step={100} />,
-          note: s.overdueTrips ? `On ${s.overdueTrips} trip${s.overdueTrips > 1 ? 's' : ''} · see them` : s.dueThisWeek ? `${inr(s.dueThisWeek)} due this week` : 'Nobody is late',
+          note: s.overdueTrips ? tx(`On ${s.overdueTrips} trip${s.overdueTrips > 1 ? 's' : ''} · see them`) : s.dueThisWeek ? `${inr(s.dueThisWeek)} due this week` : 'Nobody is late',
           tone: s.overdue > 0 ? 'danger' : undefined,
           onClick: s.overdueTrips ? onShowOverdue : undefined,
         },
@@ -148,7 +149,7 @@ function GroupStrip() {
 const COLUMNS: { status: TripStatus; empty: string }[] = [
   { status: 'ENQUIRY', empty: 'New enquiries land here.' },
   { status: 'QUOTED', empty: 'Drag an enquiry here once you’ve sent the price.' },
-  { status: 'BOOKED', empty: 'Confirmed trips. Recording a payment moves a trip here.' },
+  { status: 'BOOKED', empty: tx("Confirmed trips. Recording a payment moves a trip here.") },
 ];
 
 function TripCard({ t, onDragStart, dragging }: { t: TripSummary; onDragStart: (e: DragEvent, t: TripSummary) => void; dragging: boolean }) {
@@ -290,7 +291,7 @@ function Board({ onNew }: { onNew: () => void }) {
               {items.map((t) => (
                 <TripCard key={t.id} t={t} onDragStart={onDragStart} dragging={dragId === t.id} />
               ))}
-              {!items.length && <li className="rounded-[12px] border border-dashed border-line px-4 py-6 text-center text-[13px] text-muted">{empty}</li>}
+              {!items.length && <li className="rounded-[12px] border border-dashed border-line px-4 py-6 text-center text-[13px] text-muted">{tx(empty)}</li>}
             </ul>
             {status === 'ENQUIRY' && (
               <button type="button" onClick={onNew} className="flex h-9 items-center justify-center gap-1.5 rounded-[10px] text-[13px] font-medium text-muted hover:bg-hover hover:text-ink">
@@ -328,7 +329,7 @@ function TripList({ tab, setTab }: { tab: ListTab; setTab: (t: ListTab) => void 
       <div className="flex flex-wrap items-end justify-between gap-3 px-5 pt-2 sm:px-6">
         <div className="min-w-0 max-w-full overflow-x-auto">
           <Tabs<ListTab>
-            label="Filter trips"
+            label={tx("Filter trips")}
             value={tab}
             onChange={setTab}
             tabs={[
@@ -342,7 +343,7 @@ function TripList({ tab, setTab }: { tab: ListTab; setTab: (t: ListTab) => void 
           />
         </div>
         <div className="mb-2 w-full sm:w-64">
-          <Input aria-label="Search trips" leading={<Search className="h-4 w-4" />} value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Name, place, phone or #" />
+          <Input aria-label={tx("Search trips")} leading={<Search className="h-4 w-4" />} value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Name, place, phone or #" />
         </div>
       </div>
       <ul className={cn('stagger flex flex-col border-t border-line-soft transition-opacity', q.isPlaceholderData && 'opacity-60')}>
@@ -353,7 +354,7 @@ function TripList({ tab, setTab }: { tab: ListTab; setTab: (t: ListTab) => void 
             </li>
           ))}
         {!q.isPending && !rows.length && (
-          <li className="px-6 py-14 text-center text-sm text-muted">{search ? `No trips match “${search}”.` : tab === 'overdue' ? 'Nobody is late with a payment.' : 'Nothing here yet.'}</li>
+          <li className="px-6 py-14 text-center text-sm text-muted">{search ? tx(`No trips match “${search}”.`) : tab === 'overdue' ? 'Nobody is late with a payment.' : 'Nothing here yet.'}</li>
         )}
         {rows.map((t) => (
           <li key={t.id} className="relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-1.5 border-t border-line-soft px-5 py-3.5 first:border-0 hover:bg-sunken sm:px-6 lg:grid-cols-[56px_minmax(0,1fr)_170px_110px_150px]">
@@ -364,7 +365,7 @@ function TripList({ tab, setTab }: { tab: ListTab; setTab: (t: ListTab) => void 
               </Link>
               <span className="truncate text-[13px] text-muted">
                 {t.customer.name} · {travellers(t)}
-                {t.package ? ` · ${t.package.name}` : ''}
+                {t.package ? tx(` · ${t.package.name}`) : ''}
               </span>
             </div>
             <div className="justify-self-end lg:hidden">
@@ -384,7 +385,7 @@ function TripList({ tab, setTab }: { tab: ListTab; setTab: (t: ListTab) => void 
       {(q.data?.pages ?? 1) > 1 && (
         <div className="flex items-center justify-between border-t border-line-soft px-5 py-3 text-[13px] text-muted sm:px-6">
           <span className="tnum">
-            Page {q.data!.page} of {q.data!.pages} · {n(q.data!.total)} trips
+            Page {q.data!.page} of {q.data!.pages} · {n(q.data!.total)} {tx("trips")}
           </span>
           <div className="flex gap-1">
             <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label="Previous page">
@@ -440,13 +441,13 @@ export function TripsPage() {
   return (
     <>
       <PageHeader
-        title="Trips"
-        description="Every enquiry, quote, booking and payment, from the first call to the trip home."
+        title={tx("Trips")}
+        description={tx("Every enquiry, quote, booking and payment, from the first call to the trip home.")}
         actions={
           <>
             <LinkButton to="/trips/packages">
               <PackageIcon className="h-4 w-4" />
-              Packages
+              {tx("Packages")}
             </LinkButton>
             <LinkButton to="/trips/prices">
               <Tag className="h-4 w-4" />
@@ -477,7 +478,7 @@ export function TripsPage() {
               </Button>
             }
           >
-            When someone calls or messages about a trip, note it here. Follow it through quote and booking, schedule the advance and balance, and record payments as they come in. Reminders and receipts go out from here too.
+            {tx("When someone calls or messages about a trip, note it here. Follow it through quote and booking, schedule the advance and balance, and record payments as they come in. Reminders and receipts go out from here too.")}
           </EmptyState>
         </Panel>
       ) : (
@@ -490,7 +491,7 @@ export function TripsPage() {
           />
           <GroupStrip />
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-[15px] font-semibold tracking-tight">{view === 'board' ? 'Open trips' : 'All trips'}</h2>
+            <h2 className="text-[15px] font-semibold tracking-tight">{view === 'board' ? tx('Open trips') : tx('All trips')}</h2>
             <Segmented<View>
               size="sm"
               label="View"

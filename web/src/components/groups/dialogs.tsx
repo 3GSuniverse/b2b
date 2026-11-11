@@ -13,6 +13,7 @@ import { api, ApiError } from '@/lib/api';
 import { inr, rupeesInput } from '@/lib/format';
 import type { Attachment, GroupDetail } from '@/lib/types';
 import { takeoff } from '@/lib/celebrate';
+import { tx } from '../../lib/words';
 
 const errOf = (e: unknown, k: string) => (e instanceof ApiError ? e.field(k) : undefined);
 
@@ -43,7 +44,7 @@ export function GroupDialog({ open, onClose, onSaved, group }: { open: boolean; 
       open={open}
       onOpenChange={(o) => !o && onClose()}
       title={group ? 'Edit departure' : 'New group departure'}
-      description={group ? 'New dates and destination apply to every family’s booking.' : 'A yatra or group tour with fixed dates. Families book seats on it, and each family pays and gets reminders on their own.'}
+      description={group ? tx('New dates and destination apply to every family’s booking.') : 'A yatra or group tour with fixed dates. Families book seats on it, and each family pays and gets reminders on their own.'}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -57,7 +58,7 @@ export function GroupDialog({ open, onClose, onSaved, group }: { open: boolean; 
         <Field label="Name" error={err('title')}>
           {(p) => <Input {...p} autoFocus value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="Char Dham Yatra, May 2027" />}
         </Field>
-        <Field label="Package" hint="Optional. Fills in the destination, return date and price per person." error={err('packageId')}>
+        <Field label={tx("Package")} hint={tx("Optional. Fills in the destination, return date and price per person.")} error={err('packageId')}>
           {(p) => (
             <PackageSelect
               {...p}
@@ -68,7 +69,7 @@ export function GroupDialog({ open, onClose, onSaved, group }: { open: boolean; 
             />
           )}
         </Field>
-        <Field label="Destination" error={err('destination')}>
+        <Field label={tx("Destination")} error={err('destination')}>
           {(p) => <Input {...p} value={f.destination} onChange={(e) => setF({ ...f, destination: e.target.value })} placeholder="Uttarakhand" />}
         </Field>
         <div className="grid grid-cols-2 gap-4">
@@ -164,7 +165,7 @@ export function AddFamilyDialog({ group, open, onClose, onSaved }: { group: Grou
 
 const PRESETS = [
   'Reminder: the bus leaves at 5:30 AM on {date} from Secunderabad station, gate 2. Please be there by 5:00.',
-  'Please carry an original photo ID for every traveller, warm clothes, and any medicines you need.',
+  tx('Please carry an original photo ID for every traveller, warm clothes, and any medicines you need.'),
   'Weather update: roads are clear and we’re on schedule. See you soon!',
 ];
 

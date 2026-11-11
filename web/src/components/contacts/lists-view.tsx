@@ -9,6 +9,7 @@ import { Dialog, Menu, MenuItem, MenuSeparator } from '@/components/ui/overlay';
 import { api, ApiError } from '@/lib/api';
 import { date, n } from '@/lib/format';
 import type { ContactList } from '@/lib/types';
+import { tx } from '../../lib/words';
 
 export function ListsView({ lists, onOpen }: { lists?: ContactList[]; onOpen: (id: string) => void }) {
   const qc = useQueryClient();
@@ -125,7 +126,7 @@ export function ListsView({ lists, onOpen }: { lists?: ContactList[]; onOpen: (i
             }}
           >
             <Field label="Name" error={save.error instanceof ApiError ? save.error.field('name') : undefined}>
-              {(p) => <Input {...p} autoFocus value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="Past travellers" />}
+              {(p) => <Input {...p} autoFocus value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder={tx("Past travellers")} />}
             </Field>
             <Field label="Description" hint="Optional. Helps your team pick the right list.">
               {(p) => <Input {...p} value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />}

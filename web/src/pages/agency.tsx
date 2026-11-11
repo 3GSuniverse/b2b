@@ -15,6 +15,7 @@ import { cn } from '@/lib/cn';
 import { ago } from '@/lib/format';
 import { CountUp, useMounted } from '@/lib/motion';
 import { useSession } from '@/lib/session';
+import { tx } from '../lib/words';
 
 /**
  * The agency console: only the agency owner (the account that signed up) sees it.
@@ -34,7 +35,7 @@ type Agency = {
 };
 
 const ROLE: Record<Role, { label: string; tone: 'blue' | 'orange' | 'grey' }> = {
-  OWNER: { label: 'Agency owner', tone: 'blue' },
+  OWNER: { label: tx("Agency owner"), tone: 'blue' },
   ADMIN: { label: 'Manager', tone: 'orange' },
   MEMBER: { label: 'Employee', tone: 'grey' },
 };
@@ -54,8 +55,8 @@ function OwnerOnly({ children }: { children: ReactNode }) {
   const { user } = useSession();
   if (user.role !== 'OWNER') {
     return (
-      <EmptyState icon={<Shield />} title="Only the agency owner can open this">
-        Your agency owner manages logins and the plan. Ask them if you need something changed.
+      <EmptyState icon={<Shield />} title={tx("Only the agency owner can open this")}>
+        {tx("Your agency owner manages logins and the plan. Ask them if you need something changed.")}
       </EmptyState>
     );
   }
@@ -74,7 +75,7 @@ export function AgencyBillingPage() {
   return (
     <OwnerOnly>
       <div className="flex flex-col gap-6">
-        <PageHeader title="Plan & billing" description="Choose a plan and exactly how many employee logins you need. Both stay fixed for the billing cycle you pay for." back={<Link to="/agency">Agency</Link>} />
+        <PageHeader title="Plan & billing" description="Choose a plan and exactly how many employee logins you need. Both stay fixed for the billing cycle you pay for." back={<Link to="/agency">{tx("Agency")}</Link>} />
         <BillingSettings />
       </div>
     </OwnerOnly>
@@ -90,7 +91,7 @@ function AgencyConsole() {
   const [created, setCreated] = useState<{ name: string; username: string; password: string } | null>(null);
 
   if (q.isPending) return <Skeleton className="h-[560px]" />;
-  if (q.isError || !q.data) return <p className="text-sm text-danger">Couldn’t load your agency. Refresh to try again.</p>;
+  if (q.isError || !q.data) return <p className="text-sm text-danger">{tx("Couldn’t load your agency. Refresh to try again.")}</p>;
   const a = q.data;
   const employees = a.people.filter((p) => p.role !== 'OWNER');
   const full = a.seats.used >= a.seats.limit;
@@ -99,7 +100,7 @@ function AgencyConsole() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title={a.agency.name}
-        description="Your agency: who can sign in, what each person sends, and your plan."
+        description={tx("Your agency: who can sign in, what each person sends, and your plan.")}
         actions={
           <Button variant="primary" onClick={() => setAdding(true)} disabled={full}>
             <UserPlus className="h-4 w-4" /> Add employee
@@ -117,7 +118,7 @@ function AgencyConsole() {
         <div className="flex flex-wrap items-end justify-between gap-3 px-5 pb-4 pt-5 sm:px-6">
           <div className="flex flex-col gap-0.5">
             <h2 className="text-[17px] font-semibold">Your team this month</h2>
-            <p className="text-[13px] text-muted">Messages each person sent since the 1st, the broadcasts they started and the trips they added.</p>
+            <p className="text-[13px] text-muted">{tx("Messages each person sent since the 1st, the broadcasts they started and the trips they added.")}</p>
           </div>
           <div className="flex gap-5 text-sm">
             <span className="flex items-center gap-1.5">
@@ -140,7 +141,7 @@ function AgencyConsole() {
                 </Button>
               }
             >
-              Give each employee their own username and password. They sign in as “Employee” with your agency ID <b>{a.agency.loginCode}</b>, and you’ll see what each of them sends here.
+              {tx("Give each employee their own username and password. They sign in as “Employee” with your agency ID")} <b>{a.agency.loginCode}</b>, and you’ll see what each of them sends here.
             </EmptyState>
           </div>
         )}
@@ -242,7 +243,7 @@ function SignInCard({ code }: { code: string }) {
     mutationFn: () => api.patch<{ loginCode: string }>('/api/agency/id', { loginCode: value }),
     onSuccess: () => {
       setEditing(false);
-      toast.success('Agency ID changed', { description: 'Tell your employees: they sign in with the new one from now on.' });
+      toast.success(tx("Agency ID changed"), { description: 'Tell your employees: they sign in with the new one from now on.' });
       qc.invalidateQueries({ queryKey: ['agency'] });
       qc.invalidateQueries({ queryKey: ['me'] });
     },
@@ -257,7 +258,7 @@ function SignInCard({ code }: { code: string }) {
             m.mutate();
           }}
         >
-          <Field label="Agency ID" error={m.error instanceof ApiError ? m.error.field('loginCode') ?? m.error.message : undefined}>
+          <Field label={tx("Agency ID")} error={m.error instanceof ApiError ? m.error.field('loginCode') ?? m.error.message : undefined}>
             {(p) => <Input {...p} autoFocus autoCapitalize="none" spellCheck={false} value={value} onChange={(e) => setValue(e.target.value.toLowerCase())} />}
           </Field>
           <div className="flex gap-2">
@@ -273,10 +274,10 @@ function SignInCard({ code }: { code: string }) {
         <>
           <div className="flex items-center justify-between gap-2">
             <span className="flex min-w-0 flex-col">
-              <span className="text-xs text-muted">Agency ID</span>
+              <span className="text-xs text-muted">{tx("Agency ID")}</span>
               <span className="truncate text-lg font-bold tracking-[-0.01em]">{code}</span>
             </span>
-            <button type="button" onClick={() => setEditing(true)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted hover:bg-hover hover:text-ink" aria-label="Change agency ID">
+            <button type="button" onClick={() => setEditing(true)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted hover:bg-hover hover:text-ink" aria-label={tx("Change agency ID")}>
               <Pencil className="h-4 w-4" />
             </button>
           </div>
@@ -284,7 +285,7 @@ function SignInCard({ code }: { code: string }) {
             <span className="min-w-0 flex-1 truncate text-xs text-ink-2">{signInLink(code).replace(/^https?:\/\//, '')}</span>
             <CopyButton value={signInLink(code)} label="Copy link" />
           </div>
-          <p className="text-xs text-muted">Share this link: it opens the employee sign-in with your agency ID filled in.</p>
+          <p className="text-xs text-muted">{tx("Share this link: it opens the employee sign-in with your agency ID filled in.")}</p>
         </>
       )}
     </CardShell>
@@ -307,7 +308,7 @@ function TeamTable({ a, onEdit, onReset }: { a: Agency; onEdit: (p: Person) => v
   const remove = useMutation({
     mutationFn: (p: Person) => api.del(`/api/agency/employees/${p.id}`),
     onSuccess: (_r, p) => {
-      toast.success(`${p.name} was removed`, { description: 'Their trips and messages stay.' });
+      toast.success(`${p.name} was removed`, { description: tx("Their trips and messages stay.") });
       qc.invalidateQueries({ queryKey: ['agency'] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -335,7 +336,7 @@ function TeamTable({ a, onEdit, onReset }: { a: Agency; onEdit: (p: Person) => v
             <th className="px-3 py-2.5 text-right font-medium">WhatsApp</th>
             <th className="px-3 py-2.5 font-medium" aria-label="Share of messages" />
             <th className="px-3 py-2.5 text-right font-medium">Broadcasts</th>
-            <th className="px-3 py-2.5 text-right font-medium">Trips added</th>
+            <th className="px-3 py-2.5 text-right font-medium">{tx("Trips added")}</th>
             <th className="px-3 py-2.5 font-medium">Last signed in</th>
             <th className="w-12 px-3 py-2.5" />
           </tr>
@@ -349,7 +350,7 @@ function TeamTable({ a, onEdit, onReset }: { a: Agency; onEdit: (p: Person) => v
                   <span className="flex min-w-0 flex-col">
                     <span className="flex items-center gap-2 font-semibold">
                       {p.name}
-                      <Badge tone={ROLE[p.role].tone}>{ROLE[p.role].label}</Badge>
+                      <Badge tone={ROLE[p.role].tone}>{tx(ROLE[p.role].label)}</Badge>
                       {p.disabled && <Badge tone="red">Switched off</Badge>}
                     </span>
                     <span className="truncate text-xs text-muted">{p.role === 'OWNER' ? p.email : `@${p.username}`}</span>
@@ -401,7 +402,7 @@ function TeamTable({ a, onEdit, onReset }: { a: Agency; onEdit: (p: Person) => v
                 </span>
                 <span className="flex flex-col">
                   <span className="font-semibold">Sent automatically</span>
-                  <span className="text-xs text-muted">Payment reminders, trip messages, automations</span>
+                  <span className="text-xs text-muted">{tx("Payment reminders, trip messages, automations")}</span>
                 </span>
               </span>
             </td>
@@ -431,7 +432,7 @@ function TeamTable({ a, onEdit, onReset }: { a: Agency; onEdit: (p: Person) => v
         open={!!confirm}
         onOpenChange={(o) => !o && setConfirm(null)}
         title={`Remove ${confirm?.name}?`}
-        description="Their login is deleted. The trips, customers and messages they worked on stay. To keep the login for later, switch it off instead."
+        description={tx("Their login is deleted. The trips, customers and messages they worked on stay. To keep the login for later, switch it off instead.")}
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirm(null)}>
@@ -486,7 +487,7 @@ function AddEmployeeDialog({ open, onClose, loginCode, onCreated }: { open: bool
       title="Add an employee"
       description={
         <>
-          They’ll sign in as <b>Employee</b> with agency ID <b>{loginCode}</b> and the username and password below.
+          They’ll sign in as <b>Employee</b> {tx("with agency ID")} <b>{loginCode}</b> and the username and password below.
         </>
       }
       footer={
@@ -538,7 +539,7 @@ function AddEmployeeDialog({ open, onClose, loginCode, onCreated }: { open: bool
             )}
           </Field>
         </div>
-        <Field label="Role" hint={f.role === 'ADMIN' ? 'Can also change settings: sending addresses, WhatsApp, payments, and delete customers.' : 'Trips, quotes, customers, broadcasts and messages. No settings.'}>
+        <Field label="Role" hint={f.role === 'ADMIN' ? 'Can also change settings: sending addresses, WhatsApp, payments, and delete customers.' : tx('Trips, quotes, customers, broadcasts and messages. No settings.')}>
           {(p) => (
             <NativeSelect {...p} value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as 'MEMBER' | 'ADMIN' })}>
               <option value="MEMBER">Employee</option>
@@ -588,7 +589,7 @@ function LoginDetailsDialog({ details, loginCode, agencyName, onClose }: { detai
       >
         {[
           ['Sign-in link', signInLink(loginCode)],
-          ['Agency ID', loginCode],
+          [tx('Agency ID'), loginCode],
           ['Username', details.username],
           ['Password', details.password],
         ].map(([k, v]) => (

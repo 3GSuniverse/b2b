@@ -128,6 +128,8 @@ export const tenants = pgTable('tenants', {
   postalAddress: text(),
   // What Drona AI should know when it writes replies: office hours, policies, how the agency talks
   aiNotes: text(),
+  // 'TRAVEL' gets the travel words (trips, destinations, packages); anything else gets order/product words
+  businessType: text().notNull().default('TRAVEL'),
   // Free trial: new companies start here; the operator switches them to PAID
   plan: tenantPlan().notNull().default('TRIAL'),
   trialEndsAt: ts(),

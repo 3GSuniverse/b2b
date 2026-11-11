@@ -14,6 +14,7 @@ import type { PaymentMethod, TripDetail } from '@/lib/types';
 import { DUE_STATE, METHODS, sanitizeRupees } from './shared';
 import { burst } from '@/lib/celebrate';
 import { CountUp, useMounted } from '@/lib/motion';
+import { tx } from '../../lib/words';
 
 /** Opens WhatsApp (app or web) with a message ready to send from the agent's own number. */
 export function waShare(phone: string | null, text: string) {
@@ -182,7 +183,7 @@ export function RecordPaymentDialog({ trip, open, onClose, onSaved }: { trip: Tr
       }),
     onSuccess: ({ trip: t, receiptNumber }) => {
       burst();
-      toast.success(`Payment recorded · receipt #${receiptNumber}`, { description: trip.status === 'BOOKED' || trip.status === 'COMPLETED' ? undefined : 'The trip is now marked as booked.' });
+      toast.success(`Payment recorded · receipt #${receiptNumber}`, { description: trip.status === 'BOOKED' || trip.status === 'COMPLETED' ? undefined : tx('The trip is now marked as booked.') });
       onSaved(t, receiptNumber);
     },
   });
@@ -196,7 +197,7 @@ export function RecordPaymentDialog({ trip, open, onClose, onSaved }: { trip: Tr
       open={open}
       onOpenChange={(o) => !o && onClose()}
       title="Record a payment"
-      description={`From ${trip.customer.name}, for #${trip.number} ${trip.title}.`}
+      description={tx(`From ${trip.customer.name}, for #${trip.number} ${trip.title}.`)}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -368,7 +369,7 @@ export function PaymentsPanel({ trip, onChange, onSetPrice }: { trip: TripDetail
           <span className="flex gap-1.5">
             <a
               className="inline-flex h-8 items-center gap-1.5 rounded-[9px] bg-[#128c4a] px-3 text-[13px] font-semibold text-white hover:bg-[#0f7a40]"
-              href={waShare(trip.customer.phone, `Hi ${trip.customer.name.split(' ')[0]}, here are the details and payment options for your ${trip.title}: ${trip.payPageUrl}`)}
+              href={waShare(trip.customer.phone, tx(`Hi ${trip.customer.name.split(' ')[0]}, here are the details and payment options for your ${trip.title}: ${trip.payPageUrl}`))}
               target="_blank"
               rel="noreferrer"
             >
@@ -467,7 +468,7 @@ export function PaymentsPanel({ trip, onChange, onSetPrice }: { trip: TripDetail
                       icon={<MessageCircle />}
                       onSelect={() =>
                         window.open(
-                          waShare(trip.customer.phone, `Hi ${trip.customer.name.split(' ')[0]}, thank you! We’ve received ${inr(p.amount)} for your ${trip.title}. Your receipt: ${p.receiptUrl}`),
+                          waShare(trip.customer.phone, tx(`Hi ${trip.customer.name.split(' ')[0]}, thank you! We’ve received ${inr(p.amount)} for your ${trip.title}. Your receipt: ${p.receiptUrl}`)),
                           '_blank',
                           'noopener',
                         )

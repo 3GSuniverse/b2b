@@ -10,6 +10,7 @@ import { waShare } from '@/components/trips/payments';
 import { api, ApiError } from '@/lib/api';
 import { phone as fmtPhone } from '@/lib/format';
 import type { Traveller, TripDetail } from '@/lib/types';
+import { tx } from '../../lib/words';
 
 export const ID_LABEL: Record<string, string> = { AADHAAR: 'Aadhaar', PASSPORT: 'Passport', VOTER_ID: 'Voter ID', DRIVING_LICENCE: 'Driving licence', PAN: 'PAN', OTHER: 'ID' };
 export const FOOD: Record<string, string> = { VEG: 'Veg', NON_VEG: 'Non-veg', JAIN: 'Jain', OTHER: 'Other' };
@@ -43,7 +44,7 @@ export function TravellersSheet({ tripId, seats, open, onClose }: { tripId: stri
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['travellers', tripId] });
       qc.invalidateQueries({ queryKey: ['group'] });
-      toast.success('Travellers saved');
+      toast.success(tx("Travellers saved"));
       onClose();
     },
   });
@@ -53,14 +54,14 @@ export function TravellersSheet({ tripId, seats, open, onClose }: { tripId: stri
     <Sheet
       open={open}
       onOpenChange={(o) => !o && onClose()}
-      title="Travellers"
+      title={tx("Travellers")}
       description="Names as on their ID, for tickets and check-in. ID numbers are stored encrypted; only the last 4 digits are shown after saving."
       width="max-w-[640px]"
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
-            Save travellers
+            {tx("Save travellers")}
           </Button>
         </>
       }
@@ -71,7 +72,7 @@ export function TravellersSheet({ tripId, seats, open, onClose }: { tripId: stri
         <div className="flex flex-col gap-4">
           {rows.map((r, i) => (
             <fieldset key={r.key} className="grid grid-cols-2 gap-3 rounded-[14px] border border-line p-4 sm:grid-cols-6">
-              <legend className="px-1 text-[13px] font-semibold">Traveller {i + 1}</legend>
+              <legend className="px-1 text-[13px] font-semibold">{tx("Traveller")} {i + 1}</legend>
               <Field label="Full name" className="col-span-2 sm:col-span-4" error={err(i, 'name')}>
                 {(p) => <Input {...p} value={r.name ?? ''} onChange={(e) => set(r.key, { name: e.target.value })} />}
               </Field>
@@ -128,7 +129,7 @@ export function TravellersSheet({ tripId, seats, open, onClose }: { tripId: stri
           ))}
           <Button size="sm" variant="ghost" className="self-start" onClick={() => setRows([...rows, { key: ++k, name: '' }])}>
             <Plus className="h-4 w-4" />
-            Add a traveller
+            {tx("Add a traveller")}
           </Button>
         </div>
       )}
@@ -147,7 +148,7 @@ export function TravellersPanel({ trip }: { trip: TripDetail }) {
   return (
     <Panel className="flex flex-col gap-4 p-5">
       <PanelHeader
-        title="Travellers"
+        title={tx("Travellers")}
         action={
           <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
             <Pencil className="h-3.5 w-3.5" />
@@ -182,7 +183,7 @@ export function TravellersPanel({ trip }: { trip: TripDetail }) {
           </span>
           <a
             className="inline-flex h-8 items-center justify-center gap-1.5 rounded-[9px] bg-[#128c4a] px-3 text-[13px] font-semibold text-white hover:bg-[#0f7a40]"
-            href={waShare(trip.customer.phone, `Hi ${first}, please fill in the traveller details for your ${trip.title} here (names as on the ID): ${trip.travellersUrl}`)}
+            href={waShare(trip.customer.phone, tx(`Hi ${first}, please fill in the traveller details for your ${trip.title} here (names as on the ID): ${trip.travellersUrl}`))}
             target="_blank"
             rel="noreferrer"
           >

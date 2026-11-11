@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from './api';
 import type { Me } from './types';
+import { setBusiness } from './words';
 
 const SessionContext = createContext<Me | null>(null);
 
@@ -56,5 +57,6 @@ export function RequireSession({ children, signedOut }: { children: ReactNode; s
   }
   if (signedOutPage) return <>{signedOutPage}</>;
   if (!q.data) return null;
+  setBusiness(q.data.tenant.businessType);
   return <SessionContext.Provider value={q.data}>{children}</SessionContext.Provider>;
 }

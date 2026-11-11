@@ -13,14 +13,15 @@ import { cn } from '@/lib/cn';
 import { dateRange, inr, inrShort } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import type { PackageDetail } from '@/lib/types';
+import { tx } from '../lib/words';
 
 const back = (
   <Link to="/trips" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
     <ArrowLeft className="h-4 w-4" aria-hidden />
-    Trips
+    {tx("Trips")}
   </Link>
 );
-const length = (nights: number) => (nights ? `${nights}N/${nights + 1}D` : 'Day trip');
+const length = (nights: number) => (nights ? `${nights}N/${nights + 1}D` : tx('Day trip'));
 
 export function PackagesPage() {
   const nav = useNavigate();
@@ -30,12 +31,12 @@ export function PackagesPage() {
     <>
       <PageHeader
         back={back}
-        title="Packages"
-        description="The trips you sell again and again. Choose one on an enquiry and the price, dates and quote fill in, and you can see who took each one."
+        title={tx("Packages")}
+        description={tx("The trips you sell again and again. Choose one on an enquiry and the price, dates and quote fill in, and you can see who took each one.")}
         actions={
           <Button variant="primary" onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" />
-            New package
+            {tx("New package")}
           </Button>
         }
       />
@@ -47,7 +48,7 @@ export function PackagesPage() {
         </div>
       ) : !q.data?.length ? (
         <Panel>
-          <EmptyState icon={<PackageIcon />} title="Add your first package" action={<Button variant="primary" onClick={() => setCreating(true)}>New package</Button>}>
+          <EmptyState icon={<PackageIcon />} title={tx("Add your first package")} action={<Button variant="primary" onClick={() => setCreating(true)}>{tx("New package")}</Button>}>
             “Kerala 4N/5D”, “Char Dham 11 days”, “Goa honeymoon”: the trips you sell most. Set the price per adult and per child once; every booking of it is counted here.
           </EmptyState>
         </Panel>
@@ -74,7 +75,7 @@ export function PackagesPage() {
                 </span>
                 <span className="flex flex-col">
                   <span className="tnum font-semibold">{p.stats.travellers}</span>
-                  <span className="text-xs text-muted">travellers</span>
+                  <span className="text-xs text-muted">{tx("travellers")}</span>
                 </span>
                 <span className="flex flex-col">
                   <span className="tnum font-semibold">{inrShort(p.stats.value)}</span>
@@ -109,7 +110,7 @@ export function PackagePage() {
     mutationFn: () => api.del(`/api/packages/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['packages'] });
-      toast.success('Package archived. Its bookings stay as they are.');
+      toast.success(tx("Package archived. Its bookings stay as they are."));
       nav('/trips/packages');
     },
   });
@@ -118,7 +119,7 @@ export function PackagePage() {
   const s = p.stats;
   const tiles = [
     { label: 'Booked', value: String(s.bookings), note: s.enquiries ? `${s.enquiries} more asking` : 'Booked or travelled' },
-    { label: 'Travellers', value: String(s.travellers), note: 'On those bookings' },
+    { label: tx("Travellers"), value: String(s.travellers), note: 'On those bookings' },
     { label: 'Sold', value: inr(s.value), note: `${inr(s.received)} received` },
     { label: 'Margin', value: s.margin !== null ? inr(s.margin) : '—', note: s.cost !== null ? `after ${inr(s.cost)} costs` : 'Add your cost per person to see it', tone: s.margin !== null && s.margin < 0 ? 'danger' : 'accent' },
   ];
@@ -129,7 +130,7 @@ export function PackagePage() {
         back={
           <Link to="/trips/packages" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
             <ArrowLeft className="h-4 w-4" aria-hidden />
-            Packages
+            {tx("Packages")}
           </Link>
         }
         title={p.name}
@@ -143,7 +144,7 @@ export function PackagePage() {
             {user.role !== 'MEMBER' && (
               <Menu trigger={<Button aria-label="More options"><MoreHorizontal className="h-4 w-4" /></Button>}>
                 <MenuItem icon={<Archive />} onSelect={() => archive.mutate()}>
-                  Archive package
+                  {tx("Archive package")}
                 </MenuItem>
               </Menu>
             )}
@@ -164,7 +165,7 @@ export function PackagePage() {
       <Panel className="overflow-hidden">
         <h2 className="px-5 pb-3 pt-5 text-[15px] font-semibold tracking-tight sm:px-6">Who took it</h2>
         {!p.trips.length ? (
-          <p className="border-t border-line-soft px-6 py-10 text-center text-sm text-muted">Nobody yet. Choose this package on an enquiry and it shows up here.</p>
+          <p className="border-t border-line-soft px-6 py-10 text-center text-sm text-muted">{tx("Nobody yet. Choose this package on an enquiry and it shows up here.")}</p>
         ) : (
           <ul className="stagger border-t border-line-soft">
             {p.trips.map((t) => (

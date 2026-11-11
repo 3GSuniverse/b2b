@@ -17,6 +17,7 @@ import { cn } from '@/lib/cn';
 import { date, n, phone } from '@/lib/format';
 import { SubscriptionBadge } from '@/lib/status';
 import type { Contact, ContactList, SubscriptionStatus } from '@/lib/types';
+import { tx } from '../lib/words';
 
 type StatusTab = 'ALL' | SubscriptionStatus;
 interface Stats {
@@ -143,7 +144,7 @@ export function ContactsPage() {
     <>
       <PageHeader
         title="Customers"
-        description="Everyone your agency talks to, by email and WhatsApp. Unsubscribes and bounces are kept here so they're never messaged again."
+        description={tx("Everyone your agency talks to, by email and WhatsApp. Unsubscribes and bounces are kept here so they're never messaged again.")}
         actions={
           <>
             <Button onClick={() => setParam({ import: '1' })}>

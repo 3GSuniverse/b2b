@@ -16,6 +16,7 @@ import { cn } from '@/lib/cn';
 import { ago, dateRange, inr, rupeesInput, shortDate } from '@/lib/format';
 import type { Quote, QuoteLine, RateItem, RateKind, RateUnit, TripDetail } from '@/lib/types';
 import { takeoff } from '@/lib/celebrate';
+import { tx } from '../lib/words';
 
 type Draft = Pick<Quote, 'intro' | 'days' | 'lines' | 'inclusions' | 'exclusions' | 'terms' | 'validUntil'> & { discount: number };
 const toDraft = (q: Quote): Draft => ({ intro: q.intro, days: q.days, lines: q.lines.map(({ total: _t, needsPrice: _n, ...l }) => l), inclusions: q.inclusions, exclusions: q.exclusions, terms: q.terms, validUntil: q.validUntil, discount: q.totals.discount });
@@ -31,14 +32,14 @@ export const QUOTE_STATUS = { DRAFT: { label: 'Draft', tone: 'grey' }, SENT: { l
 function RatePicker({ open, onClose, onPick, destination, nights, travellers, adults }: { open: boolean; onClose: () => void; onPick: (l: QuoteLine) => void; destination: string | null; nights: number; travellers: number; adults: number }) {
   const rates = useRates(destination ?? undefined);
   const [term, setTerm] = useState('');
-  const shown = (rates.data ?? []).filter((r) => !term || `${r.name} ${r.destination ?? ''}`.toLowerCase().includes(term.toLowerCase()));
+  const shown = (rates.data ?? []).filter((r) => !term || tx(`${r.name} ${r.destination ?? ''}`).toLowerCase().includes(term.toLowerCase()));
   const pick = (r: RateItem) => {
     const qty = r.unit === 'PER_NIGHT' ? Math.max(1, Math.ceil(adults / 2)) : r.unit === 'PER_PERSON' ? travellers : 1;
     const times = r.unit === 'PER_NIGHT' ? Math.max(1, nights) : r.unit === 'PER_DAY' ? Math.max(1, nights + 1) : 1;
     onPick({ label: r.name, kind: r.kind, unit: r.unit, quantity: qty, times, unitPrice: r.price, unitCost: r.cost, rateItemId: r.id });
   };
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()} title="Add from your price list" description={destination ? `Prices for ${destination} first.` : undefined}>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()} title="Add from your price list" description={destination ? tx(`Prices for ${destination} first.`) : undefined}>
       <div className="flex flex-col gap-3">
         <Input autoFocus aria-label="Search prices" leading={<Search className="h-4 w-4" />} value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Houseboat, Innova…" />
         {rates.isPending && <Skeleton className="h-24" />}
@@ -58,7 +59,7 @@ function RatePicker({ open, onClose, onPick, destination, nights, travellers, ad
                   <span className="truncate text-sm font-medium">{r.name}</span>
                   <span className="truncate text-xs text-muted">
                     {KINDS[r.kind]}
-                    {r.destination ? ` · ${r.destination}` : ''} · {UNITS[r.unit].label}
+                    {r.destination ? tx(` · ${r.destination}`) : ''} · {UNITS[r.unit].label}
                   </span>
                 </span>
                 <span className="tnum shrink-0 text-sm font-semibold">{inr(r.price)}</span>
@@ -88,7 +89,7 @@ function AiDialog({ quoteId, open, onClose, onDraft }: { quoteId: string; open: 
       open={open}
       onOpenChange={(o) => !o && !m.isPending && onClose()}
       title="Draft with AI"
-      description="Writes the day-by-day plan from the trip details and picks items from your price list. It replaces what’s in the quote now. Prices always come from your list."
+      description={tx("Writes the day-by-day plan from the trip details and picks items from your price list. It replaces what’s in the quote now. Prices always come from your list.")}
       footer={
         <>
           <Button onClick={onClose} disabled={m.isPending}>
@@ -222,7 +223,7 @@ export function QuoteEditorPage() {
     change({ days });
   };
   const first = trip.customer.name.split(' ')[0];
-  const shareText = `Hi ${first}, here is the plan and price for your ${trip.title}: ${quote.url}`;
+  const shareText = tx(`Hi ${first}, here is the plan and price for your ${trip.title}: ${quote.url}`);
   const st = QUOTE_STATUS[quote.status];
 
   return (
@@ -240,7 +241,7 @@ export function QuoteEditorPage() {
               <Badge tone={st.tone} dot>
                 {st.label}
               </Badge>
-              {[trip.customer.name, dateRange(trip.startDate, trip.endDate), `${totals.people} traveller${totals.people === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}
+              {[trip.customer.name, dateRange(trip.startDate, trip.endDate), tx(`${totals.people} traveller${totals.people === 1 ? '' : 's'}`)].filter(Boolean).join(' · ')}
               {editable && <span aria-live="polite">· {saveState === 'saving' ? 'Saving…' : saveState === 'dirty' ? 'Unsaved' : saveState === 'error' ? 'Couldn’t save' : 'Saved'}</span>}
             </div>
           </div>
@@ -274,7 +275,7 @@ export function QuoteEditorPage() {
                   On WhatsApp, from my phone
                 </MenuItem>
                 <MenuItem icon={<Mail />} onSelect={() => send.mutate('EMAIL')}>
-                  By email{trip.customer.email ? ` to ${trip.customer.email}` : ''}
+                  By email{trip.customer.email ? tx(` to ${trip.customer.email}`) : ''}
                 </MenuItem>
                 <MenuItem
                   icon={<Copy />}
@@ -295,7 +296,7 @@ export function QuoteEditorPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-line bg-surface px-4 py-3 text-[13px]">
           <span>
             {quote.status === 'SENT' && `Sent ${ago(quote.sentAt)}${quote.viewedAt ? `, opened ${ago(quote.viewedAt)}` : ', not opened yet'}. A sent quote stays as it is.`}
-            {quote.status === 'ACCEPTED' && `Accepted ${ago(quote.respondedAt)}. The advance and balance are on the trip.`}
+            {quote.status === 'ACCEPTED' && tx(`Accepted ${ago(quote.respondedAt)}. The advance and balance are on the trip.`)}
             {quote.status === 'DECLINED' && `The customer asked for changes ${ago(quote.respondedAt)}${quote.responseNote ? `: “${quote.responseNote}”` : '.'}`}
           </span>
           <Button size="sm" loading={newVersion.isPending} onClick={() => newVersion.mutate()}>
@@ -313,7 +314,7 @@ export function QuoteEditorPage() {
           </Panel>
 
           <Panel className="flex flex-col gap-4 p-5 sm:p-6">
-            <PanelHeader title="Day by day" description={nights ? `${nights} nights, ${nights + 1} days.` : 'Add a day for each day of the trip.'} />
+            <PanelHeader title="Day by day" description={nights ? `${nights} nights, ${nights + 1} days.` : tx('Add a day for each day of the trip.')} />
             <ol className="flex flex-col gap-3">
               {d.days.map((day, i) => (
                 <li key={i} className="grid grid-cols-[44px_minmax(0,1fr)] gap-3 rounded-[14px] border border-line-soft p-3">
@@ -353,7 +354,7 @@ export function QuoteEditorPage() {
           </Panel>
 
           <Panel className="flex flex-col gap-4 p-5 sm:p-6">
-            <PanelHeader title="What’s in the package" description="The customer sees the items and the total, not the price of each item." />
+            <PanelHeader title={tx("What’s in the package")} description="The customer sees the items and the total, not the price of each item." />
             {d.lines.length > 0 && (
               <ul className="flex flex-col gap-3">
                 {d.lines.map((l, i) => {
@@ -442,7 +443,7 @@ export function QuoteEditorPage() {
             </div>
             {trip.budget ? (
               <p className={cn('rounded-[10px] px-3 py-2 text-xs', totals.total > trip.budget ? 'bg-warm-soft text-warm-strong' : 'bg-accent-soft text-accent-strong')}>
-                {totals.total > trip.budget ? `${inr(totals.total - trip.budget)} over their budget of ${inr(trip.budget)}` : `Within their budget of ${inr(trip.budget)}`}
+                {totals.total > trip.budget ? tx(`${inr(totals.total - trip.budget)} over their budget of ${inr(trip.budget)}`) : tx(`Within their budget of ${inr(trip.budget)}`)}
               </p>
             ) : null}
             <fieldset disabled={!editable} className="flex flex-col gap-3 border-t border-line-soft pt-4">

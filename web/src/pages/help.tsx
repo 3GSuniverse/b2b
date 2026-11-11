@@ -16,6 +16,7 @@ import { cn } from '@/lib/cn';
 import { ago, dateTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import type { Attachment } from '@/lib/types';
+import { tx } from '../lib/words';
 
 /** How a request's state reads to the agency. */
 export const AGENCY_STATUS: Record<TicketStatus, { label: string; tone: 'orange' | 'blue' | 'green'; dot: string }> = {
@@ -274,7 +275,7 @@ export function NewRequestPage() {
           <p className="text-[13px] leading-relaxed text-ink-2">With your request, customer care sees:</p>
           <ul className="flex flex-col gap-1.5 text-[13px] text-ink-2">
             {[
-              `Your agency, ${tenant.name}, and its plan`,
+              tx(`Your agency, ${tenant.name}, and its plan`),
               `That it’s from ${user.name}`,
               from ? `The page you were on (${from})` : 'Which browser you use',
               'How your WhatsApp and email sending are doing',

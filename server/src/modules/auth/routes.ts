@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { and, eq, ne } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { BUSINESS_VALUES } from '../../lib/business.js';
 import { env } from '../../config/env.js';
 import { planDto, whatsappWebAllowed } from '../plans/entitlements.js';
 import { sessions, tenants, users } from '../../db/schema.js';
@@ -24,6 +25,7 @@ const password = z
 
 const signupBody = z.object({
   companyName: z.string().trim().min(2, 'Enter your company name').max(120),
+  businessType: z.enum(BUSINESS_VALUES).default('TRAVEL'),
   name: z.string().trim().min(1, 'Enter your name').max(120),
   email,
   password,
@@ -57,6 +59,7 @@ async function publicTenant(t: typeof tenants.$inferSelect) {
     name: t.name,
     slug: t.slug,
     loginCode: t.loginCode,
+    businessType: t.businessType,
     status: t.status,
     timezone: t.timezone,
     monthlyQuota: t.monthlyQuota,
@@ -86,7 +89,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRouteOptions) {
       // Every new company starts on a free trial
       const [tenant] = await tx
         .insert(tenants)
-        .values({ name: body.companyName, slug: slugify(body.companyName), loginCode: await freeLoginCode(body.companyName), plan: 'TRIAL', trialEndsAt: new Date(Date.now() + env.TRIAL_DAYS * 86_400_000), monthlyQuota: env.TRIAL_EMAILS })
+        .values({ name: body.companyName, slug: slugify(body.companyName), businessType: body.businessType, loginCode: await freeLoginCode(body.companyName), plan: 'TRIAL', trialEndsAt: new Date(Date.now() + env.TRIAL_DAYS * 86_400_000), monthlyQuota: env.TRIAL_EMAILS })
         .returning();
       const [user] = await tx
         .insert(users)

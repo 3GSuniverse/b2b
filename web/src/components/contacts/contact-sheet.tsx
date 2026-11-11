@@ -13,6 +13,7 @@ import { api, ApiError } from '@/lib/api';
 import { date, dateRange, dateTime, phone as formatPhone } from '@/lib/format';
 import { SubscriptionBadge } from '@/lib/status';
 import type { Contact, ContactList, CustomField, TripSummary } from '@/lib/types';
+import { tx } from '../../lib/words';
 
 export function useFields() {
   return useQuery({ queryKey: ['fields'], queryFn: () => api.get<{ fields: CustomField[] }>('/api/fields'), staleTime: 60_000 });
@@ -325,7 +326,7 @@ function ContactTrips({ contactId }: { contactId: string }) {
   });
   const trips = q.data ?? [];
   return (
-    <Section title="Trips">
+    <Section title={tx("Trips")}>
       {q.isPending ? (
         <Skeleton className="h-14" />
       ) : (

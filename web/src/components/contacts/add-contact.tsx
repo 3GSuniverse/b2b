@@ -9,6 +9,7 @@ import { Sheet } from '@/components/ui/overlay';
 import { api, ApiError } from '@/lib/api';
 import type { Contact, ContactList } from '@/lib/types';
 import { AttributeInput, useFields } from './contact-sheet';
+import { tx } from '../../lib/words';
 
 const EMPTY = { email: '', phone: '', firstName: '', lastName: '', consentNote: '', whatsappOptIn: false, listIds: [] as string[], attributes: {} as Record<string, unknown> };
 
@@ -137,7 +138,7 @@ export function AddContactSheet({
           </fieldset>
         )}
 
-        <Field label="How did they agree to hear from you?" hint="Kept as their consent record, for example “Booking form, Goa trip, Oct 2026”." error={err('consentNote')}>
+        <Field label="How did they agree to hear from you?" hint={tx("Kept as their consent record, for example “Booking form, Goa trip, Oct 2026”.")} error={err('consentNote')}>
           {(p) => <Input {...p} value={f.consentNote} onChange={(e) => setF({ ...f, consentNote: e.target.value })} />}
         </Field>
         <label className="flex items-center justify-between gap-4 rounded-[12px] bg-sunken px-4 py-3 text-sm">

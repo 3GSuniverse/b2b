@@ -34,6 +34,7 @@ import { cn } from '@/lib/cn';
 import { ago, date, dateTime, inr, n, pct, until } from '@/lib/format';
 import { CountPercent, CountUp, useMounted, useReducedMotion } from '@/lib/motion';
 import type { Communication, MessageSource, Overview } from '@/lib/types';
+import { tx } from '../lib/words';
 
 /**
  * The Overview: everything Dhrona said to customers this month, how much of it happened on its
@@ -275,7 +276,7 @@ function MessagesChart({ data }: { data: Day[] }) {
 const SOURCE: Record<MessageSource, { icon: ReactNode; tone: ChipTone; label: string }> = {
   automation: { icon: <Repeat2 />, tone: 'indigo', label: 'Automation' },
   payment_reminder: { icon: <Wallet />, tone: 'saffron', label: 'Payment reminder' },
-  trip_message: { icon: <PlaneTakeoff />, tone: 'blue', label: 'Trip message' },
+  trip_message: { icon: <PlaneTakeoff />, tone: 'blue', label: tx("Trip message") },
   broadcast: { icon: <Megaphone />, tone: 'plum', label: 'Broadcast' },
   direct: { icon: <Send />, tone: 'green', label: 'Sent by your team' },
 };
@@ -304,7 +305,7 @@ export function WorkingForYou({ items, title = "Working for you", note = "The la
       </div>
       {items.length === 0 ? (
         <p className="px-6 pb-8 pt-2 text-sm leading-relaxed text-muted">
-          Nothing sent yet. Payment reminders, pre-trip details and birthday wishes appear here as Dhrona sends them.
+          {tx("Nothing sent yet. Payment reminders, pre-trip details and birthday wishes appear here as Dhrona sends them.")}
         </p>
       ) : (
         <ol className="stagger flex flex-col px-2 pb-2 sm:px-3 sm:pb-3">
@@ -318,7 +319,7 @@ export function WorkingForYou({ items, title = "Working for you", note = "The la
                   <span className="truncate text-[13px] font-semibold">{a.title}</span>
                   <span className="truncate text-xs text-muted">
                     To {a.to}
-                    {a.trip?.title ? `, ${a.trip.title}` : ''}
+                    {a.trip?.title ? tx(`, ${a.trip.title}`) : ''}
                   </span>
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-0.5">
@@ -381,7 +382,7 @@ function ComingUp({ o }: { o: Overview }) {
     rows.push({ key: 'overdue', icon: <AlertCircle />, tone: 'red', title: <>{inr(c.overdue)} overdue on {c.overdueTrips} {c.overdueTrips === 1 ? 'trip' : 'trips'}</>, note: 'Overdue reminders go out on their own', to: '/trips' });
   if (c.dueThisWeek > 0) rows.push({ key: 'due', icon: <Wallet />, tone: 'saffron', title: <>{inr(c.dueThisWeek)} due this week</>, note: 'Customers get a reminder before each due date', to: '/trips' });
   if (c.departingThisWeek > 0)
-    rows.push({ key: 'leaving', icon: <PlaneTakeoff />, tone: 'blue', title: <>{c.departingThisWeek} {c.departingThisWeek === 1 ? 'trip leaves' : 'trips leave'} this week</>, note: 'Pre-trip details are sent automatically', to: '/trips' });
+    rows.push({ key: 'leaving', icon: <PlaneTakeoff />, tone: 'blue', title: <>{c.departingThisWeek} {c.departingThisWeek === 1 ? tx('trip leaves') : tx('trips leave')} this week</>, note: tx("Pre-trip details are sent automatically"), to: '/trips' });
   if (c.newEnquiries > 0)
     rows.push({ key: 'enquiries', icon: <MessageSquarePlus />, tone: 'indigo', title: <>{c.newEnquiries} {c.newEnquiries === 1 ? 'enquiry is' : 'enquiries are'} waiting for a quote</>, note: 'Draft one in minutes from your price list', to: '/trips' });
   return (
@@ -418,7 +419,7 @@ function ComingUp({ o }: { o: Overview }) {
           ))}
         </ul>
       ) : (
-        !o.upcoming && <p className="text-sm leading-relaxed text-muted">A quiet week. Nothing is due and no trips leave in the next seven days.</p>
+        !o.upcoming && <p className="text-sm leading-relaxed text-muted">{tx("A quiet week. Nothing is due and no trips leave in the next seven days.")}</p>
       )}
     </Panel>
   );
@@ -444,7 +445,7 @@ function AiCard({ drafts }: { drafts: number }) {
         Open any enquiry and choose <strong className="font-semibold">Draft with AI</strong>. Dhrona writes the day-by-day plan in English, Telugu or Hindi, priced from your own rates.
       </p>
       <LinkButton to="/trips" size="sm" className="self-start">
-        Open trips
+        {tx("Open trips")}
       </LinkButton>
     </Panel>
   );
@@ -542,7 +543,7 @@ function Setup({ o }: { o: Overview }) {
     {
       done: o.recentCampaigns.some((c) => c.status !== 'DRAFT'),
       title: 'Send your first message',
-      body: 'Turn on trip reminders, or send a broadcast from a template.',
+      body: tx('Turn on trip reminders, or send a broadcast from a template.'),
       to: '/campaigns/new',
       cta: 'Create',
       icon: <Send />,
@@ -618,7 +619,7 @@ function Launchpad({ o }: { o: Overview }) {
   const tiles = [
     { to: '/email', title: 'Email', note: 'Broadcasts, automatic emails, designs', value: c.email, unit: 'sent this month', icon: Mail, quick: { to: '/campaigns/new', label: 'Broadcast' }, cls: 'bg-[linear-gradient(135deg,#3b31b8,#4A3FD1_50%,#7a6cf5)] text-white', chip: 'bg-white/15 ring-1 ring-white/25', sub: 'text-white/75', pill: 'bg-white text-accent-strong' },
     { to: '/whatsapp', title: 'WhatsApp', note: 'Broadcasts, automatic messages, your number', value: c.whatsapp, unit: 'sent this month', icon: MessageCircle, quick: { to: '/campaigns/new?channel=WHATSAPP', label: 'Broadcast' }, cls: 'bg-[linear-gradient(135deg,#07603f,#0e9466_50%,#25c48a)] text-white', chip: 'bg-white/15 ring-1 ring-white/25', sub: 'text-white/75', pill: 'bg-white text-success-strong' },
-    { to: '/trips', title: 'Trips', note: 'Enquiries, quotes, bookings, payments', value: o.communication.comingUp.newEnquiries, unit: 'enquiries waiting', icon: Plane, quick: { to: '/trips?new=1', label: 'Enquiry' }, cls: 'bg-surface text-ink border border-line', chip: 'bg-highlight-soft text-warm', sub: 'text-muted', pill: 'bg-highlight-soft text-warm-strong' },
+    { to: '/trips', title: tx("Trips"), note: 'Enquiries, quotes, bookings, payments', value: o.communication.comingUp.newEnquiries, unit: 'enquiries waiting', icon: Plane, quick: { to: '/trips?new=1', label: 'Enquiry' }, cls: 'bg-surface text-ink border border-line', chip: 'bg-highlight-soft text-warm', sub: 'text-muted', pill: 'bg-highlight-soft text-warm-strong' },
     { to: '/contacts', title: 'Customers', note: 'Your address book', value: o.audience.total, unit: 'customers', icon: Users, quick: { to: '/contacts?add=1', label: 'Customer' }, cls: 'bg-surface text-ink border border-line', chip: 'bg-blue-soft text-blue-ink', sub: 'text-muted', pill: 'bg-blue-soft text-blue-ink' },
   ];
   return (
@@ -668,7 +669,7 @@ export function OverviewPage() {
             <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.025em]">{o.greeting}</h1>
             <p className="text-sm text-muted">
               {date(new Date(), { weekday: 'long', day: 'numeric', month: 'long' })}.{' '}
-              {c.thisMonth.automatic > 0 ? <>Dhrona has sent <span className="tnum font-semibold text-ink">{n(c.thisMonth.automatic)}</span> messages on its own this month.</> : 'Here is your agency today.'}
+              {c.thisMonth.automatic > 0 ? <>Dhrona has sent <span className="tnum font-semibold text-ink">{n(c.thisMonth.automatic)}</span> messages on its own this month.</> : tx('Here is your agency today.')}
             </p>
           </div>
         </div>

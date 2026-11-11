@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn';
 import { n } from '@/lib/format';
 import type { ContactList } from '@/lib/types';
 import { useFields } from './contact-sheet';
+import { tx } from '../../lib/words';
 
 interface Preview {
   headers: string[];
@@ -134,7 +135,7 @@ function DropZone({ onFile, busy, error }: { onFile: (f: File) => void; busy: bo
         <ul className="flex list-disc flex-col gap-1 pl-5 text-muted">
           <li>One person per row, with column names in the first row.</li>
           <li>An email column. Phone numbers can be written any way, like 98480 22338.</li>
-          <li>Dates like 15/12/2026 work, for trip reminders and birthdays.</li>
+          <li>{tx("Dates like 15/12/2026 work, for trip reminders and birthdays.")}</li>
         </ul>
         <a
           href={`data:text/csv;charset=utf-8,${encodeURIComponent(SAMPLE_CSV)}`}

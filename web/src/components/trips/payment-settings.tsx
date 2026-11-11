@@ -11,6 +11,7 @@ import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { phone as fmtPhone } from '@/lib/format';
 import { useSession } from '@/lib/session';
+import { tx } from '../../lib/words';
 
 export interface PaymentSettings {
   upiId: string | null;
@@ -42,8 +43,8 @@ export const TAG_LABEL: Record<string, string> = {
   amount: 'Amount due',
   due_label: 'Instalment',
   due_date: 'Due date',
-  trip: 'Trip name',
-  trip_number: 'Trip number',
+  trip: tx('Trip name'),
+  trip_number: tx('Trip number'),
   balance: 'Balance',
   pay_link: 'Pay link',
   company_name: 'Your company',
@@ -56,7 +57,7 @@ function sample(company: string): Record<string, string> {
     amount: '₹45,000',
     due_label: 'balance',
     due_date: '5 Dec 2026',
-    trip: 'Kashmir family trip',
+    trip: tx('Kashmir family trip'),
     trip_number: '#12',
     balance: '₹45,000',
     pay_link: `${location.origin}/p/…`,
@@ -291,7 +292,7 @@ export function PaymentSettingsPanel() {
       <Panel className="flex flex-col gap-5 p-5 sm:p-6">
         <PanelHeader
           title="How customers pay"
-          description="Each trip has a page for the customer with what’s due, a UPI QR code and a button that opens their UPI app. Money goes straight to your account; there’s no fee from us."
+          description={tx("Each trip has a page for the customer with what’s due, a UPI QR code and a button that opens their UPI app. Money goes straight to your account; there’s no fee from us.")}
         />
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Your UPI ID" hint="From GPay, PhonePe or your bank app, e.g. kurukshetra@okhdfcbank" error={err('upiId')}>
@@ -301,7 +302,7 @@ export function PaymentSettingsPanel() {
             {(p) => <Input {...p} disabled={!canEdit} value={d.upiName ?? ''} onChange={(e) => setD({ ...d, upiName: e.target.value })} placeholder={tenant.name} />}
           </Field>
         </div>
-        <Field label="WhatsApp number for payment questions" hint="Customers tap it to send you the UPI reference after paying. Shown on their trip page." error={err('contactPhone')}>
+        <Field label="WhatsApp number for payment questions" hint={tx("Customers tap it to send you the UPI reference after paying. Shown on their trip page.")} error={err('contactPhone')}>
           {(p) => <Input {...p} disabled={!canEdit} inputMode="tel" leading={<Phone className="h-4 w-4" />} value={d.contactPhone ? fmtPhone(d.contactPhone) : ''} onChange={(e) => setD({ ...d, contactPhone: e.target.value })} placeholder="98480 22338" />}
         </Field>
         {!d.upiId && <p className="rounded-[12px] bg-warm-soft px-4 py-3 text-[13px] text-warm-strong">Without a UPI ID, the customer’s page shows what’s due and asks them to contact you to pay.</p>}
@@ -309,7 +310,7 @@ export function PaymentSettingsPanel() {
 
       <Panel className="flex flex-col gap-5 p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4">
-          <PanelHeader title="Payment reminders" description="Sent at 10 am to customers with a booked trip, once per instalment. Payments you record stop them automatically." />
+          <PanelHeader title="Payment reminders" description={tx("Sent at 10 am to customers with a booked trip, once per instalment. Payments you record stop them automatically.")} />
           <Switch label="Send payment reminders" checked={d.remindersEnabled} disabled={!canEdit} onCheckedChange={(v) => setD({ ...d, remindersEnabled: v })} />
         </div>
         <div className={cn('flex flex-col gap-5', !d.remindersEnabled && 'pointer-events-none opacity-50')} aria-disabled={!d.remindersEnabled}>
