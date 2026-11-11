@@ -12,6 +12,8 @@ export const QUEUES = {
   imports: 'contact-import',
   // WhatsApp Web sends: one job per message, paced per linked number
   whatsappSend: 'whatsapp-send',
+  // Drona AI Autopilot: answers a chat a few seconds after the customer's last message
+  autopilot: 'ai-autopilot',
 } as const;
 
 export type WhatsAppJob =
@@ -29,6 +31,16 @@ let emailSendQueue: Queue<EmailSendJob> | undefined;
 let schedulerQueue: Queue | undefined;
 let importQueue: Queue<{ importId: string }> | undefined;
 let whatsappQueue: Queue<WhatsAppJob> | undefined;
+let autopilotQueue: Queue<{ chatId: string; at: number }> | undefined;
+
+/** Queues an Autopilot answer. Every new customer message adds a job; only the newest one answers. */
+export async function enqueueAutopilot(chatId: string, at: Date, waitMs: number) {
+  autopilotQueue ??= new Queue(QUEUES.autopilot, {
+    connection: createRedis(),
+    defaultJobOptions: { attempts: 2, backoff: { type: 'fixed', delay: 20_000 }, removeOnComplete: { age: 3600, count: 5000 }, removeOnFail: { age: 3 * 86_400 } },
+  });
+  await autopilotQueue.add('answer', { chatId, at: at.getTime() }, { jobId: `${chatId}-${at.getTime()}`, delay: waitMs });
+}
 
 export function getWhatsAppQueue(): Queue<WhatsAppJob> {
   whatsappQueue ??= new Queue<WhatsAppJob>(QUEUES.whatsappSend, {
@@ -99,5 +111,5 @@ export async function enqueueEmails(messageIds: string[]): Promise<void> {
 export type EnqueueFn = typeof enqueueEmails;
 
 export async function closeQueues() {
-  await Promise.allSettled([emailSendQueue?.close(), schedulerQueue?.close(), importQueue?.close(), whatsappQueue?.close()]);
+  await Promise.allSettled([emailSendQueue?.close(), schedulerQueue?.close(), importQueue?.close(), whatsappQueue?.close(), autopilotQueue?.close()]);
 }

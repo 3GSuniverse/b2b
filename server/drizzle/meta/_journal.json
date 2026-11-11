@@ -204,6 +204,13 @@
       "when": 1794387924023,
       "tag": "0028_ai_caller",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794399114017,
+      "tag": "0029_ai_autopilot",
+      "breakpoints": true
     }
   ]
 }

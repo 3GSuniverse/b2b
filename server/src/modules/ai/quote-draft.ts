@@ -16,15 +16,19 @@ import { useAi } from '../plans/entitlements.js';
 
 export interface AiClient {
   /** `model` overrides the default (replies use a cheaper one than quote drafts) */
-  complete(input: { system: string; prompt: string; maxTokens: number; model?: string }): Promise<string>;
+  /** `think`: a token budget for thinking before answering (extended thinking). The answer still gets maxTokens. */
+  complete(input: { system: string; prompt: string; maxTokens: number; model?: string; think?: number }): Promise<string>;
 }
 
 const anthropic: AiClient = {
-  async complete({ system, prompt, maxTokens, model }) {
+  async complete({ system, prompt, maxTokens, model, think }) {
+    // Claude's extended thinking needs at least 1,024 tokens of budget
+    const budget = think && think >= 1024 ? think : 0;
+    const thinking = budget ? { thinking: { type: 'enabled', budget_tokens: budget } } : {};
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: model ?? env.AI_MODEL ?? 'claude-sonnet-5-5', max_tokens: maxTokens, system, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: model ?? env.AI_MODEL ?? 'claude-sonnet-5-5', max_tokens: maxTokens + budget, ...thinking, system, messages: [{ role: 'user', content: prompt }] }),
       signal: AbortSignal.timeout(90_000),
     });
     const data = (await res.json().catch(() => ({}))) as { content?: { type: string; text?: string }[]; error?: { message?: string } };
@@ -34,7 +38,7 @@ const anthropic: AiClient = {
 };
 
 const openai: AiClient = {
-  async complete({ system, prompt, maxTokens, model: wanted }) {
+  async complete({ system, prompt, maxTokens, model: wanted, think }) {
     const model = wanted ?? env.AI_MODEL ?? 'gpt-5-mini';
     // GPT-5 and o-series models think before answering; that thinking counts toward the token limit
     const reasoning = /^(gpt-5|o\d)/.test(model);
@@ -47,8 +51,8 @@ const openai: AiClient = {
           { role: 'system', content: system },
           { role: 'user', content: prompt },
         ],
-        max_completion_tokens: reasoning ? maxTokens * 3 : maxTokens,
-        ...(reasoning ? { reasoning_effort: 'low' } : {}),
+        max_completion_tokens: reasoning ? maxTokens + Math.max(maxTokens * 2, think ?? 0) : maxTokens,
+        ...(reasoning ? { reasoning_effort: think ? 'medium' : 'low' } : {}),
       }),
       signal: AbortSignal.timeout(90_000),
     });
@@ -59,16 +63,16 @@ const openai: AiClient = {
 };
 
 /** Gemini's request is the same on Google AI Studio and on Vertex AI; only the address and sign-in differ. */
-async function geminiCall(url: string, headers: Record<string, string>, { system, prompt, maxTokens, model }: { system: string; prompt: string; maxTokens: number; model: string }) {
-  // 2.5 models think by default and bill it as output; Drona's tasks are short, so thinking is switched off
-  const thinking = /^gemini-2\.5/.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {};
+async function geminiCall(url: string, headers: Record<string, string>, { system, prompt, maxTokens, model, think }: { system: string; prompt: string; maxTokens: number; model: string; think?: number }) {
+  // 2.5 models bill thinking as output: off unless asked for, then capped at the budget given
+  const thinking = /^gemini-2\.5/.test(model) ? { thinkingConfig: { thinkingBudget: think ?? 0 } } : {};
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: maxTokens, ...thinking },
+      generationConfig: { maxOutputTokens: maxTokens + (think ?? 0), ...thinking },
     }),
     signal: AbortSignal.timeout(90_000),
   });

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { parseBody } from '../../lib/http.js';
 import { requireAuth, requireRole, tenantOf, viewerOf } from '../auth/guard.js';
 import { aiNotesBody, getAiNotes, setAiNotes, suggestBody, suggestReply } from '../ai/reply-draft.js';
+import { autopilotBody, getAutopilot, setAutopilot } from '../ai/autopilot.js';
 import { getThread, listChats, listQuery, markRead, reply, replyBody, setDone, unreadCount } from './service.js';
 
 type Id = { Params: { id: string } };
@@ -21,7 +22,10 @@ export async function inboxRoutes(app: FastifyInstance) {
   );
   // What Drona AI should know about the agency (owners and managers write it; everyone's replies use it)
   app.get('/api/ai/notes', auth, async (req) => getAiNotes(tenantOf(req)));
-  app.put('/api/ai/notes', { preHandler: requireRole('ADMIN') }, async (req) => setAiNotes(tenantOf(req), parseBody(aiNotesBody, req.body).aiNotes));
+  app.put('/api/ai/notes', { preHandler: requireRole('ADMIN') }, async (req) => setAiNotes(tenantOf(req), parseBody(aiNotesBody, req.body)));
+  // Drona AI Autopilot on the employee's own WhatsApp number
+  app.get('/api/ai/autopilot', auth, async (req) => getAutopilot(viewerOf(req)));
+  app.put('/api/ai/autopilot', auth, async (req) => setAutopilot(viewerOf(req), parseBody(autopilotBody, req.body).on));
   app.post<Id>('/api/inbox/:id/read', auth, async (req) => {
     await markRead(viewerOf(req), req.params.id);
     return { ok: true };

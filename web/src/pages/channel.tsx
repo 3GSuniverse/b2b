@@ -34,6 +34,7 @@ import { useSession } from '@/lib/session';
 import type { Communication } from '@/lib/types';
 import { AutomationsPage } from './automations';
 import { InboxTab, useInboxUnread } from './inbox';
+import { AutopilotBar } from '@/components/whatsapp/autopilot';
 import { CampaignsPage } from './campaigns';
 import { WorkingForYou } from './overview';
 import { Domains, Senders } from './settings';
@@ -477,6 +478,7 @@ export function WhatsAppHubPage() {
   }
   return (
     <HubFrame channel="WHATSAPP" tab={tab} tabs={tabs} action={<BandButton to="/campaigns/new?channel=WHATSAPP">New WhatsApp broadcast</BandButton>} stats={bandStats(h.data, 'WHATSAPP')}>
+      {(tab === 'home' || tab === 'inbox') && <AutopilotBar />}
       {tab === 'home' && <OverviewTab h={h.data} channel="WHATSAPP" />}
       {tab === 'inbox' && <InboxTab />}
       {tab === 'broadcasts' && <CampaignsPage channel="WHATSAPP" embedded />}

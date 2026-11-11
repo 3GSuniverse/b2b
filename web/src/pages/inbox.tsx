@@ -62,7 +62,7 @@ type ChatRow = {
 type ThreadMessage = {
   id: string;
   direction: 'IN' | 'OUT';
-  source: 'customer' | 'reply' | 'broadcast' | 'automatic' | 'phone';
+  source: 'customer' | 'reply' | 'broadcast' | 'automatic' | 'phone' | 'autopilot';
   body: string | null;
   mediaKind: string | null;
   mediaName: string | null;
@@ -75,7 +75,7 @@ type ThreadMessage = {
   campaignName: string | null;
 };
 type Thread = {
-  chat: { id: string; phone: string; done: boolean; unread: number };
+  chat: { id: string; phone: string; done: boolean; unread: number; aiDraft: { text: string; note: string | null } | null };
   contact: { id: string; name: string | null; email: string | null; whatsappStatus: string } | null;
   messages: ThreadMessage[];
 };
@@ -361,6 +361,26 @@ function Conversation({ id, onBack }: { id: string; onBack: () => void }) {
             <Sparkles className="h-3.5 w-3.5" /> Drona AI writes replies like these on the Professional plan
           </Link>
         )}
+        {t.chat.aiDraft && !text.trim() && (
+          <div className="mb-2.5 flex flex-col gap-2 rounded-[16px] bg-[linear-gradient(120deg,#fff4e6,#ecebfd)] p-3 animate-[rise-in_400ms_both]">
+            <span className="flex items-center gap-1.5 text-[12.5px] font-bold text-warm-strong">
+              <TriangleAlert className="h-3.5 w-3.5" /> Drona AI held this reply for you
+            </span>
+            {t.chat.aiDraft.note && <p className="text-[12.5px] text-ink-2">{t.chat.aiDraft.note}</p>}
+            <p className="line-clamp-3 rounded-[12px] bg-white/80 px-3 py-2 text-[13px] leading-relaxed">{t.chat.aiDraft.text}</p>
+            <Button
+              size="sm"
+              variant="primary"
+              className="self-start"
+              onClick={() => {
+                typeInto(t.chat.aiDraft!.text, setText);
+                box.current?.focus();
+              }}
+            >
+              <Wand2 className="h-4 w-4" /> Check and send
+            </Button>
+          </div>
+        )}
         {ai.enabled && (
           <DronaAiTray
             chatId={id}
@@ -418,6 +438,8 @@ function Bubble({ m, first }: { m: ThreadMessage; first: boolean }) {
       ? { icon: Megaphone, text: m.campaignName ? `Broadcast: ${m.campaignName}` : 'Broadcast' }
       : m.source === 'automatic'
         ? { icon: Bot, text: 'Sent automatically' }
+        : m.source === 'autopilot'
+          ? { icon: Sparkles, text: 'Drona AI Autopilot' }
         : m.source === 'phone'
           ? { icon: Smartphone, text: 'From the phone' }
           : m.source === 'reply' && m.sentBy
@@ -599,17 +621,25 @@ function DronaAiTray({ chatId, canTeach, hasCustomerMessage, onDraft, drafted }:
   );
 }
 
+const LANGUAGES = [
+  { value: 'auto', label: 'The customer’s own language (recommended)' },
+  ...['English', 'Telugu', 'Hindi', 'Tamil', 'Kannada', 'Malayalam', 'Marathi', 'Bengali', 'Gujarati', 'Odia', 'Punjabi'].map((l) => ({ value: l, label: `Always ${l}` })),
+];
+
 function TeachDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['ai', 'notes'], queryFn: () => api.get<{ aiNotes: string | null }>('/api/ai/notes'), enabled: open });
+  const q = useQuery({ queryKey: ['ai', 'notes'], queryFn: () => api.get<{ aiNotes: string | null; aiLanguage: string }>('/api/ai/notes'), enabled: open });
   const [text, setText] = useState<string | null>(null);
+  const [lang, setLang] = useState<string | null>(null);
   const value = text ?? q.data?.aiNotes ?? '';
+  const language = lang ?? q.data?.aiLanguage ?? 'auto';
   const save = useMutation({
-    mutationFn: () => api.put('/api/ai/notes', { aiNotes: value.trim() || null }),
+    mutationFn: () => api.put('/api/ai/notes', { aiNotes: value.trim() || null, aiLanguage: language }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ai', 'notes'] });
       toast.success('Drona AI will use this from the next reply');
       setText(null);
+      setLang(null);
       onClose();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -631,6 +661,20 @@ function TeachDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
         </>
       }
     >
+      <label className="mb-3 flex flex-col gap-1.5">
+        <span className="text-[13px] font-semibold">Replies are written in</span>
+        <select
+          value={language}
+          onChange={(e) => setLang(e.target.value)}
+          className="h-11 rounded-[12px] border border-line bg-surface px-3 text-[13.5px] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.value} value={l.value}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <textarea
         value={value}
         onChange={(e) => setText(e.target.value)}

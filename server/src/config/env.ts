@@ -63,6 +63,8 @@ const schema = z.object({
   AI_MODEL: z.string().optional(), // quote drafts. default: claude-sonnet-5-5, gpt-5-mini or gemini-2.5-flash
   // WhatsApp reply suggestions are short, so they use a cheaper model. default: claude-haiku-5-5, gpt-5-mini or gemini-2.5-flash-lite
   AI_REPLY_MODEL: z.string().optional(),
+  // Tokens Drona AI may spend thinking before a customer reply (extended thinking). 0 switches it off.
+  AI_THINKING_TOKENS: z.coerce.number().int().min(0).max(16_000).default(1024),
   // Every Drona AI answer across all agencies in 24 hours; past it, AI pauses for everyone. Unset = only the plan limits apply
   AI_GLOBAL_PER_DAY: z.coerce.number().int().min(1).optional(),
   // Drona AI answers (replies and quote drafts) a day during a free trial; paid plans get theirs from the plan

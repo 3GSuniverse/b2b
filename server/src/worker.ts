@@ -11,6 +11,7 @@ import { setWhatsAppGateway } from './modules/whatsapp/gateway.js';
 import { WhatsAppManager } from './modules/whatsapp/manager.js';
 import { deliverWhatsApp, processWhatsAppJob } from './modules/whatsapp/service.js';
 import { loadFiles } from './modules/attachments/service.js';
+import { runAutopilot, type AutopilotJob } from './modules/ai/autopilot.js';
 
 // The worker runs as its own process, separate from the API,
 // so a burst of sending never slows down the dashboard.
@@ -110,6 +111,18 @@ whatsappWorker.on('failed', (job, err) => {
   if (job.attemptsMade >= (job.opts.attempts ?? 1)) void markMessageFailed(job.data.messageId, `gave_up: ${err.message}`.slice(0, 500));
 });
 
+// Drona AI Autopilot: a few answers at once is plenty; each one waits on the AI service anyway
+const autopilotWorker = new Worker<AutopilotJob>(
+  QUEUES.autopilot,
+  async (job) => {
+    const result = await runAutopilot(job.data);
+    logger.debug({ chatId: job.data.chatId, result }, 'autopilot');
+    return result;
+  },
+  { connection: createRedis(), concurrency: 4 },
+);
+autopilotWorker.on('failed', (job, err) => logger.warn({ chatId: job?.data.chatId, err: err.message }, 'autopilot answer failed'));
+
 // One repeating job, every minute. Upsert = safe to run on every boot.
 await getSchedulerQueue().upsertJobScheduler('every-minute', { every: 60_000 }, { name: 'tick' });
 await getSchedulerQueue().upsertJobScheduler('every-5-minutes', { every: 5 * 60_000 }, { name: 'maintenance' });
@@ -117,7 +130,7 @@ await getSchedulerQueue().upsertJobScheduler('every-5-minutes', { every: 5 * 60_
 logger.info(`Worker started (send rate ${env.SEND_RATE_PER_SECOND}/s)`);
 
 async function shutdown() {
-  await Promise.allSettled([emailWorker.close(), schedulerWorker.close(), importWorker.close(), whatsappWorker.close()]);
+  await Promise.allSettled([emailWorker.close(), schedulerWorker.close(), importWorker.close(), whatsappWorker.close(), autopilotWorker.close()]);
   await whatsapp.stop();
   await closeQueues();
   await Promise.allSettled([closeDatabase(), closeRedis()]);

@@ -128,6 +128,8 @@ export const tenants = pgTable('tenants', {
   postalAddress: text(),
   // What Drona AI should know when it writes replies: office hours, policies, how the agency talks
   aiNotes: text(),
+  // The language Drona AI writes to customers in: 'auto' answers in the customer's own language
+  aiLanguage: text().notNull().default('auto'),
   // 'TRAVEL' gets the travel words (trips, destinations, packages); anything else gets order/product words
   businessType: text().notNull().default('TRAVEL'),
   // Free trial: new companies start here; the operator switches them to PAID
@@ -715,6 +717,8 @@ export const whatsappSessions = pgTable('whatsapp_sessions', {
   // The agency's own lower daily limit; null = the plan's limit (see effectiveWhatsAppLimit)
   dailyLimit: integer(),
   intervalSeconds: integer().notNull().default(10),
+  // Drona AI Autopilot: answers this number's customers by itself, handing anything tricky to the employee
+  autopilot: boolean().notNull().default(false),
   lastError: text(),
   connectedAt: ts(),
   createdAt: createdAt(),
@@ -1239,6 +1243,9 @@ export const waChats = pgTable(
     lastDirection: text().$type<'IN' | 'OUT'>(),
     unread: integer().notNull().default(0),
     doneAt: timestamp({ withTimezone: true }), // marked as handled; a new message reopens it
+    // Autopilot held a reply back for a person to check: the draft waits here until someone answers
+    aiDraft: text(),
+    aiDraftNote: text(),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex().on(t.sessionId, t.phone), index().on(t.tenantId, t.lastMessageAt)],
@@ -1254,7 +1261,7 @@ export const waChatMessages = pgTable(
       .references(() => waChats.id, { onDelete: 'cascade' }),
     direction: text().$type<'IN' | 'OUT'>().notNull(),
     // customer: they wrote; reply: an employee answered from Dhrona; phone: sent from the phone itself
-    source: text().$type<'customer' | 'reply' | 'broadcast' | 'automatic' | 'phone'>().notNull(),
+    source: text().$type<'customer' | 'reply' | 'broadcast' | 'automatic' | 'phone' | 'autopilot'>().notNull(),
     body: text(),
     mediaKind: text(), // image, video, document, audio, sticker, location, contact
     mediaName: text(),
