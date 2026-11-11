@@ -200,7 +200,7 @@ export async function createQuote(actor: Actor, tripId: string) {
           discount: 0,
         }
       : {
-        intro: `Thank you for choosing ${tenant.name}. Here is the plan we’ve put together for your ${t.destination ? `${t.destination} ` : ''}trip.`,
+        intro: `Thank you for choosing ${tenant.name}. Here is the ${tenant.businessType === 'TRAVEL' ? `plan we’ve put together for your ${t.destination ? `${t.destination} ` : ''}trip` : 'quote we’ve put together for you'}.`,
         days: Array.from({ length: Math.min(30, nights + 1 || 1) }, (_, i) => ({ title: i === 0 ? 'Arrival' : i === nights ? 'Departure' : '', description: '' })),
         lines: [] as QuoteLine[],
         inclusions: DEFAULT_INCLUSIONS,
@@ -308,7 +308,7 @@ export async function acceptQuote(token: string) {
     type: 'quotes.accepted',
     level: 'SUCCESS',
     title: `${trip.customerName} accepted the quote for ${trip.title}`,
-    body: `${formatInr(q.total)}. They can pay the advance from their trip page; record it when it arrives, and the trip is booked.`,
+    body: `${formatInr(q.total)}. They can pay the advance from their ${q.tenant.businessType === 'TRAVEL' ? 'trip' : 'order'} page; record it when it arrives, and the ${q.tenant.businessType === 'TRAVEL' ? 'trip' : 'order'} is booked.`,
     link: `/trips/${trip.id}`,
     dedupeKey: `quote.accepted:${q.id}`,
   });

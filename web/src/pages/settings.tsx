@@ -17,6 +17,7 @@ import type { DnsRecord, Domain, Mailbox, Sender } from '@/lib/types';
 import { PaymentSettingsPanel } from '@/components/trips/payment-settings';
 import { TripMessagesSettings } from '@/components/trips/trip-messages-settings';
 import { ApiKeysSettings } from '@/components/api-keys';
+import { isTravelBusiness, tx } from '../lib/words';
 
 const SECTIONS = [
   { id: 'payments', label: 'Payments', icon: Wallet },
@@ -666,7 +667,7 @@ export function SettingsPage() {
   const { section } = useParams();
   const { user } = useSession();
   const { search } = useLocation();
-  const sections = SECTIONS.filter((x) => x.id !== 'api-keys' || user.role !== 'MEMBER');
+  const sections = SECTIONS.filter((x) => (x.id !== 'api-keys' || user.role !== 'MEMBER') && (x.id !== 'trip-messages' || isTravelBusiness()));
   // Email setup lives under Email now; everyone connects their own Gmail there (Google sends people back here)
   if (section === 'senders') return <Navigate to={`/email/setup${search}`} replace />;
   if (user.role === 'MEMBER') return <Navigate to="/" replace />;

@@ -23,6 +23,7 @@ import { useWhatsApp } from '@/components/whatsapp/settings';
 import { useNavSection } from '@/lib/section';
 import { useSession } from '@/lib/session';
 import { PlanLock } from '@/components/plan-lock';
+import { tx } from '../lib/words';
 
 type Timing = 'before' | 'on' | 'after';
 interface Draft {
@@ -40,7 +41,7 @@ interface Draft {
 }
 
 const WA_TEXT = {
-  trip: 'Namaste {first_name|there} 🙏\n\nYour trip is on *{trip_date}*. Pickup: [PICKUP TIME AND PLACE].\n\nCarry your ID and tickets. Call us on [PHONE] for anything.',
+  trip: tx('Namaste {first_name|there} 🙏\n\nYour trip is on *{trip_date}*. Pickup: [PICKUP TIME AND PLACE].\n\nCarry your ID and tickets. Call us on [PHONE] for anything.'),
   birthday: 'Happy birthday {first_name|there}! 🎂\n\nWishing you a wonderful year full of happy journeys.\n\nWarm wishes from all of us at {company_name}.',
 };
 
@@ -52,7 +53,7 @@ function sampleText(text: string, company: string, dateKey?: string) {
 }
 
 const RECIPES = {
-  trip: { name: 'Trip reminder, 3 days before', fieldKey: 'trip_date', fieldLabel: 'Trip date', starter: 'trip-reminder', days: 3, timing: 'before' as Timing, sendTime: '09:00', repeat: 'ONCE' as const },
+  trip: { name: tx('Trip reminder, 3 days before'), fieldKey: 'trip_date', fieldLabel: tx('Trip date'), starter: 'trip-reminder', days: 3, timing: 'before' as Timing, sendTime: '09:00', repeat: 'ONCE' as const },
   birthday: { name: 'Birthday wishes', fieldKey: 'birthday', fieldLabel: 'Birthday', starter: 'birthday', days: 0, timing: 'on' as Timing, sendTime: '08:30', repeat: 'YEARLY' as const },
 };
 
@@ -419,7 +420,7 @@ export function AutomationEditorPage() {
                   </Pick>
                 ) : (
                   <span className="inline-flex flex-wrap gap-2">
-                    {['Trip date', 'Birthday'].map((l) => (
+                    {[tx('Trip date'), 'Birthday'].map((l) => (
                       <Button key={l} size="sm" onClick={() => createField.mutate(l)} loading={createField.isPending && createField.variables === l}>
                         Add a “{l}” field
                       </Button>
@@ -525,7 +526,7 @@ export function AutomationEditorPage() {
                   </Link>
                 </>
               ) : (
-                <p className="text-[13px] leading-relaxed text-muted">Choose a template, or start from the ready-made Trip reminder or Birthday design.</p>
+                <p className="text-[13px] leading-relaxed text-muted">{tx("Choose a template, or start from the ready-made Trip reminder or Birthday design.")}</p>
               )}
             </div>
           </Panel>

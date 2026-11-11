@@ -1,5 +1,6 @@
 import { ShieldCheck, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { tx } from '../../lib/words';
 
 /**
  * After a WhatsApp broadcast takes off: a few seconds of advice on keeping the number safe.
@@ -11,11 +12,11 @@ const ALWAYS = [
   'Delete old broadcast chats on your phone now and then. Thousands of chats fill its storage and slow WhatsApp down.',
 ];
 const ROTATING = [
-  'Send only to people who know your agency. Many “block” or “report” taps can get your number banned.',
+  tx('Send only to people who know your agency. Many “block” or “report” taps can get your number banned.'),
   'Keep the phone charged and online, and open WhatsApp on it at least once every two weeks, or the link to Dhrona stops.',
   'Don’t send the same offer to the same people again and again. Change the words and leave a few days between offers.',
   'Reply when customers write back. Numbers that have real conversations are trusted more by WhatsApp.',
-  'A number that’s new to WhatsApp gets blocked fastest. Use one your agency has used for a while.',
+  tx('A number that’s new to WhatsApp gets blocked fastest. Use one your agency has used for a while.'),
   'If people reply STOP, Dhrona stops messaging them automatically. Never add them back.',
 ];
 

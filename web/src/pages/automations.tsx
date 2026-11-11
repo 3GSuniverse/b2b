@@ -13,6 +13,7 @@ import type { Automation } from '@/lib/types';
 import { useSession } from '@/lib/session';
 import { PrettyTags } from '@/lib/tags';
 import { PlanLock, usePlanAllows } from '@/components/plan-lock';
+import { tx } from '../lib/words';
 
 export interface Upcoming {
   days: { day: string; count: number; people: { name: string; email: string; occurrenceDate: string }[] }[];
@@ -138,7 +139,7 @@ export function AutomationsPage({ embedded, channel = 'EMAIL' }: { embedded?: bo
     <>
       {embedded ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-ink-2">{wa ? 'WhatsApp messages' : 'Emails'} that go out by themselves on each customer’s own date: birthdays, anniversaries, trip dates.</p>
+          <p className="text-sm text-ink-2">{wa ? 'WhatsApp messages' : 'Emails'} {tx("that go out by themselves on each customer’s own date: birthdays, anniversaries, trip dates.")}</p>
           {allowed && (
             <LinkButton to={newHref()} variant="primary">
               <Plus className="h-4 w-4" strokeWidth={2.4} />
@@ -166,11 +167,11 @@ export function AutomationsPage({ embedded, channel = 'EMAIL' }: { embedded?: bo
           <Plane className="h-5 w-5" aria-hidden />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-sm font-semibold">Trip messages</span>
+          <span className="text-sm font-semibold">{tx("Trip messages")}</span>
           <span className="text-[13px] text-muted">
             {wa
-              ? 'Built in, and sent on WhatsApp first when the customer has it: payment reminders, “your trip starts soon”, a review request when they’re back.'
-              : 'Built in for every booked trip: “your trip starts soon”, a Google review request when they’re back, and “where next?” months later.'}
+              ? tx('Built in, and sent on WhatsApp first when the customer has it: payment reminders, “your trip starts soon”, a review request when they’re back.')
+              : tx('Built in for every booked trip: “your trip starts soon”, a Google review request when they’re back, and “where next?” months later.')}
           </span>
         </span>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
@@ -193,7 +194,7 @@ export function AutomationsPage({ embedded, channel = 'EMAIL' }: { embedded?: bo
             <section className="flex flex-col gap-3">
               <h2 className="text-[15px] font-semibold">{list.length ? 'Ideas' : 'Start with one of these'}</h2>
               <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
-                {!has('trip_date') && <Recipe icon={<Plane className="h-5 w-5" />} title="Trip reminder" body="3 days before each traveller’s trip date, at 9 AM: what to carry, pickup time, who to call." to={newHref('trip')} />}
+                {!has('trip_date') && <Recipe icon={<Plane className="h-5 w-5" />} title={tx("Trip reminder")} body="3 days before each traveller’s trip date, at 9 AM: what to carry, pickup time, who to call." to={newHref('trip')} />}
                 {!has('birthday') && <Recipe icon={<CakeSlice className="h-5 w-5" />} title="Birthday wishes" body="On each customer’s birthday, every year, at 8:30 AM. A warm note, maybe a small offer." to={newHref('birthday')} />}
                 {list.length === 0 && (
                   <button type="button" onClick={() => nav(newHref())} className="flex items-center gap-4 rounded-[var(--radius-panel)] border border-dashed border-[#cfcde6] p-5 text-left hover:border-accent hover:bg-accent-soft/30">
@@ -202,7 +203,7 @@ export function AutomationsPage({ embedded, channel = 'EMAIL' }: { embedded?: bo
                     </span>
                     <span className="flex flex-col gap-1">
                       <span className="text-[15px] font-semibold">Something else</span>
-                      <span className="text-[13px] text-muted">Any date you keep for your customers: anniversaries, passport expiry, last trip.</span>
+                      <span className="text-[13px] text-muted">{tx("Any date you keep for your customers: anniversaries, passport expiry, last trip.")}</span>
                     </span>
                   </button>
                 )}

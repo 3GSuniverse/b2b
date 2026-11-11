@@ -51,7 +51,7 @@ export function ListsView({ lists, onOpen }: { lists?: ContactList[]; onOpen: (i
               </Button>
             }
           >
-            For example “Past travellers” or “Pilgrimage interest”. A broadcast can go to one list or several.
+            {tx("For example “Past travellers” or “Pilgrimage interest”. A broadcast can go to one list or several.")}
           </EmptyState>
         </Panel>
       ) : (

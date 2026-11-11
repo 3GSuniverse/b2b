@@ -51,7 +51,7 @@ const keyOf = (label: string) =>
     .replace(/^(\d)/, 'f_$1')
     .slice(0, 40);
 
-const SAMPLE_CSV = 'Name,Email,Phone,City,Trip date,Birthday\nPriya Nair,priya@example.com,98480 22338,Hyderabad,15/12/2026,21/03/1990\n';
+const SAMPLE_CSV = tx('Name,Email,Phone,City,Trip date,Birthday\nPriya Nair,priya@example.com,98480 22338,Hyderabad,15/12/2026,21/03/1990\n');
 
 function Steps({ step }: { step: 1 | 2 | 3 }) {
   const labels = ['Upload', 'Match columns', 'Done'];

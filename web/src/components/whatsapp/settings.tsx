@@ -10,6 +10,7 @@ import { api, ApiError } from '@/lib/api';
 import { ago, n } from '@/lib/format';
 import type { WhatsAppStatus } from '@/lib/types';
 import { useSession } from '@/lib/session';
+import { tx } from '../../lib/words';
 
 export function useWhatsApp(opts: { poll?: boolean } = {}) {
   return useQuery({
@@ -222,7 +223,7 @@ export function WhatsAppSettings({ heading = true }: { heading?: boolean } = {})
         <p>Only customers marked “Agreed to WhatsApp messages” with a phone number get WhatsApp broadcasts.</p>
         <p>If someone replies STOP, they’re unsubscribed from WhatsApp straight away and get a short confirmation.</p>
         <p>If the phone unlinks this device or WhatsApp blocks the number, sending pauses and you get an alert.</p>
-        <p>Automatic messages (payment reminders, trip follow-ups) go from the number of the employee who handles the trip, or from any linked number if they don’t have one.</p>
+        <p>{tx("Automatic messages (payment reminders, trip follow-ups) go from the number of the employee who handles the trip, or from any linked number if they don’t have one.")}</p>
       </Panel>
 
       <Dialog

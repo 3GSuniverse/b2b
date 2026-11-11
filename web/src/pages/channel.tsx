@@ -38,6 +38,7 @@ import { CampaignsPage } from './campaigns';
 import { WorkingForYou } from './overview';
 import { Domains, Senders } from './settings';
 import { TemplatesPage } from './templates';
+import { tx } from '../lib/words';
 
 /**
  * The two master tabs. Everything about email lives under Email, everything about WhatsApp
@@ -291,7 +292,7 @@ function EmailReady({ h }: { h: Hub }) {
         <span className={cn('grid h-9 w-9 place-items-center rounded-[11px]', ok ? 'bg-success-soft text-success' : 'bg-warm-soft text-warm')}>{ok ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />}</span>
         <div className="flex min-w-0 flex-col">
           <span className="text-[15px] font-semibold">{ok ? 'Ready to send' : 'Add a sending address'}</span>
-          <span className="truncate text-[13px] text-muted">{ok ? `From ${e.defaultSender}` : 'Emails need your agency’s address to go out from.'}</span>
+          <span className="truncate text-[13px] text-muted">{ok ? `From ${e.defaultSender}` : tx('Emails need your agency’s address to go out from.')}</span>
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
@@ -355,7 +356,7 @@ function OverviewTab({ h, channel }: { h: Hub | undefined; channel: Channel }) {
     channel === 'EMAIL'
       ? [
           { to: '/campaigns/new', icon: Megaphone, title: 'Send a broadcast', note: 'One email to many customers, now or later', tone: 'bg-accent-soft text-accent' },
-          { to: '/automations/new?recipe=birthday', icon: Clock3, title: 'Automatic email', note: 'Birthdays, anniversaries, trip dates', tone: 'bg-highlight-soft text-warm' },
+          { to: '/automations/new?recipe=birthday', icon: Clock3, title: 'Automatic email', note: tx('Birthdays, anniversaries, trip dates'), tone: 'bg-highlight-soft text-warm' },
           { to: '/campaigns/new?to=temporary', icon: ClipboardList, title: 'Temporary list', note: 'Paste or upload emails. They aren’t saved.', tone: 'bg-blue-soft text-blue-ink' },
           { to: '/email/templates', icon: FileText, title: 'Email designs', note: 'Reusable templates for offers and updates', tone: 'bg-plum-soft text-plum-ink' },
         ]
@@ -436,7 +437,7 @@ function EmailSetup({ admin }: { admin: boolean }) {
       )}
       {part === 'senders' ? <Senders /> : <Domains />}
       <p className="flex items-center gap-1.5 text-xs text-muted">
-        <Globe className="h-3.5 w-3.5" /> Customers see your agency’s name and address on every email, never {BRAND.name}.
+        <Globe className="h-3.5 w-3.5" /> {tx("Customers see your agency’s name and address on every email, never")} {BRAND.name}.
       </p>
     </>
   );
@@ -468,7 +469,7 @@ export function WhatsAppHubPage() {
               </a>
             }
           >
-            It’s included in the free trial. After the trial, we switch it on for your agency on request.
+            {tx("It’s included in the free trial. After the trial, we switch it on for your agency on request.")}
           </EmptyState>
         </Panel>
       </HubFrame>

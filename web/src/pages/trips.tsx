@@ -16,7 +16,7 @@ import { dateRange, inr, inrShort, n } from '@/lib/format';
 import type { Contact, GroupSummary, TripStats, TripStatus, TripSummary } from '@/lib/types';
 import { CountUp } from '@/lib/motion';
 import { usePlanAllows } from '@/components/plan-lock';
-import { tx } from '../lib/words';
+import { isTravelBusiness, tx } from '../lib/words';
 
 type View = 'board' | 'list';
 type ListTab = 'OPEN' | 'overdue' | 'due' | 'COMPLETED' | 'CLOSED' | 'ALL';
@@ -449,11 +449,13 @@ export function TripsPage() {
               <PackageIcon className="h-4 w-4" />
               {tx("Packages")}
             </LinkButton>
-            <LinkButton to="/trips/prices">
-              <Tag className="h-4 w-4" />
-              Price list
-            </LinkButton>
-            {groupsAllowed && (
+            {isTravelBusiness() && (
+              <LinkButton to="/trips/prices">
+                <Tag className="h-4 w-4" />
+                Price list
+              </LinkButton>
+            )}
+            {groupsAllowed && isTravelBusiness() && (
               <Button onClick={() => setNewGroup(true)}>
                 <Users className="h-4 w-4" />
                 New group

@@ -12,6 +12,7 @@ import { cn } from '@/lib/cn';
 import { CountUp, useMounted } from '@/lib/motion';
 import { useSession } from '@/lib/session';
 import type { Entitlements } from '@/lib/types';
+import { tx } from '../lib/words';
 
 type Kind = 'NEW' | 'RENEW' | 'CHANGE';
 type Billing = {
@@ -272,7 +273,7 @@ export function BillingSettings() {
             const gst = Math.round((base * b.gstPercent) / 100);
             const same = paid && b.current.planId === p.id && b.current.seats === seats;
             const dark = p.id === 'ultra';
-            if (!canPay) return <p className={cn('text-xs', dark ? 'text-nav-muted' : 'text-muted')}>Only the agency owner can pay.</p>;
+            if (!canPay) return <p className={cn('text-xs', dark ? 'text-nav-muted' : 'text-muted')}>{tx("Only the agency owner can pay.")}</p>;
             if (w.state === 'paid') return <p className={cn('text-xs', dark ? 'text-nav-muted' : 'text-muted')}>Your next billing cycle is already paid.</p>;
             if (w.state === 'locked')
               return (

@@ -9,7 +9,7 @@ import { sanitizeRupees } from '@/components/trips/shared';
 import { api, ApiError } from '@/lib/api';
 import { inr, rupeesInput } from '@/lib/format';
 import type { Package, PackageDetail } from '@/lib/types';
-import { tx } from '../../lib/words';
+import { isTravelBusiness, tx } from '../../lib/words';
 
 export function usePackages() {
   return useQuery({ queryKey: ['packages'], queryFn: () => api.get<{ packages: Package[] }>('/api/packages').then((r) => r.packages), staleTime: 60_000 });
@@ -112,7 +112,7 @@ export function PackageSheet({ pkg, open, onClose, onSaved }: { pkg: PackageDeta
         </Field>
         <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-4">
           <Field label={tx("Destination")} error={err('destination')}>
-            {(p) => <Input {...p} value={f.destination} onChange={(e) => setF({ ...f, destination: e.target.value })} placeholder="Kerala" />}
+            {(p) => <Input {...p} value={f.destination} onChange={(e) => setF({ ...f, destination: e.target.value })} placeholder={isTravelBusiness() ? "Kerala" : "Sofa set"} />}
           </Field>
           <Field label="Nights" error={err('nights')}>
             {(p) => <Input {...p} type="number" min={0} max={60} value={f.nights} onChange={(e) => setF({ ...f, nights: e.target.value })} />}

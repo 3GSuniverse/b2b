@@ -13,6 +13,7 @@ import { api, ApiError, qs } from '@/lib/api';
 import { inr, rupeesInput } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import type { RateItem, RateKind, RateUnit } from '@/lib/types';
+import { tx } from '../lib/words';
 
 const ICON: Record<RateKind, ReactNode> = {
   HOTEL: <BedDouble className="h-4 w-4" />,
@@ -100,7 +101,7 @@ function RateSheet({ rate, open, onClose }: { rate: RateItem | null; open: boole
         <Field label="Name" error={err('name')}>
           {(p) => <Input {...p} autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={f.kind === 'HOTEL' ? 'Houseboat, deluxe room' : f.kind === 'TRANSPORT' ? 'Innova Crysta with driver' : 'Kathakali show'} />}
         </Field>
-        <Field label="Destination" hint="Where it applies. Quotes for that place show it first." error={err('destination')}>
+        <Field label={tx("Destination")} hint="Where it applies. Quotes for that place show it first." error={err('destination')}>
           {(p) => <Input {...p} value={f.destination} onChange={(e) => setF({ ...f, destination: e.target.value })} placeholder="Kerala" />}
         </Field>
         <div className="grid grid-cols-2 gap-4">
@@ -149,7 +150,7 @@ export function PricesPage() {
         back={
           <Link to="/trips" className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-muted hover:text-ink">
             <ArrowLeft className="h-4 w-4" aria-hidden />
-            Trips
+            {tx("Trips")}
           </Link>
         }
         title="Price list"

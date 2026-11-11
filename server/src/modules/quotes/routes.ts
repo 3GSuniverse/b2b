@@ -108,7 +108,7 @@ export async function quoteRoutes(app: FastifyInstance) {
     const expired = q.status === 'SENT' && q.validUntil && q.validUntil < today;
     const ask = waLink(s.contactPhone, `Hi, about the quote for ${trip.title} (trip #${trip.number}): `);
 
-    const brand = `<div class="brand"><span>${e(tenant.name)}</span><small>Quote ${q.version > 1 ? `v${q.version} ` : ''}· Trip #${trip.number}</small></div>`;
+    const brand = `<div class="brand"><span>${e(tenant.name)}</span><small>Quote ${q.version > 1 ? `v${q.version} ` : ''}· ${tenant.businessType === 'TRAVEL' ? 'Trip' : 'Order'} #${trip.number}</small></div>`;
     const draft = q.status === 'DRAFT' ? `<div class="banner">Preview. The customer can’t see this until you send it.</div>` : '';
     const head = `<div class="card"><h1>${e(trip.title)}</h1><div class="meta">${[e(`For ${trip.customerName}`), e(range(trip.startDate, trip.endDate)), `${travellers} traveller${travellers === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}</div>${q.intro ? `<p style="margin:14px 0 0;color:var(--ink2)">${e(q.intro)}</p>` : ''}</div>`;
 
@@ -127,7 +127,7 @@ export async function quoteRoutes(app: FastifyInstance) {
 ${ask ? `<p class="note" style="text-align:center;margin:0">Questions? <a href="${e(ask)}">Ask on WhatsApp</a></p>` : ''}`;
     }
 
-    const price = `<div class="card"><div class="due-label">Total for ${travellers} traveller${travellers === 1 ? '' : 's'}</div><div class="amount">${formatInr(t.total)}</div>${t.perPerson && travellers > 1 ? `<div class="per">${formatInr(t.perPerson)} per person</div>` : ''}${q.discount > 0 ? `<div class="per">Includes a discount of ${formatInr(q.discount)}</div>` : ''}${q.validUntil && !expired && q.status === 'SENT' ? `<p class="note">Valid until ${d(q.validUntil)}</p>` : ''}</div>`;
+    const price = `<div class="card"><div class="due-label">Total${tenant.businessType === 'TRAVEL' ? ` for ${travellers} traveller${travellers === 1 ? '' : 's'}` : ''}</div><div class="amount">${formatInr(t.total)}</div>${t.perPerson && travellers > 1 ? `<div class="per">${formatInr(t.perPerson)} per person</div>` : ''}${q.discount > 0 ? `<div class="per">Includes a discount of ${formatInr(q.discount)}</div>` : ''}${q.validUntil && !expired && q.status === 'SENT' ? `<p class="note">Valid until ${d(q.validUntil)}</p>` : ''}</div>`;
 
     const start = trip.startDate;
     const days = q.days.length

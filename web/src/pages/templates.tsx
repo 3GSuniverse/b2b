@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { ago } from '@/lib/format';
 import { PrettyTags } from '@/lib/tags';
 import type { Template } from '@/lib/types';
+import { tx } from '../lib/words';
 
 export function TemplatesPage({ embedded }: { embedded?: boolean } = {}) {
   const nav = useNavigate();
@@ -85,7 +86,7 @@ export function TemplatesPage({ embedded }: { embedded?: boolean } = {}) {
       ) : list.length === 0 ? (
         <Panel>
           <EmptyState icon={<LayoutTemplate />} title="No templates yet" action={<Button variant="primary" onClick={() => setPicking(true)}>Start from a design</Button>}>
-            Save designs you use often, like your monthly offers email or the trip reminder.
+            {tx("Save designs you use often, like your monthly offers email or the trip reminder.")}
           </EmptyState>
         </Panel>
       ) : (

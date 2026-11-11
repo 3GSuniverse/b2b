@@ -52,6 +52,7 @@ import { Segmented } from '@/components/ui/controls';
 import { PrettyTags } from '@/lib/tags';
 import type { Attachment, Audience, Campaign, CampaignPreview, Check as CheckT, Sender } from '@/lib/types';
 import { takeoff } from '@/lib/celebrate';
+import { tx } from '../lib/words';
 
 // ---------------------------------------------------------------- time helpers
 
@@ -830,7 +831,7 @@ function Composer({ id }: { id: string }) {
             number={isLetter ? 4 : 5}
             next={{ label: 'Done: check and send', onClick: () => setOpen(null) }}
             title="Attachments"
-            summary={draft.attachments.length ? describeFiles(draft.attachments) : 'Optional: brochure, itinerary, photos'}
+            summary={draft.attachments.length ? describeFiles(draft.attachments) : tx('Optional: brochure, itinerary, photos')}
             done={draft.attachments.length > 0 && !errorFor(['attachments'])}
             error={errorFor(['attachments'])}
             open={open === 'files'}

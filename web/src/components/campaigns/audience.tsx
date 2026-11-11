@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { n } from '@/lib/format';
 import type { Audience, AudienceFilter, Contact, ContactList } from '@/lib/types';
+import { tx } from '../../lib/words';
 
 const CORE_FIELDS = [
   { key: 'first_name', label: 'First name' },
@@ -258,7 +259,7 @@ function ListPicker({ channel, lists, selected, onChange }: { channel: 'EMAIL' |
       {!lists ? (
         <Skeleton className="m-3 h-10" />
       ) : lists.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-ink-2">You don’t have any lists yet. Make one below, for example “Past travellers” or “Char Dham enquiries”.</p>
+        <p className="px-4 py-3 text-sm text-ink-2">{tx("You don’t have any lists yet. Make one below, for example “Past travellers” or “Char Dham enquiries”.")}</p>
       ) : (
         <div className="flex max-h-72 flex-col divide-y divide-line-soft overflow-y-auto">
           {lists.map((l) => {

@@ -24,6 +24,7 @@ import type { Attachment, Audience, Campaign, CampaignPreview } from '@/lib/type
 import { ChecksPanel, nextAt, Step, toIso, toLocalInput } from './composer';
 import { takeoff } from '@/lib/celebrate';
 import { showWhatsAppSafetyTips } from '@/components/whatsapp/safety-tips';
+import { tx } from '../lib/words';
 
 const MAX = 4096;
 interface Draft {
@@ -378,7 +379,7 @@ export function WhatsAppComposer({ c }: { c: Campaign }) {
             number={4}
             next={{ label: 'Done: check and send', onClick: () => setOpen(null) }}
             title="Attachments"
-            summary={draft.attachments.length ? describeFiles(draft.attachments) : 'Optional: photos, videos, brochure, itinerary'}
+            summary={draft.attachments.length ? describeFiles(draft.attachments) : tx('Optional: photos, videos, brochure, itinerary')}
             done={draft.attachments.length > 0 && !errorFor(['attachments'])}
             error={errorFor(['attachments'])}
             open={open === 'files'}

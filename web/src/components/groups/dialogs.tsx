@@ -13,7 +13,7 @@ import { api, ApiError } from '@/lib/api';
 import { inr, rupeesInput } from '@/lib/format';
 import type { Attachment, GroupDetail } from '@/lib/types';
 import { takeoff } from '@/lib/celebrate';
-import { tx } from '../../lib/words';
+import { isTravelBusiness, tx } from '../../lib/words';
 
 const errOf = (e: unknown, k: string) => (e instanceof ApiError ? e.field(k) : undefined);
 

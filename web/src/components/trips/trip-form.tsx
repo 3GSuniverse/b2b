@@ -12,7 +12,7 @@ import { inr, phone as fmtPhone, rupeesInput } from '@/lib/format';
 import { PackageSelect, usePackages } from '@/components/packages/package-sheet';
 import type { Contact, TripDetail, TripSource } from '@/lib/types';
 import { SOURCES, sanitizeRupees, useTeam } from './shared';
-import { tx } from '../../lib/words';
+import { isTravelBusiness, tx } from '../../lib/words';
 
 type Picked = { id: string; name: string; phone: string | null; email: string | null };
 
@@ -135,7 +135,7 @@ function TripFieldsForm({ f, setF, err, showPrice }: { f: TripFields; setF: (f: 
       )}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label={tx("Destination")} error={err('destination')}>
-          {(p) => <Input {...p} value={f.destination} onChange={(e) => setF({ ...f, destination: e.target.value })} placeholder="Kashmir" />}
+          {(p) => <Input {...p} value={f.destination} onChange={(e) => setF({ ...f, destination: e.target.value })} placeholder={isTravelBusiness() ? "Kashmir" : "Sofa set"} />}
         </Field>
         <Field label={tx("Trip name")} hint={f.title ? undefined : tx(`Leave empty for “${f.destination ? `${f.destination} trip` : 'Trip for …'}”`)} error={err('title')}>
           {(p) => <Input {...p} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder={tx("Family trip, Dec")} />}

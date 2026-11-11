@@ -38,6 +38,7 @@ import { phone as formatPhone } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { Dialog } from '@/components/ui/overlay';
 import { Button } from '@/components/ui/button';
+import { tx } from '../lib/words';
 
 /**
  * WhatsApp inbox: every conversation on the agency's linked number in one place.
@@ -568,7 +569,7 @@ function DronaAiTray({ chatId, canTeach, hasCustomerMessage, onDraft, drafted }:
           </form>
           {canTeach && (
             <button type="button" onClick={() => setTeaching(true)} className="self-start text-[12px] font-semibold text-accent hover:text-accent-strong">
-              Teach Drona AI about your agency
+              {tx("Teach Drona AI about your agency")}
             </button>
           )}
         </div>
@@ -617,8 +618,8 @@ function TeachDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
     <Dialog
       open={open}
       onOpenChange={(o) => !o && onClose()}
-      title="Teach Drona AI about your agency"
-      description="Everything here is used in every reply it writes. Your packages and each customer’s trips are read automatically; add what they don’t say."
+      title={tx("Teach Drona AI about your agency")}
+      description={tx("Everything here is used in every reply it writes. Your packages and each customer’s trips are read automatically; add what they don’t say.")}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>

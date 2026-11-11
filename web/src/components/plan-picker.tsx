@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Segmented } from '@/components/ui/controls';
 import { PLAN_FEATURES, PLANS, periodPrice, SEATS, type Plan, type PlanId } from '@/lib/brand';
 import { cn } from '@/lib/cn';
+import { tx } from '../lib/words';
 
 export type Period = 'month' | 'year';
 const inr = (v: number) => `₹${v.toLocaleString('en-IN')}`;
@@ -126,7 +127,7 @@ export function PlanCards({
                 {current === p.id ? (
                   <span className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-semibold', p.id === 'basic' ? 'bg-accent text-on-primary' : 'bg-white text-accent')}>Your plan</span>
                 ) : (
-                  p.popular && <span className="rounded-full bg-highlight px-2.5 py-0.5 text-[11px] font-semibold text-white">Most agencies pick this</span>
+                  p.popular && <span className="rounded-full bg-highlight px-2.5 py-0.5 text-[11px] font-semibold text-white">{tx("Most agencies pick this")}</span>
                 )}
               </div>
               <p className="flex items-baseline gap-1.5">
