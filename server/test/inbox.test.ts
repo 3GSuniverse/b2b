@@ -53,6 +53,17 @@ describe('WhatsApp inbox', () => {
     expect(chat).toMatchObject({ unread: 1, lastDirection: 'IN', lastPreview: 'Is it available in December?' });
   });
 
+  it('a one-to-one message sent from Dhrona starts a chat, so it shows in the inbox', async () => {
+    const { tenant, gw, line } = await agencyWithBroadcast();
+    expect(await db.$count(waChats)).toBe(0); // the broadcast alone doesn't
+    const [m] = await db.insert(messages).values({ tenantId: tenant.id, channel: 'WHATSAPP', toAddress: '+919848077777', body: 'Your Goa quote is ready', whatsappSessionId: line.id }).returning();
+    expect(await processWhatsAppJob(m!.id, gw)).toBe('sent');
+    const chat = await db.query.waChats.findFirst({ where: eq(waChats.phone, '+919848077777') });
+    expect(chat).toMatchObject({ lastDirection: 'OUT', unread: 0 });
+    const rows = await db.select().from(waChatMessages).where(eq(waChatMessages.chatId, chat!.id));
+    expect(rows.map((r) => r.body)).toEqual(['Your Goa quote is ready']);
+  });
+
   it('the team answers from Dhrona; the reply is sent and not recorded twice', async () => {
     const { tenant, gw, line } = await agencyWithBroadcast();
     const chatId = await recordIncoming(tenant.id, line.id, { phone: '+919848012345', text: 'Price for 4?', waId: 'IN-2', at: new Date() });

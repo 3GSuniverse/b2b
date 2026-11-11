@@ -153,7 +153,7 @@ export async function recordFromPhone(tenantId: string, sessionId: string, m: In
   if (row) await touch(chatId, 'OUT', m.text, m.mediaKind, m.at);
 }
 
-/** Dhrona delivered a WhatsApp message: add it to the person's chat, if they have one. */
+/** Dhrona delivered a WhatsApp message: add it to the person's chat (starting one, unless it's a broadcast). */
 export async function recordSent(
   msg: Pick<Message, 'id' | 'tenantId' | 'toAddress' | 'campaignId' | 'automationId' | 'sentById' | 'service' | 'whatsappSessionId'>,
   text: string,
@@ -166,8 +166,11 @@ export async function recordSent(
     return;
   }
   if (!msg.whatsappSessionId) return;
-  const chat = await db.query.waChats.findFirst({ where: and(eq(waChats.sessionId, msg.whatsappSessionId), eq(waChats.phone, msg.toAddress)), columns: { id: true } });
-  if (!chat) return; // copied in later if they ever reply
+  const found = await db.query.waChats.findFirst({ where: and(eq(waChats.sessionId, msg.whatsappSessionId), eq(waChats.phone, msg.toAddress)), columns: { id: true } });
+  // A one-to-one message (sent from Dhrona, a reminder, a quote…) starts the chat, so it shows in the inbox.
+  // Broadcasts don't: thousands of one-way chats would bury real conversations; theirs appear when the person replies.
+  if (!found && msg.campaignId) return;
+  const chat = found ?? { id: await ensureChat(msg.tenantId, msg.whatsappSessionId, msg.toAddress) };
   await db
     .insert(waChatMessages)
     .values({ tenantId: msg.tenantId, chatId: chat.id, direction: 'OUT', source: sourceOf(msg), body: text || null, waId, messageId: msg.id, sentById: msg.sentById, at })
