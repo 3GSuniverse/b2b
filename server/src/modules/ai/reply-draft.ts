@@ -210,7 +210,7 @@ export async function composeReply(tenantId: string, chat: Chat, opts: { mode: '
   if (!built) return null;
   const text = await ai.complete({ ...built, maxTokens: 700, model: replyModel(), think: env.AI_THINKING_TOKENS || undefined });
   const parsed = parseReply(text);
-  if (!parsed) throw new AppError(502, 'ai_bad_answer', 'Drona AI’s answer didn’t come back right. Try again.');
+  if (!parsed) throw new AppError(503, 'ai_bad_answer', 'Drona AI’s answer didn’t come back right. Try again.');
   return parsed;
 }
 

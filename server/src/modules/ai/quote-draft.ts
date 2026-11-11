@@ -20,6 +20,12 @@ export interface AiClient {
   complete(input: { system: string; prompt: string; maxTokens: number; model?: string; think?: number }): Promise<string>;
 }
 
+/** AI failures are logged too, so `drona logs` shows the provider's own words. */
+function logAi(e: AppError) {
+  console.error(`[ai] ${e.message}`);
+  return e;
+}
+
 /** A request to the AI service. Network failures and timeouts become a clear message instead of "Something went wrong". */
 async function aiFetch(url: string, init: RequestInit) {
   try {
@@ -28,7 +34,7 @@ async function aiFetch(url: string, init: RequestInit) {
     const e = err as Error & { cause?: { code?: string } };
     const why = e.name === 'TimeoutError' ? 'it took too long to answer' : (e.cause?.code ?? e.message);
     console.error(`[ai] couldn't reach ${new URL(url).host}:`, e.cause ?? e);
-    throw new AppError(502, 'ai_unreachable', `Couldn’t reach the AI service (${why}). Try again in a moment.`);
+    throw new AppError(503, 'ai_unreachable', `Couldn’t reach the AI service (${why}). Try again in a moment.`);
   }
 }
 
@@ -44,7 +50,7 @@ const anthropic: AiClient = {
       signal: AbortSignal.timeout(90_000),
     });
     const data = (await res.json().catch(() => ({}))) as { content?: { type: string; text?: string }[]; error?: { message?: string } };
-    if (!res.ok) throw new AppError(502, 'ai_error', `The AI service answered with an error: ${data.error?.message ?? res.status}`);
+    if (!res.ok) throw logAi(new AppError(503, 'ai_error', `The AI service answered with an error: ${data.error?.message ?? res.status}`));
     return (data.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join('');
   },
 };
@@ -69,7 +75,7 @@ const openai: AiClient = {
       signal: AbortSignal.timeout(90_000),
     });
     const data = (await res.json().catch(() => ({}))) as { choices?: { message?: { content?: string | null } }[]; error?: { message?: string } };
-    if (!res.ok) throw new AppError(502, 'ai_error', `The AI service answered with an error: ${data.error?.message ?? res.status}`);
+    if (!res.ok) throw logAi(new AppError(503, 'ai_error', `The AI service answered with an error: ${data.error?.message ?? res.status}`));
     return data.choices?.[0]?.message?.content ?? '';
   },
 };
@@ -89,7 +95,7 @@ async function geminiCall(url: string, headers: Record<string, string>, { system
     signal: AbortSignal.timeout(90_000),
   });
   const data = (await res.json().catch(() => ({}))) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]; error?: { message?: string } };
-  if (!res.ok) throw new AppError(502, 'ai_error', `The AI service answered with an error: ${data.error?.message ?? res.status}`);
+  if (!res.ok) throw logAi(new AppError(503, 'ai_error', `The AI service answered with an error: ${data.error?.message ?? res.status}`));
   return (data.candidates?.[0]?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? '').join('');
 }
 
@@ -110,7 +116,7 @@ let vertexToken: { value: string; until: number } | null = null;
 let vertexProject: string | null = null;
 async function fromMetadata(path: string) {
   const res = await fetch(`${METADATA}/${path}`, { headers: { 'Metadata-Flavor': 'Google' }, signal: AbortSignal.timeout(5_000) }).catch(() => null);
-  if (!res?.ok) throw new AppError(502, 'ai_error', 'Vertex AI: couldn’t sign in with the VM’s service account. Is the server running on Google Cloud with access to Cloud APIs?');
+  if (!res?.ok) throw logAi(new AppError(503, 'ai_error', 'Vertex AI: couldn’t sign in with the VM’s service account. Is the server running on Google Cloud with access to Cloud APIs?'));
   return res;
 }
 /** Tests start from a clean sign-in. */
@@ -226,7 +232,7 @@ ${nights !== null ? `Make exactly ${nights + 1} days.` : 'Choose a sensible numb
 
   const text = await ai.complete({ system, prompt, maxTokens: 4000 });
   const parsed = answer.safeParse(extractJson(text));
-  if (!parsed.success) throw new AppError(502, 'ai_bad_answer', 'The AI’s answer didn’t come back in the right shape. Try again.');
+  if (!parsed.success) throw new AppError(503, 'ai_bad_answer', 'The AI’s answer didn’t come back in the right shape. Try again.');
   await db.insert(auditLogs).values({ tenantId, userId, action: 'ai.draft', entity: 'quote', entityId: q.id, meta: { language: input.language } });
 
   const byId = new Map(rates.map((r) => [r.id, r]));
