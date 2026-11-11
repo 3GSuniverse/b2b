@@ -96,7 +96,7 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
     db.select({ status: contacts.emailStatus, n: count() }).from(contacts).where(and(eq(contacts.tenantId, tenantId), onlyMine ? eq(contacts.ownerId, userId) : undefined)).groupBy(contacts.emailStatus),
     db.select().from(sendingDomains).where(eq(sendingDomains.tenantId, tenantId)),
     db.query.senders.findMany({ where: eq(senders.tenantId, tenantId), with: { domain: true, connection: true } }),
-    unreadCount(tenantId),
+    unreadCount(tenantId, onlyMine ? userId : undefined),
     getCommunication(tenantId, thisMonth, tz, now, onlyMine ? userId : undefined),
   ]);
 

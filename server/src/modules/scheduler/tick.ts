@@ -67,6 +67,7 @@ export async function runSchedulerTick(opts: { now?: Date; enqueue?: EnqueueFn }
         .returning();
       if (failed) {
         await notify(failed.tenantId, {
+          userId: failed.createdById,
           type: 'campaign.failed',
           level: 'ERROR',
           title: `“${failed.name}” couldn’t be sent at its scheduled time`,

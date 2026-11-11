@@ -544,6 +544,7 @@ export const automations = pgTable(
   {
     id: id(),
     tenantId: tenantRef(),
+    createdById: text().references(() => users.id, { onDelete: 'set null' }), // the employee whose automation this is
     name: text().notNull(),
     status: automationStatus().notNull().default('DRAFT'),
     channel: channel().notNull().default('EMAIL'),
@@ -755,6 +756,8 @@ export const notifications = pgTable(
     title: text().notNull(),
     body: text(),
     link: text(), // dashboard path, e.g. /campaigns/abc
+    // Who it is for. Empty: the owner and managers only. An employee sees just the ones made for them.
+    userId: text().references(() => users.id, { onDelete: 'cascade' }),
     // Same key = same event; prevents duplicates when a check runs twice
     dedupeKey: text(),
     readAt: ts(),

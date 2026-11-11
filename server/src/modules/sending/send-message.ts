@@ -76,6 +76,7 @@ export async function maybeCompleteCampaign(campaignId: string) {
     if (done && done.recipients > 0) {
       const skipped = done.suppressed + done.failed;
       await notify(done.tenantId, {
+        userId: done.createdById,
         type: 'campaign.completed',
         level: done.failed > 0 ? 'WARNING' : 'SUCCESS',
         title: `“${done.name}” has been sent`,

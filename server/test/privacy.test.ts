@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
-import { campaigns, messages, waChats, whatsappSessions } from '../src/db/schema.js';
+import { automations, campaigns, customFields, messages, waChats, whatsappSessions } from '../src/db/schema.js';
 import { closeDatabase, db } from '../src/lib/db.js';
 import { closeRedis } from '../src/lib/redis.js';
+import { notify } from '../src/modules/notifications/service.js';
 import { recordIncoming } from '../src/modules/inbox/service.js';
 import { api, employee, signup } from './api-helpers.js';
 import { makeContact, resetDb } from './helpers.js';
@@ -101,5 +102,34 @@ describe('employees never see each other’s work', () => {
     // An employee can erase only their own
     expect((await A.post('/api/contacts/delete', { contactIds: [id] })).json().deleted).toBe(1);
     expect((await O.get('/api/contacts')).json().total).toBe(1);
+  });
+
+  it('automations and bell notifications stay with the employee they belong to', async () => {
+    const owner = await signup(app);
+    const tenantId = owner.json.tenant.id;
+    const asha = await employee(app, owner, 'asha');
+    const ravi = await employee(app, owner, 'ravi');
+    const A = api(app, asha.cookie);
+    const R = api(app, ravi.cookie);
+    const O = api(app, owner.cookie);
+
+    const [field] = await db.insert(customFields).values({ tenantId, key: 'birthday', label: 'Birthday', type: 'DATE' }).returning();
+    const [auto] = await db.insert(automations).values({ tenantId, createdById: asha.id, name: 'Asha birthdays', channel: 'WHATSAPP', text: 'Happy birthday', dateFieldId: field!.id }).returning();
+
+    expect((await A.get('/api/automations')).json().automations).toHaveLength(1);
+    expect((await R.get('/api/automations')).json().automations).toHaveLength(0);
+    expect((await R.get(`/api/automations/${auto!.id}`)).statusCode).toBe(404);
+    expect((await R.post(`/api/automations/${auto!.id}/pause`)).statusCode).toBe(404);
+    expect((await R.del(`/api/automations/${auto!.id}`)).statusCode).toBe(404);
+    expect((await R.get(`/api/automations/${auto!.id}/upcoming`)).statusCode).toBe(404);
+    expect((await O.get('/api/automations')).json().automations).toHaveLength(1);
+
+    await notify(tenantId, { type: 'campaign.completed', title: '“Asha secret offer” has been sent', userId: asha.id, dedupeKey: 'n1' });
+    await notify(tenantId, { type: 'billing.paid', title: 'Plan renewed', dedupeKey: 'n2' });
+    expect((await A.get('/api/notifications')).json().notifications.map((n: { title: string }) => n.title)).toEqual(['“Asha secret offer” has been sent']);
+    expect((await R.get('/api/notifications')).json()).toMatchObject({ notifications: [], unread: 0 });
+    expect((await O.get('/api/notifications')).json().notifications).toHaveLength(2);
+    expect((await R.post('/api/notifications/read', {})).json().unread).toBe(0);
+    expect((await A.get('/api/notifications')).json().unread).toBe(1);
   });
 });

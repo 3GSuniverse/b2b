@@ -1,13 +1,13 @@
 import { and, count, desc, eq, sql } from 'drizzle-orm';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { automations, automationSends, customFields, senders, templates } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError, parseBody } from '../../lib/http.js';
-import { requireAuth, tenantOf } from '../auth/guard.js';
+import { requireAuth, seesAll, tenantOf, viewerOf } from '../auth/guard.js';
 import { PLACEHOLDER } from '../campaigns/checks.js';
 import { audienceSchema } from '../campaigns/service.js';
-import { countEmailAudience, countWhatsAppAudience } from '../audience/resolve.js';
+import { countEmailAudience, countWhatsAppAudience, creatorScoped, scopeAudience } from '../audience/resolve.js';
 import { requireFeature, whatsappWebAllowed } from '../plans/entitlements.js';
 import { isDomainReady } from '../domains/service.js';
 import { dueContactsQuery } from './engine.js';
@@ -37,14 +37,20 @@ export function describeRule(a: { offsetDays: number; sendTime: string; repeat: 
   return `${when} · ${time}${a.repeat === 'YEARLY' ? ' · every year' : ''}`;
 }
 
-async function owned(tenantId: string, id: string) {
+async function owned(tenantId: string, id: string, only?: string) {
   const a = await db.query.automations.findFirst({
-    where: and(eq(automations.id, id), eq(automations.tenantId, tenantId)),
+    where: and(eq(automations.id, id), eq(automations.tenantId, tenantId), only ? eq(automations.createdById, only) : undefined),
     with: { dateField: true, tenant: true, sender: { with: { domain: true, connection: true } }, template: true },
   });
   if (!a) throw new AppError(404, 'automation_not_found', 'Automation not found');
   return a;
 }
+
+/** An employee works with their own automations only; owners and managers with all. */
+const only = (req: FastifyRequest) => {
+  const v = viewerOf(req);
+  return seesAll(v) ? undefined : v.userId;
+};
 
 async function assertRefs(tenantId: string, input: Partial<z.infer<typeof body>>) {
   if (input.dateFieldId) {
@@ -90,7 +96,7 @@ export async function automationRoutes(app: FastifyInstance) {
     const tenantId = tenantOf(req);
     const channel = req.query.channel === 'WHATSAPP' || req.query.channel === 'EMAIL' ? req.query.channel : undefined;
     const rows = await db.query.automations.findMany({
-      where: and(eq(automations.tenantId, tenantId), channel ? eq(automations.channel, channel) : undefined),
+      where: and(eq(automations.tenantId, tenantId), only(req) ? eq(automations.createdById, only(req)!) : undefined, channel ? eq(automations.channel, channel) : undefined),
       with: { dateField: true, tenant: true, sender: { with: { domain: true, connection: true } }, template: true },
       orderBy: [desc(automations.createdAt)],
     });
@@ -108,7 +114,8 @@ export async function automationRoutes(app: FastifyInstance) {
       .values({
         tenantId,
         ...b,
-        audience: b.audience ?? null,
+        createdById: req.auth!.userId,
+        audience: scopeAudience(b.audience ?? null, viewerOf(req)),
         templateId: wa ? null : (b.templateId ?? null),
         senderId: wa ? null : (b.senderId ?? null),
         text: wa ? (b.text ?? null) : null,
@@ -119,25 +126,26 @@ export async function automationRoutes(app: FastifyInstance) {
   });
 
   app.get<IdParams>('/api/automations/:id', { preHandler: requireAuth }, async (req) => ({
-    automation: await dto(await owned(tenantOf(req), req.params.id)),
+    automation: await dto(await owned(tenantOf(req), req.params.id, only(req))),
   }));
 
   // Edits apply from now on. Emails already sent stay sent.
   app.patch<IdParams>('/api/automations/:id', { preHandler: requireAuth }, async (req) => {
     const tenantId = tenantOf(req);
-    await owned(tenantId, req.params.id);
+    await owned(tenantId, req.params.id, only(req));
     const { attachments: ids, ...b } = parseBody(body.partial(), req.body);
     await assertRefs(tenantId, b);
     const patch: Record<string, unknown> = Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined));
+    if (b.audience !== undefined) patch.audience = scopeAudience(b.audience, viewerOf(req));
     if (ids !== undefined) patch.attachments = await resolveRefs(tenantId, ids);
     if (Object.keys(patch).length) await db.update(automations).set(patch).where(eq(automations.id, req.params.id));
-    return { automation: await dto(await owned(tenantId, req.params.id)) };
+    return { automation: await dto(await owned(tenantId, req.params.id, only(req))) };
   });
 
   app.post<IdParams>('/api/automations/:id/activate', { preHandler: requireAuth }, async (req) => {
     const tenantId = tenantOf(req);
     await requireFeature(tenantId, 'automations');
-    const a = await owned(tenantId, req.params.id);
+    const a = await owned(tenantId, req.params.id, only(req));
     if (a.dateField.type !== 'DATE') throw new AppError(400, 'not_a_date_field', `“${a.dateField.label}” isn’t a date field`);
     if (a.channel === 'WHATSAPP') {
       if (!a.text?.trim() && !a.attachments.length) throw new AppError(400, 'no_content', 'Write the WhatsApp message first');
@@ -165,14 +173,14 @@ export async function automationRoutes(app: FastifyInstance) {
 
   app.post<IdParams>('/api/automations/:id/pause', { preHandler: requireAuth }, async (req) => {
     const tenantId = tenantOf(req);
-    await owned(tenantId, req.params.id);
+    await owned(tenantId, req.params.id, only(req));
     await db.update(automations).set({ status: 'PAUSED' }).where(eq(automations.id, req.params.id));
-    return { automation: await dto(await owned(tenantId, req.params.id)) };
+    return { automation: await dto(await owned(tenantId, req.params.id, only(req))) };
   });
 
   app.delete<IdParams>('/api/automations/:id', { preHandler: requireAuth }, async (req, reply) => {
     const tenantId = tenantOf(req);
-    const a = await owned(tenantId, req.params.id);
+    const a = await owned(tenantId, req.params.id, only(req));
     const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(automationSends).where(eq(automationSends.automationId, a.id));
     if (n > 0) throw new AppError(409, 'has_history', 'This automation has already sent messages. Pause it instead, to keep its reports.');
     await db.delete(automations).where(eq(automations.id, a.id));
@@ -182,12 +190,13 @@ export async function automationRoutes(app: FastifyInstance) {
   /** "Coming up in the next 7 days" — who gets it, day by day, in the company's timezone. */
   app.get<IdParams & { Querystring: { days?: string } }>('/api/automations/:id/upcoming', { preHandler: requireAuth }, async (req) => {
     const tenantId = tenantOf(req);
-    const a = await owned(tenantId, req.params.id);
+    const a = await owned(tenantId, req.params.id, only(req));
     const days = Math.min(31, Math.max(1, Number(req.query.days ?? 7) || 7));
     const now = new Date();
     const to = new Date(now.getTime() + days * 86_400_000);
+    const audience = await creatorScoped(db, a.audience, a.createdById);
     const rows = await db.execute<{ contact_id: string; email: string; first_name: string | null; occurrence_date: string; due_at: Date }>(
-      dueContactsQuery(a, now, to),
+      dueContactsQuery({ ...a, audience: audience ?? null }, now, to),
     );
     const tz = a.tenant.timezone;
     const dayOf = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
@@ -200,12 +209,12 @@ export async function automationRoutes(app: FastifyInstance) {
       byDay.set(day, entry);
     }
     const wa = a.channel === 'WHATSAPP';
-    const matching = wa ? await countWhatsAppAudience(db, tenantId, a.audience) : await countEmailAudience(db, tenantId, a.audience);
+    const matching = wa ? await countWhatsAppAudience(db, tenantId, audience) : await countEmailAudience(db, tenantId, audience);
     const [{ withDate } = { withDate: 0 }] = await db.execute<{ withDate: number }>(
       wa
-        ? sql`select count(*)::int as "withDate" from contacts where tenant_id = ${tenantId} and whatsapp_status = 'SUBSCRIBED' and phone is not null
+        ? sql`select count(*)::int as "withDate" from contacts where tenant_id = ${tenantId} and (${audience?.ownerId ?? null}::text is null or owner_id = ${audience?.ownerId ?? null}) and whatsapp_status = 'SUBSCRIBED' and phone is not null
           and coalesce(attributes ->> ${a.dateField.key}, '') ~ '^\\d{4}-\\d{2}-\\d{2}$'`
-        : sql`select count(*)::int as "withDate" from contacts where tenant_id = ${tenantId} and email_status = 'SUBSCRIBED'
+        : sql`select count(*)::int as "withDate" from contacts where tenant_id = ${tenantId} and (${audience?.ownerId ?? null}::text is null or owner_id = ${audience?.ownerId ?? null}) and email_status = 'SUBSCRIBED'
           and coalesce(attributes ->> ${a.dateField.key}, '') ~ '^\\d{4}-\\d{2}-\\d{2}$'`,
     ).then((r) => r.rows);
     return { days: [...byDay.values()], total: rows.rows.length, audience: { matching, withDate } };

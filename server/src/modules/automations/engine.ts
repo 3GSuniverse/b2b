@@ -4,7 +4,7 @@ import { automations, automationSends, contacts, customFields, messages, tenants
 import { db } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
 import { enqueueEmails, enqueueWhatsApp, type EnqueueFn } from '../../queues/index.js';
-import { emailAudienceWhere, whatsappAudienceWhere } from '../audience/resolve.js';
+import { creatorScoped, emailAudienceWhere, whatsappAudienceWhere } from '../audience/resolve.js';
 import { notify, today } from '../notifications/service.js';
 import { monthStartSql } from '../sending/start-campaign.js';
 
@@ -90,7 +90,7 @@ export async function runAutomationsTick(opts: { now?: Date; enqueue?: EnqueueFn
     try {
       // Never back-fill: nothing due before the automation was switched on
       const from = new Date(Math.max(now.getTime() - CATCH_UP_HOURS * 3_600_000, (a.activatedAt ?? now).getTime()));
-      const due = await db.execute<{ contact_id: string; email: string; occurrence_date: string; due_at: Date }>(dueContactsQuery(a, from, now));
+      const due = await db.execute<{ contact_id: string; email: string; occurrence_date: string; due_at: Date }>(dueContactsQuery({ ...a, audience: (await creatorScoped(db, a.audience, a.createdById)) ?? null }, from, now));
       if (!due.rows.length) continue;
 
       // Monthly email quota (WhatsApp has its own daily pacing in the worker)
@@ -111,6 +111,7 @@ export async function runAutomationsTick(opts: { now?: Date; enqueue?: EnqueueFn
           .onConflictDoNothing();
         result.skipped += over.length;
         await notify(a.tenantId, {
+          userId: a.createdById,
           type: 'automation.quota',
           level: 'WARNING',
           title: `“${a.name}” skipped ${over.length} email${over.length > 1 ? 's' : ''} — monthly limit reached`,
@@ -133,8 +134,8 @@ export async function runAutomationsTick(opts: { now?: Date; enqueue?: EnqueueFn
           .insert(messages)
           .values(
             wa
-              ? { tenantId: a.tenantId, automationId: a.id, contactId: r.contact_id, channel: 'WHATSAPP' as const, toAddress: r.email, body: a.text, attachments: a.attachments }
-              : { tenantId: a.tenantId, automationId: a.id, contactId: r.contact_id, senderId: a.senderId, channel: 'EMAIL' as const, toAddress: r.email.toLowerCase() },
+              ? { tenantId: a.tenantId, automationId: a.id, contactId: r.contact_id, channel: 'WHATSAPP' as const, toAddress: r.email, body: a.text, attachments: a.attachments, sentById: a.createdById }
+              : { tenantId: a.tenantId, automationId: a.id, contactId: r.contact_id, senderId: a.senderId, channel: 'EMAIL' as const, toAddress: r.email.toLowerCase(), sentById: a.createdById },
           )
           .returning({ id: messages.id });
         await db.update(automationSends).set({ messageId: msg!.id }).where(eq(automationSends.id, send.id));

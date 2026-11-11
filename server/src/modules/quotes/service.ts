@@ -304,6 +304,7 @@ export async function acceptQuote(token: string) {
   }
   await db.insert(auditLogs).values({ tenantId: trip.tenantId, userId: null, action: 'trip.quote', entity: 'trip', entityId: trip.id, meta: { version: q.version, step: 'accepted', total: formatInr(q.total) } });
   await notify(trip.tenantId, {
+    userId: trip.assignedToId ?? trip.createdById,
     type: 'quotes.accepted',
     level: 'SUCCESS',
     title: `${trip.customerName} accepted the quote for ${trip.title}`,
@@ -320,6 +321,7 @@ export async function declineQuote(token: string, note: string) {
   await db.update(quotes).set({ status: 'DECLINED', respondedAt: new Date(), responseNote: note || null }).where(eq(quotes.id, q.id));
   await db.insert(auditLogs).values({ tenantId: q.tenantId, userId: null, action: 'trip.quote', entity: 'trip', entityId: q.tripId, meta: { version: q.version, step: 'declined', note: note || undefined } });
   await notify(q.tenantId, {
+    userId: q.trip.assignedToId ?? q.trip.createdById,
     type: 'quotes.declined',
     level: 'WARNING',
     title: `${q.trip.customerName} asked for changes to the quote for ${q.trip.title}`,

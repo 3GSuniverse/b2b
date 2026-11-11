@@ -17,6 +17,7 @@ async function markRevoked(connectionId: string, why: string) {
     .returning();
   if (c) {
     await notify(c.tenantId, {
+      userId: c.connectedById,
       type: 'mailbox.disconnected',
       level: 'WARNING',
       title: `${c.email} was disconnected`,
