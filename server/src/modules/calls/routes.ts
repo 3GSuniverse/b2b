@@ -48,7 +48,7 @@ export async function callRoutes(app: FastifyInstance) {
    * microphone, no phone line needed. Same listening, thinking and voice as a real call, but
    * free (no wallet minutes) and capped at 3 minutes. Binary frames are 8 kHz 16-bit PCM both ways.
    */
-  app.get('/api/calls/test', { websocket: true, preHandler: admin.preHandler }, (socket: WebSocket, req) => {
+  app.get<{ Querystring: { lang?: string } }>('/api/calls/test', { websocket: true, preHandler: admin.preHandler }, (socket: WebSocket, req) => {
     const send = (m: object) => socket.readyState === socket.OPEN && socket.send(JSON.stringify(m));
     const refuse = (why: string) => {
       send({ event: 'refused', why });
@@ -67,7 +67,8 @@ export async function callRoutes(app: FastifyInstance) {
       if (why || !tenant) return refuse(why ?? 'agency_inactive');
       session = new CallSession(
         tenant,
-        settings,
+        // The practice call can start in any language, without changing the agency's saved one
+        ['en', 'te', 'hi'].includes(req.query.lang ?? '') ? { ...settings, language: req.query.lang as 'en' | 'te' | 'hi' } : settings,
         'Practice call',
         {
           play: (pcm) => {
@@ -76,7 +77,7 @@ export async function callRoutes(app: FastifyInstance) {
           clear: () => send({ event: 'clear' }),
           hangUp: () => socket.close(1000, 'done'),
         },
-        { minutesLeft: 3, test: true },
+        { minutesLeft: 3, test: true, onEvent: (e) => send(e) },
       );
       live.add(session);
       send({ event: 'ready' });

@@ -15,6 +15,25 @@ export const FRAME_BYTES = 320; // 20 ms of 8 kHz 16-bit audio
 export type Lang = 'en' | 'te' | 'hi';
 const LOCALE: Record<Lang, string> = { en: 'en-IN', te: 'te-IN', hi: 'hi-IN' };
 const FROM_LOCALE: Record<string, Lang> = { 'en-IN': 'en', 'te-IN': 'te', 'hi-IN': 'hi' };
+/** Google answers "te-in", Sarvam "te-IN": understand both. */
+export const langFromLocale = (code: string | undefined, fallback: Lang): Lang => {
+  const [a, b] = (code ?? '').split('-');
+  return FROM_LOCALE[b ? `${a}-${b.toUpperCase()}` : (code ?? '')] ?? fallback;
+};
+
+/**
+ * Which language some words are really in, judged by their script. The AI's own "language" label
+ * is sometimes missing or wrong, and a wrong label means the wrong voice, so the words decide.
+ */
+export function langOf(text: string, fallback: Lang): Lang {
+  const te = (text.match(/[\u0C00-\u0C7F]/g) ?? []).length;
+  const hi = (text.match(/[\u0900-\u097F]/g) ?? []).length;
+  const en = (text.match(/[A-Za-z]/g) ?? []).length;
+  if (te >= 3 && te >= hi) return 'te';
+  if (hi >= 3) return 'hi';
+  if (en >= 4 && te + hi === 0) return 'en';
+  return fallback;
+}
 
 export interface SpeechToText {
   /** Words from one utterance (8 kHz PCM). `lang` is a hint; the language actually heard comes back. */
@@ -87,7 +106,7 @@ export class Vad {
 
   constructor(
     private readonly on: { start: () => void; utterance: (pcm: Buffer) => void },
-    private readonly opts = { startFrames: 4, endSilenceMs: 650, minSpeechMs: 300, maxSpeechMs: 15_000 },
+    private readonly opts = { startFrames: 4, endSilenceMs: 500, minSpeechMs: 300, maxSpeechMs: 15_000 },
   ) {}
 
   push(frame: Buffer) {
@@ -147,7 +166,7 @@ const sarvamStt: SpeechToText = {
     const res = await fetch('https://api.sarvam.ai/speech-to-text', { method: 'POST', headers: sarvamHeaders(), body: form, signal: AbortSignal.timeout(8_000) });
     const data = (await res.json().catch(() => ({}))) as { transcript?: string; language_code?: string; error?: { message?: string } };
     if (!res.ok) throw new Error(`speech-to-text ${res.status}: ${data.error?.message ?? 'failed'}`);
-    return { text: (data.transcript ?? '').trim(), lang: FROM_LOCALE[data.language_code ?? ''] ?? lang };
+    return { text: (data.transcript ?? '').trim(), lang: langFromLocale(data.language_code, lang) };
   },
 };
 
@@ -196,25 +215,57 @@ const googleStt: SpeechToText = {
     const data = (await res.json().catch(() => ({}))) as { results?: { languageCode?: string; alternatives?: { transcript?: string }[] }[]; error?: { message?: string } };
     if (!res.ok) throw new Error(`speech-to-text ${res.status}: ${googleError(data)}`);
     const best = data.results?.[0];
-    return { text: (data.results ?? []).map((r) => r.alternatives?.[0]?.transcript ?? '').join(' ').trim(), lang: FROM_LOCALE[best?.languageCode ?? ''] ?? lang };
+    return { text: (data.results ?? []).map((r) => r.alternatives?.[0]?.transcript ?? '').join(' ').trim(), lang: langFromLocale(best?.languageCode, lang) };
   },
 };
 
+/** WAV from Google comes at the rate it was made in (Chirp voices: 24 kHz); a phone line takes 8 kHz. */
+function pcm8k(wav: Buffer) {
+  const rate = wav.toString('ascii', 0, 4) === 'RIFF' && wav.length > 28 ? wav.readUInt32LE(24) : SAMPLE_RATE;
+  const pcm = fromWav(wav);
+  if (rate === SAMPLE_RATE || !rate) return pcm;
+  const ratio = rate / SAMPLE_RATE;
+  const inN = Math.floor(pcm.length / 2);
+  const out = Buffer.alloc(Math.floor(inN / ratio) * 2);
+  for (let i = 0; i < out.length / 2; i++) {
+    const from = Math.floor(i * ratio);
+    const to = Math.max(from + 1, Math.min(inN, Math.floor((i + 1) * ratio)));
+    let sum = 0;
+    for (let j = from; j < to; j++) sum += pcm.readInt16LE(j * 2);
+    out.writeInt16LE(Math.round(sum / (to - from)), i * 2);
+  }
+  return out;
+}
+
+let chirpBroken = false;
 const googleTts: TextToSpeech = {
   async speak(text, lang) {
-    const res = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${await googleToken()}`, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        input: { text },
-        voice: { languageCode: LOCALE[lang], name: GOOGLE_VOICE[lang] },
-        audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: SAMPLE_RATE, speakingRate: 1.05 },
-      }),
-      signal: AbortSignal.timeout(8_000),
-    });
-    const data = (await res.json().catch(() => ({}))) as { audioContent?: string; error?: { message?: string } };
+    const call = async (name: string, rate: number, speakingRate?: number) => {
+      const res = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${await googleToken()}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          input: { text },
+          voice: { languageCode: LOCALE[lang], name },
+          audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: rate, ...(speakingRate ? { speakingRate } : {}) },
+        }),
+        signal: AbortSignal.timeout(8_000),
+      });
+      const data = (await res.json().catch(() => ({}))) as { audioContent?: string; error?: { message?: string } };
+      return { res, data };
+    };
+    // Chirp 3 HD: Google's most natural voices. If this project can't use them, fall back to the standard ones.
+    if (!chirpBroken) {
+      const { res, data } = await call(`${LOCALE[lang]}-Chirp3-HD-${env.CALL_GOOGLE_VOICE}`, 24_000);
+      if (res.ok && data.audioContent) return pcm8k(Buffer.from(data.audioContent, 'base64'));
+      if (res.status === 400 || res.status === 404) {
+        chirpBroken = true;
+        console.error(`[calls] Chirp voice not available (${res.status}: ${googleError(data)}); using standard Google voices`);
+      } else throw new Error(`text-to-speech ${res.status}: ${googleError(data)}`);
+    }
+    const { res, data } = await call(GOOGLE_VOICE[lang], SAMPLE_RATE, 1.05);
     if (!res.ok || !data.audioContent) throw new Error(`text-to-speech ${res.status}: ${googleError(data)}`);
-    return fromWav(Buffer.from(data.audioContent, 'base64'));
+    return pcm8k(Buffer.from(data.audioContent, 'base64'));
   },
 };
 

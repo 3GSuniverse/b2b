@@ -28,3 +28,19 @@ describe('Google voice for the AI Caller', () => {
     expect(calls.find((c) => c.url.includes('texttospeech'))!.body.voice.languageCode).toBe('hi-IN');
   });
 });
+
+import { langFromLocale, langOf } from '../src/modules/calls/voice.js';
+describe('which language is being spoken', () => {
+  it('judges by script, not by the AI’s label', () => {
+    expect(langOf('నమస్కారం, మీకు ఎలా సహాయం చేయగలను?', 'en')).toBe('te');
+    expect(langOf('जी, बताइए मैं क्या मदद करूँ?', 'en')).toBe('hi');
+    expect(langOf('Sure, I can help with Kerala packages', 'te')).toBe('en');
+    expect(langOf('ఓకే, package details WhatsApp లో పంపిస్తాను', 'en')).toBe('te');
+    expect(langOf('ok', 'hi')).toBe('hi');
+  });
+  it('understands Google’s lowercase language codes', () => {
+    expect(langFromLocale('te-in', 'en')).toBe('te');
+    expect(langFromLocale('hi-IN', 'en')).toBe('hi');
+    expect(langFromLocale(undefined, 'hi')).toBe('hi');
+  });
+});

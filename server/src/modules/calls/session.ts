@@ -3,7 +3,7 @@ import type { tenants } from '../../db/schema.js';
 import { callContext, greetingFor, nextTurn, optOutLine, sorryLine, timeUpLine, type CallContext, type Outcome, type Turn } from './brain.js';
 import { wantsNoCalls } from './safety.js';
 import { addOptout, finishCall, startCall, type CallSettings } from './service.js';
-import { durationMs, FRAME_BYTES, sentences, Vad, voice, type Lang } from './voice.js';
+import { durationMs, FRAME_BYTES, langOf, sentences, Vad, voice, type Lang } from './voice.js';
 
 /** What a call needs from the phone line: send audio, stop audio, hang up. */
 export interface Line {
@@ -48,7 +48,7 @@ export class CallSession {
     private readonly settings: CallSettings,
     private readonly phone: string,
     private readonly line: Line,
-    private readonly opts: { minutesLeft: number; providerCallId?: string; /** a practice call from the website: free, not charged to the wallet */ test?: boolean },
+    private readonly opts: { minutesLeft: number; providerCallId?: string; /** a practice call from the website: free, not charged to the wallet */ test?: boolean; /** what was heard, said and how long it took (shown on the practice call) */ onEvent?: (e: { event: 'line'; from: 'agent' | 'customer'; text: string; lang: Lang } | { event: 'timing'; heardMs: number; thinkMs: number; voiceMs: number }) => void },
   ) {
     this.lang = settings.language;
     this.vad = new Vad({ start: () => this.onSpeechStart(), utterance: (pcm) => void this.onUtterance(pcm) });
@@ -94,17 +94,20 @@ export class CallSession {
     if (this.ending || this.finished) return;
     const mine = ++this.heard;
     this.lastActivity = Date.now();
+    const t0 = Date.now();
     let text: string;
     try {
       const r = await voice().stt.transcribe(pcm, this.lang);
       text = r.text;
-      this.lang = r.lang;
+      this.lang = langOf(r.text, r.lang);
     } catch (err) {
       console.error('[calls] speech-to-text failed', err);
       return; // one missed sentence isn't worth ending the call; they'll repeat
     }
     if (!text || this.finished) return;
     this.history.push({ from: 'customer', text });
+    this.opts.onEvent?.({ event: 'line', from: 'customer', text, lang: this.lang });
+    const heardMs = Date.now() - t0;
     if (wantsNoCalls(text)) {
       await addOptout(this.tenant.id, this.phone, 'Asked on a call').catch(() => undefined);
       return this.wrapUp(optOutLine[this.lang], 'NOT_INTERESTED');
@@ -113,13 +116,15 @@ export class CallSession {
     if (mine !== this.heard) return;
     const turn = ++this.turn;
     try {
+      const t1 = Date.now();
       const a = await nextTurn(this.ctx, this.history, this.lang);
+      const thinkMs = Date.now() - t1;
       if (turn !== this.turn || this.finished) return;
       if (a.outcome) this.setOutcome(a.outcome);
       if (a.summary) this.summary = a.summary;
-      this.lang = a.language;
+      this.lang = langOf(a.say, a.language);
       if (a.end) return this.wrapUp(a.say, a.outcome ?? this.outcome ?? 'ANSWERED');
-      await this.say(a.say, turn);
+      await this.say(a.say, turn, { heardMs, thinkMs });
     } catch (err) {
       console.error('[calls] reply failed', err);
       this.failed = this.history.filter((t) => t.from === 'customer').length <= 1;
@@ -128,7 +133,8 @@ export class CallSession {
   }
 
   /** Speaks sentence by sentence: the first one plays while the next is still being voiced. */
-  private async say(text: string, turn: number) {
+  private async say(text: string, turn: number, took?: { heardMs: number; thinkMs: number }) {
+    const t2 = Date.now();
     const parts = sentences(text);
     const spoken: string[] = [];
     let next = parts.length ? voice().tts.speak(parts[0]!, this.lang) : null;
@@ -145,11 +151,19 @@ export class CallSession {
         next?.catch(() => undefined);
         return;
       }
+      if (i === 0 && took) {
+        const voiceMs = Date.now() - t2;
+        console.log(`[calls] answered in ${((took.heardMs + took.thinkMs + voiceMs) / 1000).toFixed(1)}s (heard ${took.heardMs}ms, thought ${took.thinkMs}ms, voice ${voiceMs}ms)`);
+        this.opts.onEvent?.({ event: 'timing', ...took, voiceMs });
+      }
       this.line.play(audio);
       this.playingUntil = Math.max(Date.now(), this.playingUntil) + durationMs(audio);
       spoken.push(parts[i]!);
     }
-    if (spoken.length) this.history.push({ from: 'agent', text: spoken.join(' ') });
+    if (spoken.length) {
+      this.history.push({ from: 'agent', text: spoken.join(' ') });
+      this.opts.onEvent?.({ event: 'line', from: 'agent', text: spoken.join(' '), lang: this.lang });
+    }
     this.lastActivity = Date.now();
   }
 

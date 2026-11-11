@@ -2,11 +2,19 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Mic, PhoneOff } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Segmented } from '@/components/ui/controls';
 import { Panel } from '@/components/ui/display';
 import { cn } from '@/lib/cn';
 
 const RATE = 8000;
 type Phase = 'idle' | 'connecting' | 'live' | 'ended';
+type Lang = 'en' | 'te' | 'hi';
+type Line = { from: 'agent' | 'customer'; text: string };
+const LANGS: { value: Lang; label: string }[] = [
+  { value: 'te', label: 'Telugu' },
+  { value: 'hi', label: 'Hindi' },
+  { value: 'en', label: 'English' },
+];
 
 const WHY: Record<string, string> = {
   not_configured: 'The voice or AI isn’t switched on in the server yet. Set CALL_VOICE and an AI provider in deploy/.env, then deploy.',
@@ -42,10 +50,13 @@ function makeDownsampler(inRate: number) {
  * Talk to your own AI Caller from the browser, no phone line needed. Same listening, thinking and
  * voice as a real call; free, and it stops after 3 minutes.
  */
-export function PracticeCall({ onDone }: { onDone?: () => void }) {
+export function PracticeCall({ defaultLang = 'en', onDone }: { defaultLang?: Lang; onDone?: () => void }) {
   const qc = useQueryClient();
   const [phase, setPhase] = useState<Phase>('idle');
   const [note, setNote] = useState<string | null>(null);
+  const [lang, setLang] = useState<Lang>(defaultLang);
+  const [lines, setLines] = useState<Line[]>([]);
+  const [timing, setTiming] = useState<string | null>(null);
   const [level, setLevel] = useState(0);
   const [talking, setTalking] = useState(false);
   const stop = useRef<(() => void) | null>(null);
@@ -54,6 +65,8 @@ export function PracticeCall({ onDone }: { onDone?: () => void }) {
 
   async function begin() {
     setNote(null);
+    setLines([]);
+    setTiming(null);
     setPhase('connecting');
     let mic: MediaStream;
     try {
@@ -65,7 +78,7 @@ export function PracticeCall({ onDone }: { onDone?: () => void }) {
     }
     const ctx = new AudioContext();
     await ctx.resume();
-    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/calls/test`);
+    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/calls/test?lang=${lang}`);
     ws.binaryType = 'arraybuffer';
     const sources = new Set<AudioBufferSourceNode>();
     let nextAt = 0;
@@ -119,8 +132,10 @@ export function PracticeCall({ onDone }: { onDone?: () => void }) {
 
     ws.onmessage = (e) => {
       if (typeof e.data === 'string') {
-        const m = JSON.parse(e.data) as { event: string; why?: string };
+        const m = JSON.parse(e.data) as { event: string; why?: string; from?: Line['from']; text?: string; heardMs?: number; thinkMs?: number; voiceMs?: number };
         if (m.event === 'ready') setPhase('live');
+        else if (m.event === 'line' && m.from && m.text) setLines((l) => [...l.slice(-7), { from: m.from!, text: m.text! }]);
+        else if (m.event === 'timing') setTiming(`${(((m.heardMs ?? 0) + (m.thinkMs ?? 0) + (m.voiceMs ?? 0)) / 1000).toFixed(1)}s to answer: hearing ${((m.heardMs ?? 0) / 1000).toFixed(1)}s, thinking ${((m.thinkMs ?? 0) / 1000).toFixed(1)}s, voice ${((m.voiceMs ?? 0) / 1000).toFixed(1)}s`);
         else if (m.event === 'refused') end(WHY[m.why ?? ''] ?? 'The AI Caller couldn’t take this call. Check the setup steps below.');
         else if (m.event === 'clear') {
           sources.forEach((s) => s.stop());
@@ -186,6 +201,22 @@ export function PracticeCall({ onDone }: { onDone?: () => void }) {
           </Button>
         )}
       </div>
+      {!live && phase !== 'connecting' && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-3">
+          <span className="text-[13px] font-medium text-ink-2">Practice in</span>
+          <Segmented label="Practice language" value={lang} onChange={(v) => setLang(v)} options={LANGS} />
+        </div>
+      )}
+      {lines.length > 0 && (
+        <div className="flex flex-col gap-2 border-t border-line bg-sunken/50 p-4">
+          {lines.map((l, i) => (
+            <div key={i} className={cn('max-w-[85%] rounded-[14px] px-3 py-2 text-[13.5px] leading-relaxed', l.from === 'agent' ? 'self-start bg-white shadow-sm' : 'self-end bg-primary text-on-primary')}>
+              {l.text}
+            </div>
+          ))}
+          {timing && <p className="self-center text-[12px] text-muted">{timing}</p>}
+        </div>
+      )}
     </Panel>
   );
 }

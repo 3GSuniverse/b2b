@@ -73,6 +73,8 @@ const schema = z.object({
   // AI Caller. Speech-to-text and the voice come from Sarvam AI (Indian languages, no GPU needed here)
   // 'sarvam' (default) or 'google' (Google Cloud Speech-to-Text + Text-to-Speech, paid from Google credits)
   CALL_VOICE: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['sarvam', 'google']).default('sarvam')),
+  // Google's Chirp 3 HD voice name used when CALL_VOICE=google (Aoede, Leda, Kore = women; Puck, Charon, Fenrir = men)
+  CALL_GOOGLE_VOICE: z.string().default('Aoede'),
   SARVAM_API_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   CALL_STT_MODEL: z.string().default('saarika:v2.5'),
   CALL_TTS_MODEL: z.string().default('bulbul:v2'),
