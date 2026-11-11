@@ -56,7 +56,10 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   // Google Gemini (aistudio.google.com → Get API key). Use a paid-tier key for real customers: on the free tier Google may use the data
   GEMINI_API_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
-  AI_PROVIDER: z.enum(['anthropic', 'openai', 'gemini']).optional(),
+  AI_PROVIDER: z.enum(['anthropic', 'openai', 'gemini', 'vertex']).optional(),
+  // Vertex AI (AI_PROVIDER=vertex): Gemini inside Google Cloud, signed in with the VM's service account
+  VERTEX_PROJECT: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()), // default: the VM's own project
+  VERTEX_LOCATION: z.preprocess((v) => (v === '' ? undefined : v), z.string().default('asia-south1')), // Mumbai; "global" also works
   AI_MODEL: z.string().optional(), // quote drafts. default: claude-sonnet-5-5, gpt-5-mini or gemini-2.5-flash
   // WhatsApp reply suggestions are short, so they use a cheaper model. default: claude-haiku-5-5, gpt-5-mini or gemini-2.5-flash-lite
   AI_REPLY_MODEL: z.string().optional(),

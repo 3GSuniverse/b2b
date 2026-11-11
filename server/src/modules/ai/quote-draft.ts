@@ -58,33 +58,70 @@ const openai: AiClient = {
   },
 };
 
+/** Gemini's request is the same on Google AI Studio and on Vertex AI; only the address and sign-in differ. */
+async function geminiCall(url: string, headers: Record<string, string>, { system, prompt, maxTokens, model }: { system: string; prompt: string; maxTokens: number; model: string }) {
+  // 2.5 models think by default and bill it as output; Drona's tasks are short, so thinking is switched off
+  const thinking = /^gemini-2\.5/.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {};
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: maxTokens, ...thinking },
+    }),
+    signal: AbortSignal.timeout(90_000),
+  });
+  const data = (await res.json().catch(() => ({}))) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]; error?: { message?: string } };
+  if (!res.ok) throw new AppError(502, 'ai_error', `The AI service answered with an error: ${data.error?.message ?? res.status}`);
+  return (data.candidates?.[0]?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? '').join('');
+}
+
 const gemini: AiClient = {
-  async complete({ system, prompt, maxTokens, model: wanted }) {
-    const model = wanted ?? env.AI_MODEL ?? 'gemini-2.5-flash';
-    // 2.5 models think by default and bill it as output; Drona's tasks are short, so thinking is switched off
-    const thinking = /^gemini-2\.5/.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {};
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY! },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: maxTokens, ...thinking },
-      }),
-      signal: AbortSignal.timeout(90_000),
-    });
-    const data = (await res.json().catch(() => ({}))) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]; error?: { message?: string } };
-    if (!res.ok) throw new AppError(502, 'ai_error', `The AI service answered with an error: ${data.error?.message ?? res.status}`);
-    return (data.candidates?.[0]?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? '').join('');
+  async complete({ model, ...rest }) {
+    const m = model ?? env.AI_MODEL ?? 'gemini-2.5-flash';
+    return geminiCall(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, { 'x-goog-api-key': env.GEMINI_API_KEY! }, { ...rest, model: m });
   },
 };
 
-export const providers = { anthropic, openai, gemini }; // exported for tests
+/**
+ * Gemini on Vertex AI, inside Google Cloud. No API key: the VM signs in with its own service
+ * account through the metadata server, it's billed on the Google Cloud bill (credits apply),
+ * and customers' messages aren't used to train Google's models.
+ */
+const METADATA = 'http://metadata.google.internal/computeMetadata/v1';
+let vertexToken: { value: string; until: number } | null = null;
+let vertexProject: string | null = null;
+async function fromMetadata(path: string) {
+  const res = await fetch(`${METADATA}/${path}`, { headers: { 'Metadata-Flavor': 'Google' }, signal: AbortSignal.timeout(5_000) }).catch(() => null);
+  if (!res?.ok) throw new AppError(502, 'ai_error', 'Vertex AI: couldn’t sign in with the VM’s service account. Is the server running on Google Cloud with access to Cloud APIs?');
+  return res;
+}
+/** Tests start from a clean sign-in. */
+export function resetVertexCache() {
+  vertexToken = null;
+  vertexProject = null;
+}
+const vertex: AiClient = {
+  async complete({ model, ...rest }) {
+    const m = model ?? env.AI_MODEL ?? 'gemini-2.5-flash';
+    if (!vertexToken || vertexToken.until < Date.now()) {
+      const t = (await (await fromMetadata('instance/service-accounts/default/token')).json()) as { access_token: string; expires_in: number };
+      vertexToken = { value: t.access_token, until: Date.now() + (t.expires_in - 120) * 1000 };
+    }
+    vertexProject ??= env.VERTEX_PROJECT ?? (await (await fromMetadata('project/project-id')).text()).trim();
+    const loc = env.VERTEX_LOCATION;
+    const host = loc === 'global' ? 'aiplatform.googleapis.com' : `${loc}-aiplatform.googleapis.com`;
+    return geminiCall(`https://${host}/v1/projects/${vertexProject}/locations/${loc}/publishers/google/models/${encodeURIComponent(m)}:generateContent`, { authorization: `Bearer ${vertexToken.value}` }, { ...rest, model: m });
+  },
+};
+
+export const providers = { anthropic, openai, gemini, vertex }; // exported for tests
 
 /** The model for short WhatsApp replies: cheap and fast. Quote drafts keep the stronger default. */
 export function replyModel() {
   const p = aiProvider();
-  return env.AI_REPLY_MODEL ?? (p === 'openai' ? 'gpt-5-mini' : p === 'gemini' ? 'gemini-2.5-flash-lite' : 'claude-haiku-5-5');
+  return env.AI_REPLY_MODEL ?? (p === 'openai' ? 'gpt-5-mini' : p === 'gemini' || p === 'vertex' ? 'gemini-2.5-flash-lite' : 'claude-haiku-5-5');
 }
 
 let client: AiClient | null = null;
@@ -92,13 +129,14 @@ export function setAiClient(c: AiClient | null) {
   client = c;
 }
 /** Which provider is set up: the one AI_PROVIDER names, else whichever key is present (Anthropic, then OpenAI, then Gemini). */
-export function aiProvider(): 'anthropic' | 'openai' | 'gemini' | null {
-  const has = { anthropic: !!env.ANTHROPIC_API_KEY, openai: !!env.OPENAI_API_KEY, gemini: !!env.GEMINI_API_KEY };
+export function aiProvider(): 'anthropic' | 'openai' | 'gemini' | 'vertex' | null {
+  // Vertex needs no key (the VM's service account signs in), so it's on only when AI_PROVIDER=vertex
+  const has = { anthropic: !!env.ANTHROPIC_API_KEY, openai: !!env.OPENAI_API_KEY, gemini: !!env.GEMINI_API_KEY, vertex: true };
   if (env.AI_PROVIDER) return has[env.AI_PROVIDER] ? env.AI_PROVIDER : null;
   return has.anthropic ? 'anthropic' : has.openai ? 'openai' : has.gemini ? 'gemini' : null;
 }
 export const aiEnabled = () => !!client || aiProvider() !== null;
-export const getClient = () => client ?? ({ anthropic, openai, gemini, none: null } as const)[aiProvider() ?? 'none'];
+export const getClient = () => client ?? ({ anthropic, openai, gemini, vertex, none: null } as const)[aiProvider() ?? 'none'];
 
 const LANG = { en: 'English', te: 'Telugu (Telugu script)', hi: 'Hindi (Devanagari script)' } as const;
 export const draftBody = z.object({
