@@ -2,7 +2,7 @@ import { and, count, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from '../../lib/db.js';
 import { campaigns, messages, senders } from '../../db/schema.js';
 import { enqueueEmails, enqueueWhatsApp, type EnqueueFn } from '../../queues/index.js';
-import { countEmailAudience, countWhatsAppAudience, iterateEmailAudience, iterateWhatsAppAudience } from '../audience/resolve.js';
+import { creatorScoped, countEmailAudience, countWhatsAppAudience, iterateEmailAudience, iterateWhatsAppAudience } from '../audience/resolve.js';
 import { trialEnded, whatsappTrialCapacity, whatsappWebAllowed } from '../plans/entitlements.js';
 import { isDomainReady } from '../domains/service.js';
 import { LIMITS, totalSize } from '../attachments/service.js';
@@ -92,7 +92,8 @@ export async function startCampaign(
   }
 
   if (campaign.audience?.mode === 'temporary' && !campaign.audience.consent) throw new CampaignError('Confirm that the people in the temporary list agreed to hear from you', 'consent_needed');
-  const audienceSize = await countEmailAudience(db, campaign.tenantId, campaign.audience);
+  const audience = await creatorScoped(db, campaign.audience, campaign.createdById);
+  const audienceSize = await countEmailAudience(db, campaign.tenantId, audience);
   const used = await monthlyUsage(campaign.tenantId, now, campaign.tenant.timezone);
   if (used + audienceSize > campaign.tenant.monthlyQuota) {
     throw new CampaignError(
@@ -117,7 +118,7 @@ export async function startCampaign(
     .returning({ id: campaigns.id });
   if (claimed.length === 0) throw new CampaignError('Campaign already started', 'not_startable');
 
-  for await (const batch of iterateEmailAudience(db, campaign.tenantId, campaign.audience)) {
+  for await (const batch of iterateEmailAudience(db, campaign.tenantId, audience)) {
     const inserted = await db
       .insert(messages)
       .values(
@@ -171,10 +172,11 @@ export async function startWhatsAppCampaign(campaignId: string, opts: { enqueue?
   if (session?.status !== 'CONNECTED') throw new CampaignError('Link your WhatsApp number first, in WhatsApp → Linked number', 'whatsapp_not_ready');
   if (!campaign.text?.trim() && !campaign.attachments.length) throw new CampaignError('The message is empty', 'no_content');
   if (campaign.audience?.mode === 'temporary' && !campaign.audience.consent) throw new CampaignError('Confirm that the people in the temporary list agreed to hear from you', 'consent_needed');
+  const audience = await creatorScoped(db, campaign.audience, campaign.createdById);
   // A trial sends at most N a day; refuse a campaign that couldn't finish before the trial ends
   const cap = await whatsappTrialCapacity(campaign.tenant, now);
   if (cap !== null) {
-    const needed = await countWhatsAppAudience(db, campaign.tenantId, campaign.audience);
+    const needed = await countWhatsAppAudience(db, campaign.tenantId, audience);
     if (needed > cap.beforeTrialEnds) {
       throw new CampaignError(
         `Your trial sends up to ${cap.perDay} WhatsApp messages a day and can fit ${cap.beforeTrialEnds} more before it ends. This needs ${needed}. Choose a smaller list.`,
@@ -190,7 +192,7 @@ export async function startWhatsAppCampaign(campaignId: string, opts: { enqueue?
     .returning({ id: campaigns.id });
   if (claimed.length === 0) throw new CampaignError('Campaign already started', 'not_startable');
 
-  for await (const batch of iterateWhatsAppAudience(db, campaign.tenantId, campaign.audience)) {
+  for await (const batch of iterateWhatsAppAudience(db, campaign.tenantId, audience)) {
     const inserted = await db
       .insert(messages)
       .values(batch.map((c) => ({ tenantId: campaign.tenantId, campaignId, contactId: c.id, channel: 'WHATSAPP' as const, toAddress: c.phone, sentById: campaign.createdById })))

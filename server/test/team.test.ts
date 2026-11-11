@@ -100,7 +100,7 @@ describe('what each employee sends', () => {
     const [domain] = await db.insert(sendingDomains).values({ tenantId, domain: 'count.in', identityStatus: 'VERIFIED', dkimStatus: 'VERIFIED', ownershipStatus: 'VERIFIED' }).returning();
     await db.update(tenants).set({ postalAddress: '1 MG Road' }).where(eq(tenants.id, tenantId));
     const [sender] = await db.insert(senders).values({ tenantId, domainId: domain!.id, fromName: 'Count', fromEmail: 'hi@count.in', isDefault: true }).returning();
-    await db.insert(contacts).values([1, 2, 3].map((i) => ({ tenantId, email: `c${i}@example.com`, phone: `+9190000000${i}`, whatsappStatus: 'SUBSCRIBED' as const })));
+    await db.insert(contacts).values([1, 2, 3].map((i) => ({ tenantId, email: `c${i}@example.com`, phone: `+9190000000${i}`, whatsappStatus: 'SUBSCRIBED' as const, ownerId: ravi.id })));
     const [camp] = await db.insert(campaigns).values({ tenantId, name: 'Diwali', subject: 'Hi', html: '<p>Hi</p>', senderId: sender!.id, createdById: ravi.id }).returning();
     await startCampaign(camp!.id, { enqueue: fakeQueue().enqueue });
     await db.update(messages).set({ sentAt: new Date() }).where(eq(messages.campaignId, camp!.id));

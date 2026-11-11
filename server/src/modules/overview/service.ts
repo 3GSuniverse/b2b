@@ -93,7 +93,7 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
       orderBy: [asc(campaigns.scheduledAt)],
       columns: { id: true, name: true, scheduledAt: true, audience: true },
     }),
-    db.select({ status: contacts.emailStatus, n: count() }).from(contacts).where(eq(contacts.tenantId, tenantId)).groupBy(contacts.emailStatus),
+    db.select({ status: contacts.emailStatus, n: count() }).from(contacts).where(and(eq(contacts.tenantId, tenantId), onlyMine ? eq(contacts.ownerId, userId) : undefined)).groupBy(contacts.emailStatus),
     db.select().from(sendingDomains).where(eq(sendingDomains.tenantId, tenantId)),
     db.query.senders.findMany({ where: eq(senders.tenantId, tenantId), with: { domain: true, connection: true } }),
     unreadCount(tenantId),
@@ -111,7 +111,7 @@ export async function getOverview(tenantId: string, userId: string, now = new Da
   const byWhatsapp = await db
     .select({ n: count() })
     .from(contacts)
-    .where(and(eq(contacts.tenantId, tenantId), eq(contacts.whatsappStatus, 'SUBSCRIBED'), isNotNull(contacts.phone)))
+    .where(and(eq(contacts.tenantId, tenantId), onlyMine ? eq(contacts.ownerId, userId) : undefined, eq(contacts.whatsappStatus, 'SUBSCRIBED'), isNotNull(contacts.phone)))
     .then((r) => r[0]?.n ?? 0);
   const byStatus = Object.fromEntries(audienceRows.map((r) => [r.status, r.n]));
   const totalContacts = audienceRows.reduce((a, r) => a + r.n, 0);

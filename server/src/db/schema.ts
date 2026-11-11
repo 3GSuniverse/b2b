@@ -321,13 +321,16 @@ export const contacts = pgTable(
     whatsappStatus: subscriptionStatus().notNull().default('UNSUBSCRIBED'), // separate consent
     consentSource: text(),
     consentAt: ts(),
+    // Whose customer this is. Every employee has their own list; the owner sees all of them.
+    ownerId: text().references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
-    uniqueIndex().on(t.tenantId, t.email),
-    uniqueIndex().on(t.tenantId, t.phone),
+    uniqueIndex().on(t.tenantId, t.ownerId, t.email),
+    uniqueIndex().on(t.tenantId, t.ownerId, t.phone),
     index().on(t.tenantId, t.emailStatus),
+    index().on(t.ownerId),
   ],
 );
 
@@ -352,9 +355,10 @@ export const lists = pgTable(
     tenantId: tenantRef(),
     name: text().notNull(),
     description: text(),
+    ownerId: text().references(() => users.id, { onDelete: 'set null' }), // the employee whose list this is
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex().on(t.tenantId, t.name)],
+  (t) => [uniqueIndex().on(t.tenantId, t.ownerId, t.name)],
 );
 
 export const listMemberships = pgTable(
@@ -488,6 +492,8 @@ export type Audience = {
   listIds?: string[];
   contactIds?: string[];
   filters?: AudienceFilter[];
+  // Set by the server for an employee's campaign: only that employee's own customers are reached
+  ownerId?: string;
 };
 
 export const campaigns = pgTable(

@@ -58,11 +58,21 @@ export async function makeTenant(overrides: Partial<typeof tenants.$inferInsert>
   return { tenant: tenant!, sender: sender! };
 }
 
+/** The agency's first login (made if there is none yet): whose customers and number the helpers use. */
+export async function firstUserId(tenantId: string) {
+  const existing = await db.query.users.findFirst({ where: eq(users.tenantId, tenantId), orderBy: [asc(users.createdAt)] });
+  return (
+    existing?.id ??
+    (await db.insert(users).values({ tenantId, name: 'Ravi', username: `ravi-${Math.random().toString(36).slice(2, 8)}`, passwordHash: 'x' }).returning())[0]!.id
+  );
+}
+
 export async function makeContact(tenantId: string, overrides: Partial<typeof contacts.$inferInsert> = {}) {
   const [c] = await db
     .insert(contacts)
     .values({
       tenantId,
+      ownerId: overrides.ownerId ?? (await firstUserId(tenantId)),
       email: `user-${Math.random().toString(36).slice(2, 10)}@example.com`,
       firstName: 'Ravi',
       ...overrides,
@@ -72,7 +82,7 @@ export async function makeContact(tenantId: string, overrides: Partial<typeof co
 }
 
 export async function makeList(tenantId: string, name: string, contactIds: string[]) {
-  const [l] = await db.insert(lists).values({ tenantId, name }).returning();
+  const [l] = await db.insert(lists).values({ tenantId, name, ownerId: await firstUserId(tenantId) }).returning();
   if (contactIds.length) {
     await db.insert(listMemberships).values(contactIds.map((contactId) => ({ listId: l!.id, contactId })));
   }
@@ -115,13 +125,7 @@ export function fakeQueue() {
  * or makes an employee login for it.
  */
 export async function makeLine(tenantId: string, overrides: Partial<typeof whatsappSessions.$inferInsert> = {}) {
-  let userId = overrides.userId;
-  if (!userId) {
-    const existing = await db.query.users.findFirst({ where: eq(users.tenantId, tenantId), orderBy: [asc(users.createdAt)] });
-    userId =
-      existing?.id ??
-      (await db.insert(users).values({ tenantId, name: 'Ravi', username: `ravi-${Math.random().toString(36).slice(2, 8)}`, passwordHash: 'x' }).returning())[0]!.id;
-  }
+  const userId = overrides.userId ?? (await firstUserId(tenantId));
   const [line] = await db.insert(whatsappSessions).values({ tenantId, ...overrides, userId }).returning();
   return line!;
 }

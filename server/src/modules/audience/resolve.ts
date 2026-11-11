@@ -1,6 +1,6 @@
 import { and, count, eq, exists, inArray, isNotNull, notExists, or, sql, type SQL } from 'drizzle-orm';
 import type { DB, Tx } from '../../lib/db.js';
-import { contacts, listMemberships, suppressions, type Audience, type AudienceFilter } from '../../db/schema.js';
+import { contacts, listMemberships, suppressions, users, type Audience, type AudienceFilter } from '../../db/schema.js';
 import { normalizeEmail, normalizePhone } from '../contacts/normalize.js';
 
 const CORE_FIELDS = {
@@ -57,6 +57,7 @@ function audienceWhere(tenantId: string, audience: Audience | null | undefined, 
   const address = channel === 'EMAIL' ? contacts.email : contacts.phone;
   const conditions: (SQL | undefined)[] = [
     eq(contacts.tenantId, tenantId),
+    audience?.ownerId ? eq(contacts.ownerId, audience.ownerId) : undefined,
     channel === 'EMAIL' ? eq(contacts.emailStatus, 'SUBSCRIBED') : eq(contacts.whatsappStatus, 'SUBSCRIBED'),
     isNotNull(address),
     notExists(
@@ -186,7 +187,7 @@ export async function temporaryRecipients(db: DB | Tx, tenantId: string, audienc
   const known = await db
     .select({ id: contacts.id, address: col, emailStatus: contacts.emailStatus, whatsappStatus: contacts.whatsappStatus })
     .from(contacts)
-    .where(and(eq(contacts.tenantId, tenantId), inArray(col, addresses)));
+    .where(and(eq(contacts.tenantId, tenantId), audience.ownerId ? eq(contacts.ownerId, audience.ownerId) : undefined, inArray(col, addresses)));
   const byAddress = new Map(known.map((k) => [k.address, k]));
   const out: { contactId: string | null; address: string }[] = [];
   for (const address of addresses) {
@@ -201,4 +202,17 @@ export async function temporaryRecipients(db: DB | Tx, tenantId: string, audienc
     }
   }
   return out;
+}
+
+/** An employee's audience reaches only their own customers; the owner and managers reach everyone's. */
+export function scopeAudience<T extends Audience | null | undefined>(audience: T, v: { userId: string; role: string }): T | Audience {
+  if (v.role !== 'MEMBER') return audience;
+  return { ...(audience ?? {}), ownerId: v.userId };
+}
+
+/** At send time: an employee's campaign reaches only that employee's own customers, whatever was saved earlier. */
+export async function creatorScoped(db: DB | Tx, audience: Audience | null | undefined, createdById: string | null) {
+  if (!createdById) return audience;
+  const u = await db.select({ role: users.role }).from(users).where(eq(users.id, createdById)).limit(1);
+  return u[0]?.role === 'MEMBER' ? scopeAudience(audience, { userId: createdById, role: 'MEMBER' }) : audience;
 }

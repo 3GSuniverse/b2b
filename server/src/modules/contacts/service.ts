@@ -80,8 +80,9 @@ export const listQuery = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
 
-export async function listContacts(tenantId: string, q: z.infer<typeof listQuery>) {
+export async function listContacts(tenantId: string, q: z.infer<typeof listQuery>, only?: string) {
   const where: SQL[] = [eq(contacts.tenantId, tenantId)];
+  if (only) where.push(eq(contacts.ownerId, only));
   if (q.status) where.push(eq(contacts.emailStatus, q.status));
   if (q.listId) {
     // Spelled out: inside relational queries Drizzle re-targets other tables' columns to the root alias
@@ -122,11 +123,11 @@ export async function listContacts(tenantId: string, q: z.infer<typeof listQuery
 }
 
 /** Numbers for the status tabs: All · Subscribed · Unsubscribed · Bounced · Complained */
-export async function contactStats(tenantId: string) {
+export async function contactStats(tenantId: string, only?: string) {
   const rows = await db
     .select({ status: contacts.emailStatus, n: count() })
     .from(contacts)
-    .where(eq(contacts.tenantId, tenantId))
+    .where(and(eq(contacts.tenantId, tenantId), only ? eq(contacts.ownerId, only) : undefined))
     .groupBy(contacts.emailStatus);
   const by = Object.fromEntries(rows.map((r) => [r.status, r.n]));
   return {
@@ -138,19 +139,19 @@ export async function contactStats(tenantId: string) {
   };
 }
 
-async function getOwned(tenantId: string, id: string) {
-  const c = await db.query.contacts.findFirst({ where: and(eq(contacts.id, id), eq(contacts.tenantId, tenantId)), with: withLists });
+async function getOwned(tenantId: string, id: string, only?: string) {
+  const c = await db.query.contacts.findFirst({ where: and(eq(contacts.id, id), eq(contacts.tenantId, tenantId), only ? eq(contacts.ownerId, only) : undefined), with: withLists });
   if (!c) throw new AppError(404, 'contact_not_found', 'Contact not found');
   return c;
 }
 
-export async function getContact(tenantId: string, id: string) {
-  return contactDto(await getOwned(tenantId, id));
+export async function getContact(tenantId: string, id: string, only?: string) {
+  return contactDto(await getOwned(tenantId, id, only));
 }
 
-async function assertListsOwned(tenantId: string, listIds: string[]) {
+async function assertListsOwned(tenantId: string, listIds: string[], ownerId?: string) {
   if (!listIds.length) return;
-  const found = await db.select({ id: lists.id }).from(lists).where(and(eq(lists.tenantId, tenantId), inArray(lists.id, listIds)));
+  const found = await db.select({ id: lists.id }).from(lists).where(and(eq(lists.tenantId, tenantId), ownerId ? eq(lists.ownerId, ownerId) : undefined, inArray(lists.id, listIds)));
   if (found.length !== new Set(listIds).size) throw new AppError(404, 'list_not_found', 'One of the lists was not found');
 }
 
@@ -177,7 +178,7 @@ export const createContactBody = z
   })
   .refine((v) => v.email || v.phone, { message: 'Enter an email or a phone number', path: ['email'] });
 
-export async function createContact(tenantId: string, input: z.infer<typeof createContactBody>) {
+export async function createContact(tenantId: string, input: z.infer<typeof createContactBody>, ownerId: string) {
   const email = input.email ? normalizeEmail(input.email) : null;
   if (input.email && !email) throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { email: 'Enter a valid email address' } });
   const phone = input.phone ? normalizePhone(input.phone) : null;
@@ -186,10 +187,10 @@ export async function createContact(tenantId: string, input: z.infer<typeof crea
   const defs = await fieldDefs(db, tenantId);
   const { attributes, errors } = cleanAttributes(input.attributes, defs);
   if (Object.keys(errors).length) throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: errors });
-  await assertListsOwned(tenantId, input.listIds);
+  await assertListsOwned(tenantId, input.listIds, ownerId);
 
   const dup = await db.query.contacts.findFirst({
-    where: and(eq(contacts.tenantId, tenantId), or(email ? eq(contacts.email, email) : undefined, phone ? eq(contacts.phone, phone) : undefined)),
+    where: and(eq(contacts.tenantId, tenantId), eq(contacts.ownerId, ownerId), or(email ? eq(contacts.email, email) : undefined, phone ? eq(contacts.phone, phone) : undefined)),
     columns: { id: true },
   });
   if (dup) throw new AppError(409, 'contact_exists', 'A contact with this email or phone already exists', { contactId: dup.id });
@@ -199,6 +200,7 @@ export async function createContact(tenantId: string, input: z.infer<typeof crea
       .insert(contacts)
       .values({
         tenantId,
+        ownerId,
         email,
         phone,
         firstName: input.firstName || null,
@@ -215,7 +217,7 @@ export async function createContact(tenantId: string, input: z.infer<typeof crea
     }
     return row!.id;
   });
-  return getContact(tenantId, id);
+  return getContact(tenantId, id, ownerId);
 }
 
 export const updateContactBody = z.object({
@@ -229,8 +231,8 @@ export const updateContactBody = z.object({
   whatsappOptIn: z.boolean().optional(),
 });
 
-export async function updateContact(tenantId: string, id: string, input: z.infer<typeof updateContactBody>) {
-  const c = await getOwned(tenantId, id);
+export async function updateContact(tenantId: string, id: string, input: z.infer<typeof updateContactBody>, only?: string) {
+  const c = await getOwned(tenantId, id, only);
   const patch: Partial<typeof contacts.$inferInsert> = {};
 
   if (input.firstName !== undefined) patch.firstName = input.firstName || null;
@@ -239,7 +241,7 @@ export async function updateContact(tenantId: string, id: string, input: z.infer
     const phone = input.phone ? normalizePhone(input.phone) : null;
     if (input.phone && !phone) throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { phone: 'Enter a valid phone number' } });
     if (phone) {
-      const taken = await db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, tenantId), eq(contacts.phone, phone)), columns: { id: true } });
+      const taken = await db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, tenantId), eq(contacts.ownerId, c.ownerId ?? ''), eq(contacts.phone, phone)), columns: { id: true } });
       if (taken && taken.id !== id) throw new AppError(409, 'contact_exists', 'Another contact already has this phone number');
     }
     patch.phone = phone;
@@ -286,15 +288,15 @@ export async function updateContact(tenantId: string, id: string, input: z.infer
     }
     if (Object.keys(patch).length) await tx.update(contacts).set(patch).where(eq(contacts.id, id));
   });
-  return getContact(tenantId, id);
+  return getContact(tenantId, id, only);
 }
 
 /** Permanent erase (privacy requests). Suppression entries stay, so they're never emailed again by mistake. */
-export async function deleteContacts(tenantId: string, ids: string[]) {
+export async function deleteContacts(tenantId: string, ids: string[], only?: string) {
   if (!ids.length) return 0;
   const gone = await db
     .delete(contacts)
-    .where(and(eq(contacts.tenantId, tenantId), inArray(contacts.id, ids)))
+    .where(and(eq(contacts.tenantId, tenantId), only ? eq(contacts.ownerId, only) : undefined, inArray(contacts.id, ids)))
     .returning({ id: contacts.id });
   return gone.length;
 }
@@ -303,7 +305,7 @@ export async function deleteContacts(tenantId: string, ids: string[]) {
 //  Lists
 // ---------------------------------------------------------------------
 
-export async function listLists(tenantId: string) {
+export async function listLists(tenantId: string, only?: string) {
   return db
     .select({
       id: lists.id,
@@ -316,24 +318,24 @@ export async function listLists(tenantId: string) {
         where m.list_id = "lists"."id" and c.email_status = 'SUBSCRIBED')`,
     })
     .from(lists)
-    .where(eq(lists.tenantId, tenantId))
+    .where(and(eq(lists.tenantId, tenantId), only ? eq(lists.ownerId, only) : undefined))
     .orderBy(lists.name);
 }
 
-export async function createList(tenantId: string, name: string, description?: string) {
-  const [row] = await db.insert(lists).values({ tenantId, name, description }).onConflictDoNothing().returning();
+export async function createList(tenantId: string, name: string, description: string | undefined, ownerId: string) {
+  const [row] = await db.insert(lists).values({ tenantId, ownerId, name, description }).onConflictDoNothing().returning();
   if (!row) throw new AppError(409, 'list_exists', `A list called "${name}" already exists`);
   return row;
 }
 
-async function ownedList(tenantId: string, id: string) {
-  const l = await db.query.lists.findFirst({ where: and(eq(lists.id, id), eq(lists.tenantId, tenantId)) });
+async function ownedList(tenantId: string, id: string, only?: string) {
+  const l = await db.query.lists.findFirst({ where: and(eq(lists.id, id), eq(lists.tenantId, tenantId), only ? eq(lists.ownerId, only) : undefined) });
   if (!l) throw new AppError(404, 'list_not_found', 'List not found');
   return l;
 }
 
-export async function updateList(tenantId: string, id: string, input: { name?: string; description?: string | null }) {
-  await ownedList(tenantId, id);
+export async function updateList(tenantId: string, id: string, input: { name?: string; description?: string | null }, only?: string) {
+  await ownedList(tenantId, id, only);
   try {
     const [row] = await db.update(lists).set(input).where(eq(lists.id, id)).returning();
     return row!;
@@ -342,14 +344,15 @@ export async function updateList(tenantId: string, id: string, input: { name?: s
   }
 }
 
-export async function deleteList(tenantId: string, id: string) {
-  await ownedList(tenantId, id);
+export async function deleteList(tenantId: string, id: string, only?: string) {
+  await ownedList(tenantId, id, only);
   await db.delete(lists).where(eq(lists.id, id)); // contacts stay; only membership goes
 }
 
-export async function addToList(tenantId: string, listId: string, contactIds: string[]) {
-  await ownedList(tenantId, listId);
-  const owned = await db.select({ id: contacts.id }).from(contacts).where(and(eq(contacts.tenantId, tenantId), inArray(contacts.id, contactIds)));
+export async function addToList(tenantId: string, listId: string, contactIds: string[], only?: string) {
+  const list = await ownedList(tenantId, listId, only);
+  // A list only holds its owner's customers
+  const owned = await db.select({ id: contacts.id }).from(contacts).where(and(eq(contacts.tenantId, tenantId), list.ownerId ? eq(contacts.ownerId, list.ownerId) : undefined, inArray(contacts.id, contactIds)));
   if (!owned.length) return 0;
   const added = await db
     .insert(listMemberships)
@@ -359,8 +362,8 @@ export async function addToList(tenantId: string, listId: string, contactIds: st
   return added.length;
 }
 
-export async function removeFromList(tenantId: string, listId: string, contactIds: string[]) {
-  await ownedList(tenantId, listId);
+export async function removeFromList(tenantId: string, listId: string, contactIds: string[], only?: string) {
+  await ownedList(tenantId, listId, only);
   const removed = await db
     .delete(listMemberships)
     .where(and(eq(listMemberships.listId, listId), inArray(listMemberships.contactId, contactIds)))

@@ -158,9 +158,9 @@ function splitName(name: string) {
 }
 
 /** The contact for a trip: picked from Contacts, or found by phone/email, or created. */
-export async function resolveCustomer(tenantId: string, input: z.infer<typeof customerInput>, consentSource = 'trip enquiry') {
+export async function resolveCustomer(tenantId: string, input: z.infer<typeof customerInput>, consentSource = 'trip enquiry', ownerId?: string) {
   if ('contactId' in input) {
-    const c = await db.query.contacts.findFirst({ where: and(eq(contacts.id, input.contactId), eq(contacts.tenantId, tenantId)) });
+    const c = await db.query.contacts.findFirst({ where: and(eq(contacts.id, input.contactId), eq(contacts.tenantId, tenantId), ownerId ? eq(contacts.ownerId, ownerId) : undefined) });
     if (!c) throw new AppError(404, 'contact_not_found', 'Contact not found');
     return c;
   }
@@ -170,7 +170,7 @@ export async function resolveCustomer(tenantId: string, input: z.infer<typeof cu
   if (input.phone && !phone) throw new AppError(400, 'validation_failed', 'Some fields need attention', { fields: { 'customer.phone': 'Enter a valid phone number' } });
 
   const existing = await db.query.contacts.findFirst({
-    where: and(eq(contacts.tenantId, tenantId), or(phone ? eq(contacts.phone, phone) : undefined, email ? eq(contacts.email, email) : undefined)),
+    where: and(eq(contacts.tenantId, tenantId), ownerId ? eq(contacts.ownerId, ownerId) : undefined, or(phone ? eq(contacts.phone, phone) : undefined, email ? eq(contacts.email, email) : undefined)),
   });
   if (existing) {
     // Fill in what we didn't know, never overwrite what we did
@@ -194,6 +194,7 @@ export async function resolveCustomer(tenantId: string, input: z.infer<typeof cu
     .insert(contacts)
     .values({
       tenantId,
+      ownerId: ownerId ?? null,
       email,
       phone,
       ...splitName(input.name),
@@ -451,6 +452,12 @@ export async function getTrip(tenantId: string, id: string) {
 //  Write
 // ---------------------------------------------------------------------
 
+/** Customers added with no person behind them (an API key, a form) go to the agency owner's list. */
+async function tenantOwnerId(tenantId: string) {
+  const o = await db.query.users.findFirst({ where: and(eq(users.tenantId, tenantId), eq(users.role, 'OWNER')), columns: { id: true } });
+  return o?.id;
+}
+
 async function assertAssignee(tenantId: string, userId: string | null | undefined) {
   if (!userId) return;
   const u = await db.query.users.findFirst({ where: and(eq(users.id, userId), eq(users.tenantId, tenantId)), columns: { id: true } });
@@ -459,7 +466,7 @@ async function assertAssignee(tenantId: string, userId: string | null | undefine
 
 export async function createTrip(actor: Actor, input: z.infer<typeof createTripBody>, opts: { consentSource?: string; externalRef?: string } = {}) {
   await assertAssignee(actor.tenantId, input.assignedToId);
-  const contact = await resolveCustomer(actor.tenantId, input.customer, opts.consentSource);
+  const contact = await resolveCustomer(actor.tenantId, input.customer, opts.consentSource, actor.userId ?? (await tenantOwnerId(actor.tenantId)));
   // Sold as a package: its destination, length and price fill in whatever wasn't given
   const pkg = input.packageId ? await ownedPackage(actor.tenantId, input.packageId) : null;
   if (pkg) {

@@ -94,10 +94,10 @@ export async function importRoutes(app: FastifyInstance) {
 
     let listId = opts.listId;
     if (listId) {
-      const l = await db.query.lists.findFirst({ where: and(eq(lists.id, listId), eq(lists.tenantId, tenantId)) });
+      const l = await db.query.lists.findFirst({ where: and(eq(lists.id, listId), eq(lists.tenantId, tenantId), eq(lists.ownerId, req.auth!.userId)) });
       if (!l) throw new AppError(404, 'list_not_found', 'List not found');
     } else if (opts.newListName) {
-      listId = (await createList(tenantId, opts.newListName)).id;
+      listId = (await createList(tenantId, opts.newListName, undefined, req.auth!.userId)).id;
     }
 
     const [job] = await db

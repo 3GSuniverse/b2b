@@ -69,8 +69,8 @@ export async function getChannelHub(tenantId: string, channel: Channel, now = ne
       .where(and(eq(automations.tenantId, tenantId), eq(automations.channel, channel)))
       .groupBy(automations.status),
     channel === 'EMAIL'
-      ? db.select({ n: count() }).from(contacts).where(and(eq(contacts.tenantId, tenantId), eq(contacts.emailStatus, 'SUBSCRIBED'), isNotNull(contacts.email))).then((r) => r[0]?.n ?? 0)
-      : db.select({ n: count() }).from(contacts).where(and(eq(contacts.tenantId, tenantId), eq(contacts.whatsappStatus, 'SUBSCRIBED'), isNotNull(contacts.phone))).then((r) => r[0]?.n ?? 0),
+      ? db.select({ n: count() }).from(contacts).where(and(eq(contacts.tenantId, tenantId), onlyUserId ? eq(contacts.ownerId, onlyUserId) : undefined, eq(contacts.emailStatus, 'SUBSCRIBED'), isNotNull(contacts.email))).then((r) => r[0]?.n ?? 0)
+      : db.select({ n: count() }).from(contacts).where(and(eq(contacts.tenantId, tenantId), onlyUserId ? eq(contacts.ownerId, onlyUserId) : undefined, eq(contacts.whatsappStatus, 'SUBSCRIBED'), isNotNull(contacts.phone))).then((r) => r[0]?.n ?? 0),
     channel === 'EMAIL' ? db.query.senders.findMany({ where: eq(senders.tenantId, tenantId), with: { domain: true, connection: true } }) : Promise.resolve([]),
   ]);
 

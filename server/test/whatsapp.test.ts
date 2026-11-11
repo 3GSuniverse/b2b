@@ -240,7 +240,9 @@ describe('every employee links their own number', () => {
     const a = await makeLine(tenant.id, { status: 'CONNECTED', phone: '+919000000021', intervalSeconds: 0, dailyLimit: 20 });
     const [u] = await db.insert(users).values({ tenantId: tenant.id, name: 'Priya', username: 'priya', passwordHash: 'x' }).returning();
     const b = await makeLine(tenant.id, { userId: u!.id, status: 'CONNECTED', phone: '+919000000022', intervalSeconds: 0, dailyLimit: 20 });
-    await makeContact(tenant.id, { phone: '+919848000001', whatsappStatus: 'SUBSCRIBED' });
+    // Each employee has their own customers: the same person can be on both lists
+    await makeContact(tenant.id, { phone: '+919848000001', whatsappStatus: 'SUBSCRIBED', ownerId: a.userId });
+    await makeContact(tenant.id, { phone: '+919848000001', whatsappStatus: 'SUBSCRIBED', ownerId: b.userId });
     const gw = new MemoryWhatsAppGateway();
     for (const line of [b, a]) {
       const [c] = await db.insert(campaigns).values({ tenantId: tenant.id, channel: 'WHATSAPP', name: 'x', text: 'Hi', createdById: line.userId }).returning();

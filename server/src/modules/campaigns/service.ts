@@ -6,7 +6,7 @@ import { senderFor } from '../senders/service.js';
 import { AppError } from '../../lib/http.js';
 import type { EnqueueFn } from '../../queues/index.js';
 import { tenants } from '../../db/schema.js';
-import { emailAudienceWhere, whatsappAudienceWhere } from '../audience/resolve.js';
+import { creatorScoped, emailAudienceWhere, whatsappAudienceWhere } from '../audience/resolve.js';
 import { normalizePhone } from '../contacts/normalize.js';
 import { pickSession, renderWhatsApp } from '../whatsapp/service.js';
 import { enqueueWhatsAppTest } from '../../queues/index.js';
@@ -277,10 +277,12 @@ async function checksFor(input: Awaited<ReturnType<typeof checkInputFor>>['input
 /** Renders the email as one real recipient would see it, plus the ready-to-send checks. */
 export async function previewCampaign(tenantId: string, id: string, contactId?: string) {
   const { c, input } = await checkInputFor(tenantId, id);
+  const audience = await creatorScoped(db, c.audience, c.createdById);
+  const mine = audience?.ownerId ? eq(contacts.ownerId, audience.ownerId) : undefined;
   if (c.channel === 'WHATSAPP') {
     const [contact] = contactId
-      ? await db.select().from(contacts).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId))).limit(1)
-      : await db.select().from(contacts).where(whatsappAudienceWhere(tenantId, c.audience)).orderBy(contacts.createdAt).limit(1);
+      ? await db.select().from(contacts).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId), mine)).limit(1)
+      : await db.select().from(contacts).where(whatsappAudienceWhere(tenantId, audience)).orderBy(contacts.createdAt).limit(1);
     return {
       previewAs: contact ? { id: contact.id, email: contact.email, firstName: contact.firstName, phone: contact.phone } : null,
       rendered: c.text ? { subject: '', html: '', text: renderWhatsApp(c.text, contact ?? null, c.tenant) } : null,
@@ -289,8 +291,8 @@ export async function previewCampaign(tenantId: string, id: string, contactId?: 
   }
   // Plain select (not db.query): the audience filter has subqueries on other tables
   const [contact] = contactId
-    ? await db.select().from(contacts).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId))).limit(1)
-    : await db.select().from(contacts).where(emailAudienceWhere(tenantId, c.audience)).orderBy(contacts.createdAt).limit(1);
+    ? await db.select().from(contacts).where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId), mine)).limit(1)
+    : await db.select().from(contacts).where(emailAudienceWhere(tenantId, audience)).orderBy(contacts.createdAt).limit(1);
 
   const vars = buildMergeVars(contact ?? null, c.tenant, { unsubscribe_url: '#unsubscribe-preview' });
   const rendered =

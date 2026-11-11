@@ -5,7 +5,7 @@ import { AppError } from '../../lib/http.js';
 import { z } from 'zod';
 import { db } from '../../lib/db.js';
 import { parseBody } from '../../lib/http.js';
-import { countEmailAudience, countWhatsAppAudience } from '../audience/resolve.js';
+import { countEmailAudience, countWhatsAppAudience, scopeAudience } from '../audience/resolve.js';
 import { requireAuth, seesAll, tenantOf, viewerOf } from '../auth/guard.js';
 import { assertCanUseSender } from '../senders/service.js';
 import {
@@ -117,7 +117,8 @@ export async function campaignRoutes(app: FastifyInstance) {
   app.post('/api/audience/count', { preHandler: requireAuth }, async (req) => ({
     count: await (async () => {
       const { channel, ...audience } = parseBody(audienceSchema.extend({ channel: z.enum(['EMAIL', 'WHATSAPP']).optional() }), req.body);
-      return channel === 'WHATSAPP' ? countWhatsAppAudience(db, tenantOf(req), audience) : countEmailAudience(db, tenantOf(req), audience);
+      const scoped = scopeAudience(audience, viewerOf(req)) as typeof audience;
+      return channel === 'WHATSAPP' ? countWhatsAppAudience(db, tenantOf(req), scoped) : countEmailAudience(db, tenantOf(req), scoped);
     })(),
   }));
 }

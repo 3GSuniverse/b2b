@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Viewer } from '../auth/guard.js';
-import { ownedChat } from '../inbox/service.js';
+import { chatOwner, ownedChat } from '../inbox/service.js';
 import { auditLogs, contacts, packages, tenants, trips, waChatMessages, waChats } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
@@ -80,7 +80,7 @@ export async function suggestReply(v: Viewer, chatId: string, input: z.infer<typ
   await useAi(tenantId);
 
   const tenant = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }))!;
-  const contact = await db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, tenantId), eq(contacts.phone, chat.phone)) });
+  const contact = await db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, tenantId), eq(contacts.phone, chat.phone), chatOwner(chat.sessionId)) });
   const [history, theirTrips, offers] = await Promise.all([
     db.select().from(waChatMessages).where(eq(waChatMessages.chatId, chat.id)).orderBy(desc(waChatMessages.at)).limit(12),
     contact

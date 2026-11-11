@@ -77,6 +77,8 @@ export async function processImport(jobId: string): Promise<ImportResult> {
 
 async function run(job: typeof importJobs.$inferSelect): Promise<ImportResult> {
   const tenantId = job.tenantId;
+  // The imported people join the importer's own list of customers
+  const ownerId = job.createdById;
   const { headers, rows } = readCsv(job.sourceCsv ?? '');
   const mapping: Record<string, ColumnTarget> = { ...autoMap(headers), ...(job.options?.mapping as Record<string, ColumnTarget> | undefined) };
   const updateExisting = job.options?.updateExisting ?? true;
@@ -152,7 +154,7 @@ async function run(job: typeof importJobs.$inferSelect): Promise<ImportResult> {
     const found = await db
       .select({ phone: contacts.phone, email: contacts.email })
       .from(contacts)
-      .where(and(eq(contacts.tenantId, tenantId), inArray(contacts.phone, phones.slice(i, i + 1000))));
+      .where(and(eq(contacts.tenantId, tenantId), ownerId ? eq(contacts.ownerId, ownerId) : undefined, inArray(contacts.phone, phones.slice(i, i + 1000))));
     for (const f of found) phoneOwners.set(f.phone!, f.email);
   }
   for (const r of parsed) {
@@ -183,7 +185,7 @@ async function run(job: typeof importJobs.$inferSelect): Promise<ImportResult> {
 
   const upsert = async (batch: Row[], by: 'email' | 'phone') => {
     if (!batch.length) return;
-    const target = by === 'email' ? [contacts.tenantId, contacts.email] : [contacts.tenantId, contacts.phone];
+    const target = by === 'email' ? [contacts.tenantId, contacts.ownerId, contacts.email] : [contacts.tenantId, contacts.ownerId, contacts.phone];
     const set = updateExisting
       ? {
           firstName: sql`coalesce(excluded.first_name, ${contacts.firstName})`,
@@ -199,6 +201,7 @@ async function run(job: typeof importJobs.$inferSelect): Promise<ImportResult> {
       .values(
         batch.map((r) => ({
           tenantId,
+          ownerId,
           email: r.email,
           phone: r.phone,
           firstName: r.firstName,

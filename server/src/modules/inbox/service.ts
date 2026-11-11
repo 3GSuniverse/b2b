@@ -52,6 +52,9 @@ function chatScope(v: Viewer) {
 }
 
 /** The chat with this number on this employee's line, made on first contact; earlier messages we sent them are copied in. */
+/** Matches the customers of the employee whose WhatsApp number the chat is on */
+export const chatOwner = (sessionId: string) => sql`${contacts.ownerId} = (select user_id from whatsapp_sessions where id = ${sessionId})`;
+
 async function ensureChat(tenantId: string, sessionId: string, phone: string) {
   const [made] = await db.insert(waChats).values({ tenantId, sessionId, phone }).onConflictDoNothing().returning({ id: waChats.id });
   if (!made) return (await db.query.waChats.findFirst({ where: and(eq(waChats.sessionId, sessionId), eq(waChats.phone, phone)), columns: { id: true } }))!.id;
@@ -198,8 +201,9 @@ export async function listChats(v: Viewer, q: z.infer<typeof listQuery>) {
       employee: users.name,
     })
     .from(waChats)
-    .leftJoin(contacts, and(eq(contacts.tenantId, waChats.tenantId), eq(contacts.phone, waChats.phone)))
     .leftJoin(whatsappSessions, eq(whatsappSessions.id, waChats.sessionId))
+    // The customer is the one in the list of the employee whose number this chat is on
+    .leftJoin(contacts, and(eq(contacts.tenantId, waChats.tenantId), eq(contacts.phone, waChats.phone), eq(contacts.ownerId, whatsappSessions.userId)))
     .leftJoin(users, eq(users.id, whatsappSessions.userId))
     .where(
       and(
@@ -234,7 +238,7 @@ export async function getThread(v: Viewer, chatId: string) {
   const { tenantId } = v;
   const chat = await ownedChat(v, chatId);
   const [contact, rows] = await Promise.all([
-    db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, tenantId), eq(contacts.phone, chat.phone)), columns: { id: true, firstName: true, lastName: true, email: true, whatsappStatus: true } }),
+    db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, tenantId), eq(contacts.phone, chat.phone), chatOwner(chat.sessionId)), columns: { id: true, firstName: true, lastName: true, email: true, whatsappStatus: true } }),
     db
       .select({
         id: waChatMessages.id,
@@ -272,7 +276,7 @@ export const replyBody = z.object({ text: z.string().trim().min(1, 'Write a repl
 export async function reply(v: Viewer, chatId: string, text: string, enqueue = (ids: string[]) => enqueueWhatsApp(ids, { urgent: true })) {
   const { tenantId, userId } = v;
   const chat = await ownedChat(v, chatId);
-  const contact = await db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, tenantId), eq(contacts.phone, chat.phone)), columns: { id: true } });
+  const contact = await db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, tenantId), eq(contacts.phone, chat.phone), chatOwner(chat.sessionId)), columns: { id: true } });
   const now = new Date();
   // A reply to someone who wrote to you: it goes unless they replied STOP
   const [m] = await db

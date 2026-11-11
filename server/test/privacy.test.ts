@@ -63,4 +63,43 @@ describe('employees never see each other’s work', () => {
     expect((await A.get('/api/channels/whatsapp')).json().activity ?? []).toHaveLength(1);
     expect(await db.$count(waChats)).toBe(1);
   });
+
+  it('every employee has a private customer list; the owner sees all', async () => {
+    const owner = await signup(app);
+    const asha = await employee(app, owner, 'asha');
+    const ravi = await employee(app, owner, 'ravi');
+    const A = api(app, asha.cookie);
+    const R = api(app, ravi.cookie);
+    const O = api(app, owner.cookie);
+
+    const made = await A.post('/api/contacts', { phone: '9848012345', firstName: 'Meena', whatsappOptIn: true });
+    expect(made.statusCode).toBe(201);
+    const id = made.json().contact.id as string;
+    const list = (await A.post('/api/lists', { name: 'Goa guests' })).json().list.id as string;
+    await A.post(`/api/lists/${list}/members`, { contactIds: [id] });
+
+    // Ravi sees none of it, and cannot reach it by id
+    expect((await R.get('/api/contacts')).json().total).toBe(0);
+    expect((await R.get('/api/contacts/stats')).json().stats.all).toBe(0);
+    expect((await R.get(`/api/contacts/${id}`)).statusCode).toBe(404);
+    expect((await R.patch(`/api/contacts/${id}`, { firstName: 'X' })).statusCode).toBe(404);
+    expect((await R.post('/api/contacts/delete', { contactIds: [id] })).json().deleted).toBe(0);
+    expect((await R.get('/api/lists')).json().lists).toHaveLength(0);
+    expect((await R.post(`/api/lists/${list}/members`, { contactIds: [id] })).statusCode).toBe(404);
+    expect((await R.post('/api/audience/count', { mode: 'everyone', channel: 'WHATSAPP' })).json().count).toBe(0);
+
+    // The same person can be Ravi's own customer too, without clashing
+    expect((await R.post('/api/contacts', { phone: '9848012345', firstName: 'Meena R' })).statusCode).toBe(201);
+    expect((await R.get('/api/contacts')).json().total).toBe(1);
+    expect((await A.post('/api/contacts', { phone: '9848012345' })).statusCode).toBe(409);
+
+    // Asha reaches her own; the owner sees both
+    expect((await A.post('/api/audience/count', { mode: 'everyone', channel: 'WHATSAPP' })).json().count).toBe(1);
+    expect((await O.get('/api/contacts')).json().total).toBe(2);
+    expect((await O.get('/api/lists')).json().lists).toHaveLength(1);
+
+    // An employee can erase only their own
+    expect((await A.post('/api/contacts/delete', { contactIds: [id] })).json().deleted).toBe(1);
+    expect((await O.get('/api/contacts')).json().total).toBe(1);
+  });
 });

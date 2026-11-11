@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { automations, contacts, templates, tenants } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError, parseBody } from '../../lib/http.js';
-import { requireAuth, tenantOf } from '../auth/guard.js';
+import { requireAuth, seesAll, tenantOf, viewerOf } from '../auth/guard.js';
 import { buildMergeVars, renderEmail } from '../email/render.js';
 import { STARTERS } from './starters.js';
 import { attachmentIds, resolveRefs } from '../attachments/service.js';
@@ -104,7 +104,7 @@ export async function templateRoutes(app: FastifyInstance) {
     const { contactId } = parseBody(z.object({ contactId: z.string().optional() }), req.body);
     const [tenant, contact] = await Promise.all([
       db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }),
-      contactId ? db.query.contacts.findFirst({ where: and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId)) }) : Promise.resolve(undefined),
+      contactId ? db.query.contacts.findFirst({ where: and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId), seesAll(viewerOf(req)) ? undefined : eq(contacts.ownerId, req.auth!.userId)) }) : Promise.resolve(undefined),
     ]);
     const vars = buildMergeVars(contact ?? null, tenant!, { unsubscribe_url: '#unsubscribe-preview' });
     return { rendered: t.subject && t.html ? renderEmail({ subject: t.subject, html: t.html, text: t.text, previewText: t.previewText }, vars, tenant!) : null };
