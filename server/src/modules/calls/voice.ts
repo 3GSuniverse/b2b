@@ -63,7 +63,7 @@ export function fromWav(wav: Buffer) {
   while (at + 8 <= wav.length) {
     const id = wav.toString('ascii', at, at + 4);
     const size = wav.readUInt32LE(at + 4);
-    if (id === 'data') return wav.subarray(at + 8, Math.min(wav.length, at + 8 + size));
+    if (id === 'data') return wav.subarray(at + 8, size ? Math.min(wav.length, at + 8 + size) : wav.length);
     at += 8 + size + (size % 2);
   }
   return wav.subarray(44);
@@ -165,10 +165,63 @@ const sarvamTts: TextToSpeech = {
   },
 };
 
+/**
+ * Google Cloud Speech-to-Text and Text-to-Speech, for testing on Google credits. No key: the VM signs in
+ * with its own service account (same as Vertex AI). Turn on with CALL_VOICE=google.
+ */
+let gToken: { value: string; until: number } | null = null;
+async function googleToken() {
+  if (gToken && gToken.until > Date.now()) return gToken.value;
+  const res = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', { headers: { 'Metadata-Flavor': 'Google' }, signal: AbortSignal.timeout(5_000) }).catch(() => null);
+  if (!res?.ok) throw new Error('Google voice: couldn’t sign in with the VM’s service account');
+  const t = (await res.json()) as { access_token: string; expires_in: number };
+  gToken = { value: t.access_token, until: Date.now() + (t.expires_in - 120) * 1000 };
+  return gToken.value;
+}
+const GOOGLE_VOICE: Record<Lang, string> = { en: 'en-IN-Neural2-A', hi: 'hi-IN-Neural2-A', te: 'te-IN-Standard-A' };
+const googleError = (d: { error?: { message?: string } }) => d.error?.message ?? 'failed';
+
+const googleStt: SpeechToText = {
+  async transcribe(pcm, lang) {
+    const others = (['te', 'hi', 'en'] as Lang[]).filter((l) => l !== lang).map((l) => LOCALE[l]);
+    const res = await fetch('https://speech.googleapis.com/v1/speech:recognize', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${await googleToken()}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        config: { encoding: 'LINEAR16', sampleRateHertz: SAMPLE_RATE, languageCode: LOCALE[lang], alternativeLanguageCodes: others, enableAutomaticPunctuation: true },
+        audio: { content: pcm.toString('base64') },
+      }),
+      signal: AbortSignal.timeout(8_000),
+    });
+    const data = (await res.json().catch(() => ({}))) as { results?: { languageCode?: string; alternatives?: { transcript?: string }[] }[]; error?: { message?: string } };
+    if (!res.ok) throw new Error(`speech-to-text ${res.status}: ${googleError(data)}`);
+    const best = data.results?.[0];
+    return { text: (data.results ?? []).map((r) => r.alternatives?.[0]?.transcript ?? '').join(' ').trim(), lang: FROM_LOCALE[best?.languageCode ?? ''] ?? lang };
+  },
+};
+
+const googleTts: TextToSpeech = {
+  async speak(text, lang) {
+    const res = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${await googleToken()}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        input: { text },
+        voice: { languageCode: LOCALE[lang], name: GOOGLE_VOICE[lang] },
+        audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: SAMPLE_RATE, speakingRate: 1.05 },
+      }),
+      signal: AbortSignal.timeout(8_000),
+    });
+    const data = (await res.json().catch(() => ({}))) as { audioContent?: string; error?: { message?: string } };
+    if (!res.ok || !data.audioContent) throw new Error(`text-to-speech ${res.status}: ${googleError(data)}`);
+    return fromWav(Buffer.from(data.audioContent, 'base64'));
+  },
+};
+
 let override: { stt: SpeechToText; tts: TextToSpeech } | null = null;
 /** Tests swap in fakes. */
 export function setVoice(v: { stt: SpeechToText; tts: TextToSpeech } | null) {
   override = v;
 }
-export const voiceEnabled = () => !!override || !!env.SARVAM_API_KEY;
-export const voice = () => override ?? { stt: sarvamStt, tts: sarvamTts };
+export const voiceEnabled = () => !!override || env.CALL_VOICE === 'google' || !!env.SARVAM_API_KEY;
+export const voice = () => override ?? (env.CALL_VOICE === 'google' ? { stt: googleStt, tts: googleTts } : { stt: sarvamStt, tts: sarvamTts });

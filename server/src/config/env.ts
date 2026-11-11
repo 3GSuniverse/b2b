@@ -71,6 +71,8 @@ const schema = z.object({
   TRIAL_AI_PER_DAY: z.coerce.number().int().min(0).default(30),
 
   // AI Caller. Speech-to-text and the voice come from Sarvam AI (Indian languages, no GPU needed here)
+  // 'sarvam' (default) or 'google' (Google Cloud Speech-to-Text + Text-to-Speech, paid from Google credits)
+  CALL_VOICE: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['sarvam', 'google']).default('sarvam')),
   SARVAM_API_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   CALL_STT_MODEL: z.string().default('saarika:v2.5'),
   CALL_TTS_MODEL: z.string().default('bulbul:v2'),
