@@ -44,10 +44,22 @@ const RULES: [RegExp, string][] = [
   [/\bitinerary\b/g, 'details'],
 ];
 
-/** Wraps a screen word or sentence: unchanged for travel agencies, in everyday words for everyone else. */
-export function tx(text: string): string {
-  if (current === 'TRAVEL') return text;
+/** The same words for one named kind of business (customer care looks at many businesses at once) */
+export function txFor(type: string | undefined, text: string): string {
+  if (!type || type === 'TRAVEL') return text;
   let out = text;
   for (const [re, to] of RULES) out = out.replace(re, to);
   return out;
 }
+
+/** Wraps a screen word or sentence: unchanged for travel agencies, in everyday words for everyone else. */
+export function tx(text: string): string {
+  return txFor(current, text);
+}
+
+/** Customer care serves every kind of business, so it says "business" where a screen would say "agency" */
+export function nb(text: string): string {
+  return text.replace(/\bAgenc(y|ies)\b/g, (_, e) => (e === 'y' ? 'Business' : 'Businesses')).replace(/\bagenc(y|ies)\b/g, (_, e) => (e === 'y' ? 'business' : 'businesses'));
+}
+
+export const businessLabel = (type: string | undefined) => BUSINESS_TYPES.find((b) => b.value === type)?.label ?? 'Travel agency';

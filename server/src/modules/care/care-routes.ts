@@ -235,6 +235,7 @@ export async function careRoutes(app: FastifyInstance) {
         id: tenants.id,
         name: tenants.name,
         loginCode: tenants.loginCode,
+        businessType: tenants.businessType,
         status: tenants.status,
         plan: tenants.plan,
         planId: tenants.planId,

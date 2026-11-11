@@ -26,6 +26,7 @@ import { api } from '@/lib/api';
 import { CARE_STATUS, type AgencyProfile, type CareTicket } from '@/lib/care';
 import { cn } from '@/lib/cn';
 import { ago, date, dateTime, inr, n, phone } from '@/lib/format';
+import { businessLabel, nb, txFor } from '../../lib/words';
 
 export const useAgencyProfile = (id: string | undefined) =>
   useQuery({ queryKey: ['care', 'agency', id], queryFn: () => api.get<AgencyProfile>(`/api/care/agencies/${id}`), enabled: !!id, refetchInterval: 60_000 });
@@ -33,7 +34,7 @@ export const useAgencyProfile = (id: string | undefined) =>
 type Level = 'good' | 'warn' | 'bad' | 'off';
 type Signal = { level: Level; icon: ReactNode; title: string; note?: string };
 
-const ROLE = { OWNER: 'Agency owner', ADMIN: 'Manager', MEMBER: 'Employee' } as const;
+const ROLE = { OWNER: nb('Agency owner'), ADMIN: 'Manager', MEMBER: 'Employee' } as const;
 
 /**
  * What's wrong (or fine) with this agency right now, worst first. This is what customer care reads
@@ -173,7 +174,7 @@ export function AgencyPanel({ id, ticket, wide }: { id: string; ticket?: CareTic
         <Skeleton className="h-32 rounded-[16px]" />
       </div>
     );
-  if (!q.data) return <p className="p-5 text-sm text-muted">Couldn’t load this agency.</p>;
+  if (!q.data) return <p className="p-5 text-sm text-muted">{nb("Couldn’t load this agency.")}</p>;
   const p = q.data;
   const sig = signals(p);
   const bad = sig.filter((s) => s.level === 'bad').length;
@@ -203,8 +204,9 @@ export function AgencyPanel({ id, ticket, wide }: { id: string; ticket?: CareTic
             </span>
             <span className="flex flex-wrap items-center gap-x-2 text-[12.5px] text-white/70">
               <span>
-                Agency ID <b className="font-semibold text-white">{p.agency.loginCode}</b>
+                {nb("Agency ID")} <b className="font-semibold text-white">{p.agency.loginCode}</b>
               </span>
+              <span>· {businessLabel(p.agency.businessType)}</span>
               <span>· with us since {date(p.agency.createdAt, { month: 'short', year: 'numeric' })}</span>
             </span>
           </div>
@@ -464,7 +466,7 @@ export function AgencyPanel({ id, ticket, wide }: { id: string; ticket?: CareTic
                 </ul>
               )}
             </Section>
-            <Section title="Their customers and trips">
+            <Section title={txFor(p.agency.businessType, "Their customers and trips")}>
               <div className="grid grid-cols-2 gap-2 text-[12.5px]">
                 <div className="flex items-center gap-2 rounded-[12px] border border-line p-3">
                   <Users className="h-4 w-4 text-blue-ink" />
@@ -475,7 +477,7 @@ export function AgencyPanel({ id, ticket, wide }: { id: string; ticket?: CareTic
                 <div className="flex items-center gap-2 rounded-[12px] border border-line p-3">
                   <Plane className="h-4 w-4 text-plum-ink" />
                   <span className="tnum">
-                    <b className="font-semibold">{n(p.usage.trips.total)}</b> trips, {n(p.usage.trips.booked)} booked
+                    <b className="font-semibold">{n(p.usage.trips.total)}</b> {txFor(p.agency.businessType, 'trips')}, {n(p.usage.trips.booked)} booked
                   </span>
                 </div>
               </div>
@@ -550,7 +552,7 @@ export function AgencyPanel({ id, ticket, wide }: { id: string; ticket?: CareTic
                   {p.activity.map((x) => (
                     <li key={x.id} className="relative text-[12.5px]">
                       <span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-accent ring-4 ring-surface" aria-hidden />
-                      <span className="font-semibold">{humanAction(x.action, x.meta)}</span>
+                      <span className="font-semibold">{txFor(p.agency.businessType, humanAction(x.action, x.meta))}</span>
                       <span className="text-muted">
                         {' '}
                         · {x.userName ?? 'Dhrona'} · {ago(x.createdAt)}
@@ -588,7 +590,7 @@ const ACTIONS: Record<string, string> = {
   'package.create': 'Made a package',
   'whatsapp.connect': 'Started linking WhatsApp',
   'whatsapp.disconnect': 'Unlinked WhatsApp',
-  'account.update': 'Changed agency details',
+  'account.update': nb('Changed agency details'),
   'payments.settings': 'Changed payment settings',
   'trips.messages_settings': 'Changed trip messages',
   'api_key.create': 'Made an API key',

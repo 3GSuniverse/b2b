@@ -13,6 +13,7 @@ import type { AgencyRow, CareStaff, CareSummary } from '@/lib/care';
 import { cn } from '@/lib/cn';
 import { ago, date } from '@/lib/format';
 import { CareInbox } from './inbox';
+import { businessLabel, nb } from '../../lib/words';
 
 const StaffContext = createContext<CareStaff | null>(null);
 export const useStaff = () => useContext(StaffContext)!;
@@ -112,7 +113,7 @@ function CareSignIn() {
         </div>
         <form onSubmit={submit} className="flex flex-col gap-5 rounded-[24px] bg-surface p-7 shadow-[0_30px_80px_-30px_rgb(0_0_0/0.6)]">
           <div className="flex flex-col gap-1">
-            <h1 className="text-[22px] font-bold tracking-[-0.02em]">Sign in to help agencies</h1>
+            <h1 className="text-[22px] font-bold tracking-[-0.02em]">{nb("Sign in to help agencies")}</h1>
             <p className="text-sm text-muted">For the Dhrona support team only.</p>
           </div>
           {m.error && !(m.error instanceof ApiError && m.error.details?.fields) && (
@@ -131,11 +132,11 @@ function CareSignIn() {
           </Button>
           <p className="flex items-start gap-2 text-[12px] leading-relaxed text-muted">
             <ShieldCheck className="mt-px h-4 w-4 shrink-0 text-success" />
-            You’ll see agencies’ details to help them. Use them only for that.
+            {nb("You’ll see agencies’ details to help them. Use them only for that.")}
           </p>
         </form>
         <p className="mt-5 text-center text-[13px] text-white/55">
-          Run a travel agency?{' '}
+          Run a business?{' '}
           <Link to="/signin" className="font-semibold text-white/85 hover:text-white">
             Sign in here
           </Link>
@@ -226,8 +227,8 @@ function AgenciesPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-[1100px] flex-col gap-6 px-4 py-6 sm:px-8 sm:py-8">
         <div className="flex flex-col gap-1">
-          <h1 className="text-[28px] font-extrabold tracking-[-0.025em]">Agencies</h1>
-          <p className="text-sm text-muted">Find one by its name, agency ID, anyone’s name or email, or its WhatsApp number.</p>
+          <h1 className="text-[28px] font-extrabold tracking-[-0.025em]">{nb("Agencies")}</h1>
+          <p className="text-sm text-muted">{nb("Find one by its name, agency ID, anyone’s name or email, or its WhatsApp number.")}</p>
         </div>
         <Input
           leading={<Search className="h-4 w-4" />}
@@ -245,7 +246,7 @@ function AgenciesPage() {
             ))}
           </div>
         ) : !r.data?.agencies.length ? (
-          <p className="rounded-[16px] border border-dashed border-line px-5 py-8 text-center text-sm text-muted">{term ? `No agency matches “${term}”.` : 'No agencies yet.'}</p>
+          <p className="rounded-[16px] border border-dashed border-line px-5 py-8 text-center text-sm text-muted">{term ? nb(`No agency matches “${term}”.`) : nb('No agencies yet.')}</p>
         ) : (
           <ul className={cn('stagger flex flex-col gap-2', r.isFetching && 'opacity-70')}>
             {!term && <li className="text-[12.5px] font-semibold text-muted">Newest first</li>}
@@ -259,6 +260,7 @@ function AgenciesPage() {
                     <span className="flex items-center gap-2 truncate text-[15px] font-semibold">
                       {a.name}
                       {a.status !== 'ACTIVE' && <Badge tone="red">{a.status.toLowerCase()}</Badge>}
+                      {a.businessType !== 'TRAVEL' && <Badge tone="grey">{businessLabel(a.businessType)}</Badge>}
                     </span>
                     <span className="truncate text-[12.5px] text-muted">
                       {a.loginCode} · {a.ownerName ?? 'No owner'} {a.ownerEmail ? `· ${a.ownerEmail}` : ''}
@@ -286,7 +288,7 @@ function AgencyPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-[1100px] flex-col gap-4 px-4 py-6 sm:px-8">
         <Link to="/care/agencies" className="inline-flex w-fit items-center gap-1.5 text-[13px] font-medium text-muted hover:text-ink">
-          <ArrowLeft className="h-4 w-4" /> Agencies
+          <ArrowLeft className="h-4 w-4" /> {nb("Agencies")}
         </Link>
         <div className="overflow-hidden rounded-[22px] border border-line bg-surface shadow-[var(--panel-shadow)]">
           <AgencyPanel id={id!} wide />
@@ -302,7 +304,7 @@ function AgencyRequests({ id }: { id: string }) {
   if (!r.data?.tickets.length) return null;
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-[15px] font-semibold">Requests from this agency</h2>
+      <h2 className="text-[15px] font-semibold">{nb("Requests from this agency")}</h2>
       <ul className="flex flex-col gap-1.5">
         {r.data.tickets.map((t) => (
           <li key={t.id}>

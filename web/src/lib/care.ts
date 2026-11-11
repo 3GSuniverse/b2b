@@ -113,7 +113,7 @@ export type CareTicket = {
 
 type Verify = 'PENDING' | 'VERIFIED' | 'FAILED';
 export type AgencyProfile = {
-  agency: { id: string; name: string; loginCode: string; status: 'ACTIVE' | 'PAUSED' | 'SUSPENDED'; pausedReason: string | null; timezone: string; postalAddress: string | null; createdAt: string; owner: { name: string; email: string | null; lastLoginAt: string | null } | null };
+  agency: { id: string; name: string; loginCode: string; businessType: string; status: 'ACTIVE' | 'PAUSED' | 'SUSPENDED'; pausedReason: string | null; timezone: string; postalAddress: string | null; createdAt: string; owner: { name: string; email: string | null; lastLoginAt: string | null } | null };
   plan: {
     plan: 'TRIAL' | 'PAID';
     planId: string | null;
@@ -169,6 +169,7 @@ export type AgencyRow = {
   id: string;
   name: string;
   loginCode: string;
+  businessType: string;
   status: 'ACTIVE' | 'PAUSED' | 'SUSPENDED';
   planLabel: string;
   trial: boolean;

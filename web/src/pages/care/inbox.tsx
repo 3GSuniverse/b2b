@@ -16,6 +16,7 @@ import { cn } from '@/lib/cn';
 import { ago, dateTime } from '@/lib/format';
 import type { Attachment } from '@/lib/types';
 import { summaryQuery, useStaff } from './app';
+import { nb } from '../../lib/words';
 
 const careFile = (a: Attachment, download = false) => `/api/care/attachments/${a.id}${download ? '?download' : ''}`;
 
@@ -23,7 +24,7 @@ const VIEWS: { id: CareView; label: string; key: 'needsReply' | 'unassigned' | '
   { id: 'needs_reply', label: 'Needs reply', key: 'needsReply' },
   { id: 'unassigned', label: 'Nobody on it', key: 'unassigned' },
   { id: 'mine', label: 'Mine', key: 'mine' },
-  { id: 'waiting', label: 'Waiting on agency', key: 'waiting' },
+  { id: 'waiting', label: nb('Waiting on agency'), key: 'waiting' },
   { id: 'resolved', label: 'Solved', key: 'resolvedToday' },
   { id: 'all', label: 'Everything', key: 'all' },
 ];
@@ -136,7 +137,7 @@ export function CareInbox() {
                   <Inbox className="h-7 w-7" />
                 </span>
                 <p className="text-[15px] font-semibold">{term || category ? 'Nothing matches' : view === 'needs_reply' ? 'All caught up' : 'Nothing here'}</p>
-                <p className="text-[13px] text-muted">{view === 'needs_reply' && !term ? 'Every agency has an answer. New requests appear here by themselves.' : 'Try another view or search.'}</p>
+                <p className="text-[13px] text-muted">{view === 'needs_reply' && !term ? nb('Every agency has an answer. New requests appear here by themselves.') : 'Try another view or search.'}</p>
               </div>
             ) : (
               <ul className={cn('flex flex-col', list.isFetching && list.isPlaceholderData && 'opacity-60')}>
@@ -234,8 +235,8 @@ function NoTicket({ count }: { count: number }) {
           <circle cx="60" cy="60" r="14" fill="#4a3fd1" />
           <path d="M53 62v-3a7 7 0 0 1 14 0v3" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
         </svg>
-        <p className="text-[17px] font-bold">{count ? `${count} ${count === 1 ? 'agency is' : 'agencies are'} waiting` : 'You’re all caught up'}</p>
-        <p className="text-[13.5px] text-muted">Open a request from the list. You’ll see the conversation here, and everything about the agency beside it.</p>
+        <p className="text-[17px] font-bold">{count ? nb(`${count} ${count === 1 ? 'agency is' : 'agencies are'} waiting`) : 'You’re all caught up'}</p>
+        <p className="text-[13.5px] text-muted">{nb("Open a request from the list. You’ll see the conversation here, and everything about the agency beside it.")}</p>
       </div>
     </div>
   );
@@ -298,7 +299,7 @@ function TicketView({ id, back }: { id: string; back: string }) {
               </p>
             </div>
             <Button size="sm" variant="ghost" className="2xl:hidden" onClick={() => setDetails(true)}>
-              <PanelRight className="h-4 w-4" /> <span className="hidden sm:inline">Agency</span>
+              <PanelRight className="h-4 w-4" /> <span className="hidden sm:inline">{nb("Agency")}</span>
             </Button>
           </div>
           <div className="flex flex-wrap items-center gap-2">

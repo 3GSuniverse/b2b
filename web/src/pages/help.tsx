@@ -151,7 +151,7 @@ function CategoryGrid({ value, onPick, linkTo }: { value?: Category | null; onPi
               <Icon className="h-5 w-5" />
             </span>
             <span className="flex min-w-0 flex-col">
-              <span className="text-[14px] font-semibold leading-tight">{c.label}</span>
+              <span className="text-[14px] font-semibold leading-tight">{tx(c.label)}</span>
               <span className="truncate text-[12px] text-muted">{c.hint}</span>
             </span>
             {on && (
@@ -354,7 +354,7 @@ export function RequestPage() {
           <h1 className="text-[24px] font-extrabold leading-tight tracking-[-0.02em]">{t.subject}</h1>
           <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-muted">
             <span className="tnum">Request {t.number}</span>
-            <span>· {c.label}</span>
+            <span>· {tx(c.label)}</span>
             <span>· Sent {dateTime(t.createdAt)}</span>
           </p>
         </div>

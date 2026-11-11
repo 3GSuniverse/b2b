@@ -201,6 +201,7 @@ export async function agencyProfile(tenantId: string) {
       id: t.id,
       name: t.name,
       loginCode: t.loginCode,
+      businessType: t.businessType,
       status: t.status,
       pausedReason: t.pausedReason,
       timezone: t.timezone,
