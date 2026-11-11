@@ -7,9 +7,12 @@ import { parseBody } from '../../lib/http.js';
 import { requireAuth, requireRole, tenantOf, viewerOf } from '../auth/guard.js';
 import { indianNumber } from './safety.js';
 import { CallSession } from './session.js';
-import { addOptout, agencyForNumber, balance, getCall, isOptedOut, listCalls, listOptouts, listQuery, optoutBody, overview, refusal, removeOptout, saveSettings, settingsBody } from './service.js';
+import { addOptout, agencyForNumber, balance, getCall, isOptedOut, listCalls, listOptouts, listQuery, optoutBody, overview, refusal, removeOptout, saveSettings, settingsBody, settingsOf } from './service.js';
 import { voiceEnabled } from './voice.js';
 import { aiEnabled } from '../ai/quote-draft.js';
+import { db } from '../../lib/db.js';
+import { tenants } from '../../db/schema.js';
+import { eq } from 'drizzle-orm';
 
 type Id = { Params: { id: string } };
 const auth = { preHandler: requireAuth };
@@ -39,6 +42,67 @@ export async function callRoutes(app: FastifyInstance) {
     return reply.code(201).send(await addOptout(tenantOf(req), b.phone, b.reason));
   });
   app.delete<Id>('/api/calls/do-not-call/:id', admin, async (req) => removeOptout(tenantOf(req), req.params.id));
+
+  /**
+   * Practice call from the website: the agency owner talks to their AI through the browser's
+   * microphone, no phone line needed. Same listening, thinking and voice as a real call, but
+   * free (no wallet minutes) and capped at 3 minutes. Binary frames are 8 kHz 16-bit PCM both ways.
+   */
+  app.get('/api/calls/test', { websocket: true, preHandler: admin.preHandler }, (socket: WebSocket, req) => {
+    const send = (m: object) => socket.readyState === socket.OPEN && socket.send(JSON.stringify(m));
+    const refuse = (why: string) => {
+      send({ event: 'refused', why });
+      socket.close(1000, why);
+    };
+    // The login cookie rides along on every socket, so only accept pages served from this site
+    const origin = req.headers.origin;
+    if (origin && new URL(origin).host !== req.headers.host) return refuse('forbidden');
+    const tenantId = tenantOf(req);
+    let session: CallSession | null = null;
+    const early: Buffer[] = [];
+
+    void (async () => {
+      const [tenant, settings] = await Promise.all([db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }), settingsOf(tenantId)]);
+      const why = !tenant ? 'agency_inactive' : !voiceEnabled() || !aiEnabled() ? 'not_configured' : live.size >= MAX_LIVE ? 'busy' : await refusal(tenantId, settings, true);
+      if (why || !tenant) return refuse(why ?? 'agency_inactive');
+      session = new CallSession(
+        tenant,
+        settings,
+        'Practice call',
+        {
+          play: (pcm) => {
+            for (let i = 0; i < pcm.length; i += 1600) socket.readyState === socket.OPEN && socket.send(pcm.subarray(i, i + 1600));
+          },
+          clear: () => send({ event: 'clear' }),
+          hangUp: () => socket.close(1000, 'done'),
+        },
+        { minutesLeft: 3, test: true },
+      );
+      live.add(session);
+      send({ event: 'ready' });
+      for (const b of early.splice(0)) session.hear(b);
+      await session.start().catch((err) => {
+        req.log.error(err, 'practice call could not start');
+        socket.close(1011, 'error');
+      });
+    })().catch((err) => {
+      req.log.error(err, 'practice call failed');
+      socket.close(1011, 'error');
+    });
+
+    socket.on('message', (raw, isBinary) => {
+      if (!isBinary) return;
+      const b = Buffer.isBuffer(raw) ? raw : Buffer.concat(raw as Buffer[]);
+      if (session) session.hear(b);
+      else if (early.length < 50) early.push(b);
+    });
+    socket.on('close', () => {
+      if (!session) return;
+      live.delete(session);
+      void session.finish();
+    });
+    socket.on('error', (err) => req.log.warn(err, 'practice call socket error'));
+  });
 
   /**
    * The phone line. Exotel's Voicebot applet opens this socket when someone dials an agency's

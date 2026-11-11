@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { WebSocket } from 'ws';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { callOptouts, calls, callSettings, callWalletEntries, tenants, users } from '../src/db/schema.js';
@@ -217,6 +218,28 @@ describe('AI Caller', () => {
     await call.finish();
     expect(await db.select().from(callOptouts).where(eq(callOptouts.tenantId, tenantId))).toHaveLength(1);
     expect((await api(app, owner.cookie).get('/api/calls/do-not-call')).json().numbers[0].phone).toBe('+919848012345');
+  });
+
+  it('lets the owner practice a call from the browser: greets by voice, free of wallet minutes', async () => {
+    const owner = await signup(app);
+    await db.insert(callWalletEntries).values({ tenantId: owner.json.tenant.id, minutes: 0, reason: 'test' });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const port = (app.server.address() as { port: number }).port;
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/calls/test`, { headers: { cookie: owner.cookie } });
+    const got: { text?: string; audio: number }[] = [];
+    ws.on('message', (raw: Buffer, isBinary: boolean) => got.push(isBinary ? { audio: raw.length } : { text: raw.toString(), audio: 0 }));
+    for (let i = 0; i < 40 && !got.some((g) => g.audio); i++) await new Promise((r) => setTimeout(r, 50));
+    expect(got.some((g) => g.text?.includes('"ready"'))).toBe(true);
+    expect(got.some((g) => g.audio > 0)).toBe(true);
+    ws.close();
+    for (let i = 0; i < 40; i++) {
+      const [c] = await db.select().from(calls).where(eq(calls.tenantId, owner.json.tenant.id));
+      if (c?.endedAt) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    const [c] = await db.select().from(calls).where(eq(calls.tenantId, owner.json.tenant.id));
+    expect(c?.phone).toBe('Practice call');
+    expect(await balance(owner.json.tenant.id)).toBe(0);
   });
 
   it('refuses the phone line without the secret token', async () => {

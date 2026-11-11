@@ -24,6 +24,7 @@ import {
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { PracticeCall } from '@/components/calls/practice-call';
 import { PlanLock } from '@/components/plan-lock';
 import { Button } from '@/components/ui/button';
 import { Segmented, Switch, Tabs } from '@/components/ui/controls';
@@ -98,6 +99,7 @@ export function CallsPage() {
         <>
           <Hero d={d} />
           {d.settings.suspended && <SuspendedBand reason={d.settings.suspended.reason} />}
+          {d.allowed && <PracticeCall />}
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
             <div className="flex flex-col gap-6">
               <SetupSteps s={d.settings} />

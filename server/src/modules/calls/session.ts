@@ -48,7 +48,7 @@ export class CallSession {
     private readonly settings: CallSettings,
     private readonly phone: string,
     private readonly line: Line,
-    private readonly opts: { minutesLeft: number; providerCallId?: string },
+    private readonly opts: { minutesLeft: number; providerCallId?: string; /** a practice call from the website: free, not charged to the wallet */ test?: boolean },
   ) {
     this.lang = settings.language;
     this.vad = new Vad({ start: () => this.onSpeechStart(), utterance: (pcm) => void this.onUtterance(pcm) });
@@ -186,7 +186,7 @@ export class CallSession {
     for (const t of this.timers) clearTimeout(t);
     if (!this.callId) return;
     const seconds = Math.round((Date.now() - this.startedAt) / 1000);
-    await finishCall(this.tenant.id, this.callId, { seconds, transcript: this.history, outcome: this.outcome ?? (this.history.some((t) => t.from === 'customer') ? 'ANSWERED' : null), summary: this.summary, failed: this.failed }).catch((err) =>
+    await finishCall(this.tenant.id, this.callId, { seconds, transcript: this.history, outcome: this.outcome ?? (this.history.some((t) => t.from === 'customer') ? 'ANSWERED' : null), summary: this.summary, failed: this.failed, free: this.opts.test }).catch((err) =>
       console.error('[calls] could not save call', err),
     );
   }

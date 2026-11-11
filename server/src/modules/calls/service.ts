@@ -179,13 +179,14 @@ export async function removeOptout(tenantId: string, id: string) {
 // ---------------------------------------------------------------------
 
 /** Why a call can't be taken right now, or null when it can. */
-export async function refusal(tenantId: string, s: CallSettings) {
-  if (!s.enabled) return 'switched_off';
+/** Why a call can't be taken, or null. A practice call from the website skips the on/off switch and the minutes. */
+export async function refusal(tenantId: string, s: CallSettings, practice = false) {
+  if (!practice && !s.enabled) return 'switched_off';
   if (s.suspendedAt) return 'suspended';
   const t = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
   if (!t || t.status !== 'ACTIVE') return 'agency_inactive';
   if (!hasFeature(t, 'calls')) return 'plan';
-  if ((await balance(tenantId)) <= 0) return 'no_minutes';
+  if (!practice && (await balance(tenantId)) <= 0) return 'no_minutes';
   return null;
 }
 
@@ -208,7 +209,7 @@ export async function startCall(tenantId: string, input: { direction: 'IN' | 'OU
 export async function finishCall(
   tenantId: string,
   callId: string,
-  r: { seconds: number; transcript: { from: 'agent' | 'customer'; text: string }[]; outcome: NonNullable<(typeof calls.$inferSelect)['outcome']> | null; summary: string | null; failed?: boolean },
+  r: { seconds: number; transcript: { from: 'agent' | 'customer'; text: string }[]; outcome: NonNullable<(typeof calls.$inferSelect)['outcome']> | null; summary: string | null; failed?: boolean; free?: boolean },
 ) {
   const minutes = r.seconds > 0 ? Math.ceil(r.seconds / 60) : 0;
   const status = r.failed ? 'FAILED' : r.transcript.some((t) => t.from === 'customer') ? 'COMPLETED' : 'NO_ANSWER';
@@ -217,7 +218,7 @@ export async function finishCall(
     .set({ status, seconds: r.seconds, minutesBilled: minutes, transcript: r.transcript, outcome: r.outcome, summary: r.summary, endedAt: new Date() })
     .where(and(eq(calls.id, callId), eq(calls.tenantId, tenantId)))
     .returning();
-  if (minutes) await db.insert(callWalletEntries).values({ tenantId, minutes: -minutes, reason: 'call', callId });
+  if (minutes && !r.free) await db.insert(callWalletEntries).values({ tenantId, minutes: -minutes, reason: 'call', callId });
   if (c && (r.outcome === 'INTERESTED' || r.outcome === 'NEEDS_HUMAN' || r.outcome === 'CALLBACK')) {
     const hot = r.outcome === 'INTERESTED';
     await notify(tenantId, {
