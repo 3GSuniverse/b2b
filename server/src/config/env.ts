@@ -59,7 +59,7 @@ const schema = z.object({
   AI_PROVIDER: z.enum(['anthropic', 'openai', 'gemini', 'vertex']).optional(),
   // Vertex AI (AI_PROVIDER=vertex): Gemini inside Google Cloud, signed in with the VM's service account
   VERTEX_PROJECT: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()), // default: the VM's own project
-  VERTEX_LOCATION: z.preprocess((v) => (v === '' ? undefined : v), z.string().default('asia-south1')), // Mumbai; "global" also works
+  VERTEX_LOCATION: z.preprocess((v) => (v === '' ? undefined : v), z.string().default('global')), // Gemini 3 is served from "global"
   AI_MODEL: z.string().optional(), // quote drafts. default: claude-sonnet-5-5, gpt-5-mini or gemini-2.5-flash
   // WhatsApp reply suggestions are short, so they use a cheaper model. default: claude-haiku-5-5, gpt-5-mini or gemini-2.5-flash-lite
   AI_REPLY_MODEL: z.string().optional(),

@@ -20,6 +20,9 @@ export interface AiClient {
   complete(input: { system: string; prompt: string; maxTokens: number; model?: string; think?: number }): Promise<string>;
 }
 
+/** Google retired Gemini 2.5 on Vertex AI; 3 Flash is the current fast, cheap model. AI_MODEL / AI_REPLY_MODEL override it. */
+const GEMINI_DEFAULT = 'gemini-3-flash-preview';
+
 /** AI failures are logged too, so `drona logs` shows the provider's own words. */
 function logAi(e: AppError) {
   console.error(`[ai] ${e.message}`);
@@ -83,7 +86,12 @@ const openai: AiClient = {
 /** Gemini's request is the same on Google AI Studio and on Vertex AI; only the address and sign-in differ. */
 async function geminiCall(url: string, headers: Record<string, string>, { system, prompt, maxTokens, model, think }: { system: string; prompt: string; maxTokens: number; model: string; think?: number }) {
   // 2.5 models bill thinking as output: off unless asked for, then capped at the budget given
-  const thinking = /^gemini-2\.5/.test(model) ? { thinkingConfig: { thinkingBudget: think ?? 0 } } : {};
+  // Gemini 3 sets thinking by level instead: just enough for a good reply, never the slow "high"
+  const thinking = /^gemini-2\.5/.test(model)
+    ? { thinkingConfig: { thinkingBudget: think ?? 0 } }
+    : /^gemini-3/.test(model)
+      ? { thinkingConfig: { thinkingLevel: think ? 'low' : /flash/.test(model) ? 'minimal' : 'low' } }
+      : {};
   const res = await aiFetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...headers },
@@ -101,7 +109,7 @@ async function geminiCall(url: string, headers: Record<string, string>, { system
 
 const gemini: AiClient = {
   async complete({ model, ...rest }) {
-    const m = model ?? env.AI_MODEL ?? 'gemini-2.5-flash';
+    const m = model ?? env.AI_MODEL ?? GEMINI_DEFAULT;
     return geminiCall(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, { 'x-goog-api-key': env.GEMINI_API_KEY! }, { ...rest, model: m });
   },
 };
@@ -126,7 +134,7 @@ export function resetVertexCache() {
 }
 const vertex: AiClient = {
   async complete({ model, ...rest }) {
-    const m = model ?? env.AI_MODEL ?? 'gemini-2.5-flash';
+    const m = model ?? env.AI_MODEL ?? GEMINI_DEFAULT;
     if (!vertexToken || vertexToken.until < Date.now()) {
       const t = (await (await fromMetadata('instance/service-accounts/default/token')).json()) as { access_token: string; expires_in: number };
       vertexToken = { value: t.access_token, until: Date.now() + (t.expires_in - 120) * 1000 };
@@ -143,7 +151,7 @@ export const providers = { anthropic, openai, gemini, vertex }; // exported for 
 /** The model for short WhatsApp replies: cheap and fast. Quote drafts keep the stronger default. */
 export function replyModel() {
   const p = aiProvider();
-  return env.AI_REPLY_MODEL ?? (p === 'openai' ? 'gpt-5-mini' : p === 'gemini' || p === 'vertex' ? 'gemini-2.5-flash-lite' : 'claude-haiku-5-5');
+  return env.AI_REPLY_MODEL ?? (p === 'openai' ? 'gpt-5-mini' : p === 'gemini' || p === 'vertex' ? GEMINI_DEFAULT : 'claude-haiku-5-5');
 }
 
 let client: AiClient | null = null;

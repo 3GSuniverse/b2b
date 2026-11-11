@@ -5,7 +5,7 @@ import { providers, resetVertexCache } from '../src/modules/ai/quote-draft.js';
 describe('Vertex AI provider', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('signs in with the VM’s service account and calls Gemini in Mumbai', async () => {
+  it('signs in with the VM’s service account and calls Gemini', async () => {
     resetVertexCache();
     const fetch = vi.fn(async (url: string) => {
       if (url.endsWith('/token')) return new Response(JSON.stringify({ access_token: 'vm-token', expires_in: 3600 }));
@@ -19,7 +19,7 @@ describe('Vertex AI provider', () => {
     // The token and project are fetched once, then reused
     expect(urls.filter((u) => u.includes('metadata.google.internal'))).toHaveLength(2);
     const call = fetch.mock.calls.at(-1) as unknown as [string, RequestInit];
-    expect(call[0]).toBe('https://asia-south1-aiplatform.googleapis.com/v1/projects/drona-prod/locations/asia-south1/publishers/google/models/gemini-2.5-flash-lite:generateContent');
+    expect(call[0]).toBe('https://aiplatform.googleapis.com/v1/projects/drona-prod/locations/global/publishers/google/models/gemini-2.5-flash-lite:generateContent');
     expect((call[1].headers as Record<string, string>).authorization).toBe('Bearer vm-token');
   });
 
