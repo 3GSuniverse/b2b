@@ -37,7 +37,8 @@ compose() {
 
 env_value() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
 
-wait_healthy() {
+# Waits for /health. Returns 1 (instead of stopping) so a failed deploy can roll back.
+check_healthy() {
   local port url i
   port="$(env_value DRONA_PORT)"
   url="http://127.0.0.1:${port:-4100}/health"
@@ -50,7 +51,11 @@ wait_healthy() {
   done
   compose ps
   compose logs --tail 60 api worker migrate || true
-  die "The app didn't become healthy. The logs above show why."
+  return 1
+}
+
+wait_healthy() {
+  check_healthy || die "The app didn't become healthy. The logs above show why."
 }
 
 # The app runs as a different user inside the container, so it needs read access to these files.
@@ -182,10 +187,30 @@ cmd_deploy() {
     cmd_backup
   fi
   fix_secrets
+  # Keep the version that's running now, so a bad deploy can go straight back to it
+  local had_previous=0
+  if docker image inspect drona:latest >/dev/null 2>&1; then
+    docker tag drona:latest drona:previous
+    had_previous=1
+  fi
   compose build
-  # Migrations run first (the 'migrate' service); the API and worker start only if they succeed
+  # Safe deploy: check the new version BEFORE touching the running app. This runs the database
+  # changes with the new code and loads its settings; if either fails, the live app keeps running.
+  if ! compose run --rm -T migrate; then
+    [[ "$had_previous" == 1 ]] && docker tag drona:previous drona:latest
+    die "The new version failed its checks (output above). Nothing was changed: your users are still on the old version."
+  fi
+  ok "Database and settings checked"
   compose up -d --remove-orphans
-  wait_healthy
+  if ! check_healthy; then
+    if [[ "$had_previous" == 1 ]]; then
+      warn "The new version didn't start. Going back to the previous version..."
+      docker tag drona:previous drona:latest
+      compose up -d --no-build --force-recreate api worker
+      check_healthy && die "Rolled back: users are on the previous version. Fix the error in the logs above, then deploy again."
+    fi
+    die "The app didn't become healthy. The logs above show why."
+  fi
   docker image prune -f >/dev/null 2>&1 || true
   bold "Deployed."
 }
