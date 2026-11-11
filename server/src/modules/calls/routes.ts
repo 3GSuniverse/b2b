@@ -47,10 +47,14 @@ export async function callRoutes(app: FastifyInstance) {
    * Exotel moves on to the next step in the call flow, such as ringing the agency's office.
    */
   app.get<{ Querystring: { token?: string } }>('/api/calls/stream', { websocket: true }, (socket: WebSocket, req) => {
-    if (!sameToken(req.query.token)) {
+    // The secret comes in the address (?token=…); Exotel may instead pass it on as a custom parameter in "start"
+    let trusted = sameToken(req.query.token);
+    if (!env.CALL_STREAM_TOKEN) {
       socket.close(1008, 'forbidden');
       return;
     }
+    const knock = setTimeout(() => !trusted && socket.close(1008, 'forbidden'), 10_000);
+    socket.on('close', () => clearTimeout(knock));
     let session: CallSession | null = null;
     let streamSid = '';
     const send = (m: object) => socket.readyState === socket.OPEN && socket.send(JSON.stringify(m));
@@ -60,6 +64,11 @@ export async function callRoutes(app: FastifyInstance) {
       try {
         m = JSON.parse(raw.toString()) as ExotelEvent;
       } catch {
+        return;
+      }
+      if (m.event === 'start' && !trusted) trusted = sameToken(m.start?.custom_parameters?.token);
+      if (!trusted) {
+        if (m.event === 'start' || m.event === 'media') socket.close(1008, 'forbidden');
         return;
       }
       if (m.event === 'start' && !session) {
