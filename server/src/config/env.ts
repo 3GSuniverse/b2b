@@ -54,9 +54,11 @@ const schema = z.object({
   // Either provider works; with both keys set, AI_PROVIDER picks (Anthropic otherwise)
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
-  AI_PROVIDER: z.enum(['anthropic', 'openai']).optional(),
-  AI_MODEL: z.string().optional(), // quote drafts. default: claude-sonnet-5-5 or gpt-5-mini
-  // WhatsApp reply suggestions are short, so they use a cheaper model. default: claude-haiku-5-5 or gpt-5-mini
+  // Google Gemini (aistudio.google.com → Get API key). Use a paid-tier key for real customers: on the free tier Google may use the data
+  GEMINI_API_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  AI_PROVIDER: z.enum(['anthropic', 'openai', 'gemini']).optional(),
+  AI_MODEL: z.string().optional(), // quote drafts. default: claude-sonnet-5-5, gpt-5-mini or gemini-2.5-flash
+  // WhatsApp reply suggestions are short, so they use a cheaper model. default: claude-haiku-5-5, gpt-5-mini or gemini-2.5-flash-lite
   AI_REPLY_MODEL: z.string().optional(),
   // Every Drona AI answer across all agencies in 24 hours; past it, AI pauses for everyone. Unset = only the plan limits apply
   AI_GLOBAL_PER_DAY: z.coerce.number().int().min(1).optional(),
@@ -64,12 +66,12 @@ const schema = z.object({
   TRIAL_AI_PER_DAY: z.coerce.number().int().min(0).default(30),
 
   // AI Caller. Speech-to-text and the voice come from Sarvam AI (Indian languages, no GPU needed here)
-  SARVAM_API_KEY: z.string().optional(),
+  SARVAM_API_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   CALL_STT_MODEL: z.string().default('saarika:v2.5'),
   CALL_TTS_MODEL: z.string().default('bulbul:v2'),
   CALL_TTS_VOICE: z.string().default('anushka'),
   // The phone line (Exotel's Voicebot applet) connects to /api/calls/stream?token=<this>. Without it, calls are refused.
-  CALL_STREAM_TOKEN: z.string().min(24).optional(),
+  CALL_STREAM_TOKEN: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(24, 'CALL_STREAM_TOKEN must be at least 24 characters (make one with: openssl rand -hex 24)').optional()),
   // Longest a single call may run, in minutes
   CALL_MAX_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
 });
