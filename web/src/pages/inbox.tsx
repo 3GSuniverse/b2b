@@ -62,6 +62,9 @@ type ChatRow = {
   autopilot: boolean;
   /** Drona AI handed this chat to a person */
   needsYou: boolean;
+  /** What Autopilot is doing here right now */
+  aiStatus: 'waiting' | 'thinking' | 'paused' | 'failed' | null;
+  aiStatusNote: string | null;
 };
 type ThreadMessage = {
   id: string;
@@ -79,7 +82,7 @@ type ThreadMessage = {
   campaignName: string | null;
 };
 type Thread = {
-  chat: { id: string; phone: string; done: boolean; unread: number; aiDraft: { text: string; note: string | null } | null; autopilot: boolean; handoff: { at: string; note: string | null } | null };
+  chat: { id: string; phone: string; done: boolean; unread: number; aiDraft: { text: string; note: string | null } | null; autopilot: boolean; ai: { status: 'waiting' | 'thinking' | 'paused' | 'failed'; note: string | null } | null; handoff: { at: string; note: string | null } | null };
   contact: { id: string; name: string | null; email: string | null; whatsappStatus: string } | null;
   messages: ThreadMessage[];
 };
@@ -135,7 +138,7 @@ export function InboxTab() {
   const list = useQuery({
     queryKey: ['inbox', 'list', filter, term],
     queryFn: () => api.get<{ chats: ChatRow[] }>(`/api/inbox?${new URLSearchParams({ filter, ...(term && { search: term }) })}`),
-    refetchInterval: 5_000,
+    refetchInterval: 3_000,
     placeholderData: (p) => p,
   });
   const select = (id: string | null) => setParams(id ? { chat: id } : {}, { replace: !id });
@@ -191,10 +194,20 @@ export function InboxTab() {
                         <span className={cn('shrink-0 text-[11px]', c.unread ? 'font-semibold text-success' : 'text-muted')}>{shortTime(c.lastMessageAt)}</span>
                       </span>
                       <span className="flex items-center gap-2">
-                        <span className={cn('min-w-0 flex-1 truncate text-[13px]', c.unread ? 'text-ink' : 'text-muted')}>
-                          {c.lastDirection === 'OUT' && <span className="text-faint">You: </span>}
-                          {c.lastPreview || ' '}
-                        </span>
+                        {c.aiStatus === 'waiting' || c.aiStatus === 'thinking' ? (
+                          <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-[13px] font-semibold text-accent">
+                            <TypingDots /> {c.aiStatus === 'thinking' ? 'Drona AI is typing…' : 'Drona AI will reply…'}
+                          </span>
+                        ) : c.aiStatus === 'failed' || c.aiStatus === 'paused' ? (
+                          <span className={cn('min-w-0 flex-1 truncate text-[13px] font-semibold', c.aiStatus === 'failed' ? 'text-danger' : 'text-warm-strong')} title={c.aiStatusNote ?? undefined}>
+                            {c.aiStatus === 'failed' ? 'AI couldn’t reply' : 'AI paused'}: {c.aiStatusNote}
+                          </span>
+                        ) : (
+                          <span className={cn('min-w-0 flex-1 truncate text-[13px]', c.unread ? 'text-ink' : 'text-muted')}>
+                            {c.lastDirection === 'OUT' && <span className="text-faint">You: </span>}
+                            {c.lastPreview || ' '}
+                          </span>
+                        )}
                         {c.needsYou && <span className="shrink-0 rounded-full bg-warm-soft px-2 py-0.5 text-[11px] font-bold text-warm-strong">Needs you</span>}
                         {showEmployee && c.employee && <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent-strong">{c.employee}</span>}
                         {c.unread > 0 && <span className="tnum grid h-5 min-w-5 place-items-center rounded-full bg-success px-1.5 text-[11px] font-bold text-white">{c.unread}</span>}
@@ -227,7 +240,7 @@ function Conversation({ id, onBack }: { id: string; onBack: () => void }) {
   const qc = useQueryClient();
   const wa = useWhatsApp();
   const lists = useLists();
-  const q = useQuery({ queryKey: ['inbox', 'thread', id], queryFn: () => api.get<Thread>(`/api/inbox/${id}`), refetchInterval: 4_000 });
+  const q = useQuery({ queryKey: ['inbox', 'thread', id], queryFn: () => api.get<Thread>(`/api/inbox/${id}`), refetchInterval: 2_500 });
   const t = q.data;
   const [text, setText] = useState('');
   const [adding, setAdding] = useState(false);
@@ -345,6 +358,11 @@ function Conversation({ id, onBack }: { id: string; onBack: () => void }) {
             ))}
           </div>
         ))}
+        {(t.chat.ai?.status === 'waiting' || t.chat.ai?.status === 'thinking') && (
+          <div className="mt-2 flex w-fit items-center gap-2 rounded-[14px] rounded-tl-[4px] bg-white px-3.5 py-2.5 text-[12.5px] font-semibold text-accent shadow-sm animate-[rise-in_300ms_both]">
+            <Bot className="h-4 w-4" /> <TypingDots /> {t.chat.ai.status === 'thinking' ? 'Drona AI is writing a reply' : 'Drona AI will reply in a few seconds'}
+          </div>
+        )}
       </div>
 
       <footer className="border-t border-line-soft bg-surface p-2.5 sm:p-3">
@@ -361,13 +379,22 @@ function Conversation({ id, onBack }: { id: string; onBack: () => void }) {
             <Sparkles className="h-3.5 w-3.5" /> Drona AI writes replies like these on any paid plan
           </Link>
         )}
+        {(t.chat.ai?.status === 'failed' || t.chat.ai?.status === 'paused') && !t.chat.handoff && (
+          <div className={cn('mb-2.5 flex items-start gap-2 rounded-[14px] p-3 text-[12.5px]', t.chat.ai.status === 'failed' ? 'bg-danger-soft text-danger' : 'bg-warm-soft text-warm-strong')}>
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              <b>{t.chat.ai.status === 'failed' ? 'Drona AI couldn’t reply. ' : 'Autopilot is paused here. '}</b>
+              {t.chat.ai.note}
+            </span>
+          </div>
+        )}
         {t.chat.handoff && !text.trim() && (
           <div className="mb-2.5 flex flex-col gap-1 rounded-[16px] bg-[linear-gradient(120deg,#fff4e6,#ffe3ec)] p-3 animate-[rise-in_400ms_both]">
             <span className="flex items-center gap-1.5 text-[12.5px] font-bold text-warm-strong">
               <TriangleAlert className="h-3.5 w-3.5" /> Drona AI handed this chat to you
             </span>
             {t.chat.handoff.note && <p className="text-[13px] text-ink">{t.chat.handoff.note}</p>}
-            <p className="text-[12px] text-muted">The customer was told you’ll get back shortly. Drona AI stays quiet here until you reply.</p>
+            <p className="text-[12px] text-muted">The customer was told you’ll get back shortly. Autopilot switched itself off for this chat: reply, then tick Autopilot again to hand it back.</p>
           </div>
         )}
         {t.chat.aiDraft && !t.chat.handoff && !text.trim() && (
@@ -758,5 +785,16 @@ function AutopilotTick({ chatId, on, pill }: { chatId: string; on: boolean; pill
         {flip.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted" /> : <Bot className="h-3.5 w-3.5" />}
       </span>
     </label>
+  );
+}
+
+/** Three bouncing dots, like WhatsApp's "typing…". */
+function TypingDots() {
+  return (
+    <span className="inline-flex shrink-0 items-end gap-[3px]" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <span key={i} className="h-1.5 w-1.5 rounded-full bg-current animate-[typing-dot_1s_ease-in-out_infinite]" style={{ animationDelay: `${i * 150}ms` }} />
+      ))}
+    </span>
   );
 }

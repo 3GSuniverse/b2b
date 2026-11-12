@@ -218,6 +218,13 @@
       "when": 1794415851867,
       "tag": "0030_autopilot_chats",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1794470312812,
+      "tag": "0031_autopilot_status",
+      "breakpoints": true
     }
   ]
 }

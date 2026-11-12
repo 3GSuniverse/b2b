@@ -114,6 +114,47 @@ describe('Drona AI Autopilot', () => {
     expect(calls[0]!.system).toContain('1 or 2 short lines');
   });
 
+  it('switches itself off for a chat it hands over, and works again as soon as it is ticked back', async () => {
+    const { tenantId, line, c } = await setup();
+    const at = new Date();
+    const chatId = await recordIncoming(tenantId, line.id, { phone: '+919848012345', text: 'I want to cancel', waId: 'h1', at });
+    await c.put(`/api/inbox/${chatId}/autopilot`, { on: true });
+    answer = { situation: 'cancellation', language: 'English', reply: 'Let me check with our team and get back to you 🙏', needsHuman: true, note: 'Wants to cancel' };
+    expect(await runAutopilot({ chatId, at: at.getTime() })).toBe('handed_off');
+    let chat = (await c.get(`/api/inbox/${chatId}`)).json().chat;
+    expect(chat.autopilot).toBe(false);
+    expect(chat.handoff.note).toBe('Wants to cancel');
+    expect(chat.ai).toBeNull();
+
+    // The employee answers, then hands the chat back to the AI
+    await c.post(`/api/inbox/${chatId}/reply`, { text: 'Cancelled, refund in 3 days.' });
+    await c.put(`/api/inbox/${chatId}/autopilot`, { on: true });
+    answer = { situation: 'thanks_or_closing', language: 'English', reply: 'Welcome Sir 🙏', needsHuman: false, note: null };
+    const at2 = new Date(Date.now() + 1000);
+    await recordIncoming(tenantId, line.id, { phone: '+919848012345', text: 'Thanks', waId: 'h2', at: at2 });
+    // Not held back by the 30-minute "employee is chatting" rule: they ticked it on after replying
+    expect(await runAutopilot({ chatId, at: at2.getTime() })).toBe('sent');
+    chat = (await c.get(`/api/inbox/${chatId}`)).json().chat;
+    expect(chat.autopilot).toBe(true);
+  });
+
+  it('shows in the inbox when the AI is thinking, paused or couldn’t reply', async () => {
+    const { tenantId, line, c } = await setup();
+    const at = new Date();
+    const chatId = await recordIncoming(tenantId, line.id, { phone: '+919848012345', text: 'Hi', waId: 'k1', at });
+    await c.put(`/api/inbox/${chatId}/autopilot`, { on: true });
+    const row = async () => ((await c.get('/api/inbox')).json().chats as { id: string; aiStatus: string | null; aiStatusNote: string | null }[]).find((x) => x.id === chatId)!;
+    expect((await row()).aiStatus).toBe('waiting');
+    setAiClient({
+      async complete() {
+        expect((await row()).aiStatus).toBe('thinking');
+        throw new Error('AI service unreachable');
+      },
+    });
+    await expect(runAutopilot({ chatId, at: at.getTime() })).rejects.toThrow();
+    expect(await row()).toMatchObject({ aiStatus: 'failed', aiStatusNote: expect.stringContaining('unreachable') });
+  });
+
   it('answers once for several quick messages, and stays quiet when the employee is chatting', async () => {
     const { tenantId, line, c } = await setup();
     await c.put('/api/ai/autopilot', { on: true });

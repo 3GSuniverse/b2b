@@ -436,3 +436,8 @@ tbody > tr {
 @media (prefers-reduced-motion: reduce) {
   .dhru-float, .dhru-shadow, .dhru-tuft, .dhru-jet { animation: none; }
 }
+
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}

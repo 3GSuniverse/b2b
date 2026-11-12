@@ -1251,6 +1251,12 @@ export const waChats = pgTable(
     // The AI couldn't handle something: a person takes over (Autopilot waits) until someone replies
     handoffAt: timestamp({ withTimezone: true }),
     handoffNote: text(),
+    // When Autopilot was last ticked on: messages the employee sent before that don't pause it
+    autopilotAt: timestamp({ withTimezone: true }),
+    // What Autopilot is doing in this chat right now, shown live in the inbox: waiting | thinking | paused | failed
+    aiStatus: text(),
+    aiStatusNote: text(),
+    aiStatusAt: timestamp({ withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex().on(t.sessionId, t.phone), index().on(t.tenantId, t.lastMessageAt)],

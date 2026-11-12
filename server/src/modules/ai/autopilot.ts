@@ -49,7 +49,41 @@ export function humanLength(text: string) {
 }
 
 /** Answers the chat's latest message, if Autopilot should. Runs a few seconds after the message arrived. */
+export type AiStatus = 'waiting' | 'thinking' | 'paused' | 'failed';
+/** Shows in the inbox what Autopilot is doing in a chat (null clears it). */
+export async function markAi(chatId: string, status: AiStatus | null, note: string | null = null) {
+  await db.update(waChats).set({ aiStatus: status, aiStatusNote: note, aiStatusAt: status ? new Date() : null }).where(eq(waChats.id, chatId));
+}
+
+const AFTER: Partial<Record<AutopilotResult, [AiStatus, string] | null>> = {
+  sent: null,
+  handed_off: null,
+  skipped_answered: null,
+  skipped_off: null,
+  skipped_handoff: null,
+  skipped_nothing: null,
+  skipped_human: ['paused', 'Paused for 30 minutes because you replied in this chat. Tick Autopilot again to hand it back now.'],
+  skipped_limit: ['failed', 'Drona AI has used today’s allowance (or 10 answers in this chat this hour). It answers again later.'],
+  skipped_plan: ['failed', 'Your plan doesn’t include Drona AI.'],
+};
+
+/** Answers the chat's latest message, if Autopilot should, and keeps the inbox's live status up to date. */
 export async function runAutopilot(job: AutopilotJob): Promise<AutopilotResult> {
+  try {
+    const r = await answer(job);
+    // A newer message has its own job coming: leave the "waiting" status for it
+    if (r !== 'skipped_newer') {
+      const after = AFTER[r];
+      await markAi(job.chatId, after?.[0] ?? null, after?.[1] ?? null);
+    }
+    return r;
+  } catch (err) {
+    await markAi(job.chatId, 'failed', `Drona AI couldn’t reply: ${(err as Error).message}`.slice(0, 300)).catch(() => undefined);
+    throw err;
+  }
+}
+
+async function answer(job: AutopilotJob): Promise<AutopilotResult> {
   const chat = await db.query.waChats.findFirst({ where: eq(waChats.id, job.chatId) });
   if (!chat) return 'skipped_nothing';
   const session = await db.query.whatsappSessions.findFirst({ where: eq(whatsappSessions.id, chat.sessionId) });
@@ -65,7 +99,9 @@ export async function runAutopilot(job: AutopilotJob): Promise<AutopilotResult> 
   if (latest.direction !== 'IN') return 'skipped_answered';
   // The customer wrote again after this job was queued: that newer job answers everything together
   if (latest.at.getTime() > job.at) return 'skipped_newer';
-  const humanRecently = recent.some((m) => m.direction === 'OUT' && (m.source === 'reply' || m.source === 'phone') && Date.now() - m.at.getTime() < HUMAN_TAKEOVER_MS);
+  // The employee wrote recently (after Autopilot was last ticked on): the chat is theirs for now
+  const since = Math.max(Date.now() - HUMAN_TAKEOVER_MS, chat.autopilotAt?.getTime() ?? 0);
+  const humanRecently = recent.some((m) => m.direction === 'OUT' && (m.source === 'reply' || m.source === 'phone') && m.at.getTime() > since);
   if (humanRecently) return 'skipped_human';
   const [{ n } = { n: 0 }] = await db
     .select({ n: count() })
@@ -73,6 +109,7 @@ export async function runAutopilot(job: AutopilotJob): Promise<AutopilotResult> 
     .where(and(eq(waChatMessages.chatId, chat.id), eq(waChatMessages.source, 'autopilot'), gte(waChatMessages.at, new Date(Date.now() - 3_600_000))));
   if (n >= MAX_PER_CHAT_HOUR) return 'skipped_limit';
 
+  await markAi(chat.id, 'thinking');
   try {
     await useAi(session.tenantId);
   } catch (err) {
@@ -94,7 +131,8 @@ export async function runAutopilot(job: AutopilotJob): Promise<AutopilotResult> 
   const contact = await db.query.contacts.findFirst({ where: and(eq(contacts.tenantId, session.tenantId), eq(contacts.phone, chat.phone), eq(contacts.ownerId, session.userId)), columns: { firstName: true, lastName: true } });
   const who = [contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || chat.phone;
   const note = r.note ?? `They asked about ${r.situation.replace(/_/g, ' ')}. Drona AI told them you'll get back shortly.`;
-  await db.update(waChats).set({ handoffAt: new Date(), handoffNote: note }).where(eq(waChats.id, chat.id));
+  // Autopilot switches itself off for this chat: a person takes it from here, and ticks it again to hand it back
+  await db.update(waChats).set({ autopilot: false, handoffAt: new Date(), handoffNote: note }).where(eq(waChats.id, chat.id));
   await notify(session.tenantId, {
     userId: session.userId,
     type: 'ai.autopilot_handoff',
@@ -154,12 +192,15 @@ export async function setChatAutopilot(v: Viewer, chatId: string, on: boolean) {
   const tenant = (await db.query.tenants.findFirst({ where: eq(tenants.id, v.tenantId) }))!;
   if (on && !aiEnabled()) throw new AppError(503, 'ai_not_configured', 'Drona AI isn’t set up on this server yet.');
   if (on && !hasFeature(tenant, 'ai')) throw new AppError(403, 'plan_upgrade', 'Autopilot comes with Drona AI. Choose a plan with Drona AI for your next billing cycle in Plan & billing.', { feature: 'ai' });
-  await db.update(waChats).set({ autopilot: on, handoffAt: null, handoffNote: null }).where(eq(waChats.id, chat.id));
+  await db.update(waChats).set({ autopilot: on, autopilotAt: on ? new Date() : null, handoffAt: null, handoffNote: null, aiStatus: null, aiStatusNote: null, aiStatusAt: null }).where(eq(waChats.id, chat.id));
   await db.insert(auditLogs).values({ tenantId: v.tenantId, userId: v.userId, action: on ? 'ai.autopilot_chat_on' : 'ai.autopilot_chat_off', entity: 'wa_chat', entityId: chat.id });
   // A customer already waiting gets an answer now, not at their next message
   if (on) {
     const [latest] = await db.select({ direction: waChatMessages.direction, at: waChatMessages.at }).from(waChatMessages).where(eq(waChatMessages.chatId, chat.id)).orderBy(desc(waChatMessages.at)).limit(1);
-    if (latest?.direction === 'IN') await enqueueAutopilot(chat.id, latest.at, 1_000);
+    if (latest?.direction === 'IN') {
+      await enqueueAutopilot(chat.id, latest.at, 1_000);
+      await markAi(chat.id, 'waiting');
+    }
   }
   return { id: chat.id, autopilot: on };
 }

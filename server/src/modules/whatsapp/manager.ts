@@ -10,7 +10,7 @@ import type { AnyMessageContent } from 'baileys';
 import { onConnected, onEnded, onIncoming, onLinkFailed, onQr, onReceipt } from './service.js';
 import { extractContent, messageTime } from '../inbox/extract.js';
 import { recordFromPhone, recordIncoming } from '../inbox/service.js';
-import { autopilotOn, WAIT_MS as AUTOPILOT_WAIT_MS } from '../ai/autopilot.js';
+import { autopilotOn, markAi, WAIT_MS as AUTOPILOT_WAIT_MS } from '../ai/autopilot.js';
 import { enqueueAutopilot } from '../../queues/index.js';
 
 const log = logger.child({ module: 'whatsapp' });
@@ -164,7 +164,10 @@ export class WhatsAppManager implements WhatsAppGateway {
             const stopReply = content.text ? await onIncoming(tenantId, item.phone, content.text) : null;
             if (stopReply) await sock.sendMessage(jid, { text: stopReply });
             // Drona AI Autopilot answers in a few seconds (never to someone who just said STOP)
-            else if (await autopilotOn(sessionId, chatId)) await enqueueAutopilot(chatId, at, AUTOPILOT_WAIT_MS);
+            else if (await autopilotOn(sessionId, chatId)) {
+              await enqueueAutopilot(chatId, at, AUTOPILOT_WAIT_MS);
+              await markAi(chatId, 'waiting');
+            }
           } catch (err) {
             log.error({ err, sessionId }, 'handling a WhatsApp message failed');
           }
