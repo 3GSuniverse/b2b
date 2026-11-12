@@ -13,7 +13,7 @@ export const BILLING_PLANS = {
     extra: 400, // a month, for each login after the first
     emailsPerDay: 350, // per login, a day
     whatsappPerDay: 350, // per login, a day, from the agency's linked number
-    aiPerLogin: 0, // Drona AI replies and quote drafts, a day
+    aiPerLogin: 20, // Drona AI replies, Autopilot and quote drafts, a day
     domains: 1,
     automations: false,
     groups: false,

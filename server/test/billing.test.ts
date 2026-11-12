@@ -167,7 +167,7 @@ describe('paying for a plan', () => {
 });
 
 describe('what each plan has', () => {
-  it('Basic has no Drona AI, automatic messages, group departures or leads API; the trial has everything', async () => {
+  it('Basic has Drona AI but no automatic messages, group departures or leads API; the trial has everything', async () => {
     const { cookie, json } = await signup(app);
     const c = api(app, cookie);
     expect((await c.get('/api/auth/me')).json().tenant.plan.entitlements).toMatchObject({ plan: 'ultra', source: 'trial', ai: true, automations: true });
@@ -181,8 +181,8 @@ describe('what each plan has', () => {
     expect(await locked('post', '/api/groups', { title: 'Kashi yatra' })).toMatch(/Professional plan/);
     expect(await locked('post', '/api/api-keys', { name: 'Call agent' })).toMatch(/Ultra Premium plan/);
     expect(await locked('post', '/api/automations', {})).toMatch(/Automatic messages/);
-    expect((await c.get('/api/ai')).json()).toMatchObject({ enabled: false, inPlan: false });
-    expect((await c.get('/api/auth/me')).json().tenant.plan.entitlements).toMatchObject({ plan: 'basic', seats: 1, ai: false, domains: 1 });
+    expect((await c.get('/api/ai')).json()).toMatchObject({ inPlan: true });
+    expect((await c.get('/api/auth/me')).json().tenant.plan.entitlements).toMatchObject({ plan: 'basic', seats: 1, ai: true, aiPerDay: 20, domains: 1 });
   });
 
   it('Drona AI answers a day: 40 per login on Professional, replies and quote drafts together', async () => {

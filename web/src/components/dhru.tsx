@@ -294,7 +294,7 @@ export function Dhru() {
             </Bubble>
             {locked && (
               <Bubble from="buddy">
-                I need Drona AI to answer. It comes with the Professional plan.{' '}
+                I need Drona AI to answer. It comes with every paid plan.{' '}
                 <Link to="/agency/billing" onClick={() => setOpen(false)} className="font-semibold text-accent underline underline-offset-4">
                   See plans
                 </Link>

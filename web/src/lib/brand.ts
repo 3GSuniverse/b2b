@@ -37,7 +37,7 @@ export type Plan = {
 
 // Shown on the Pricing page and in Plan & billing. Must match server/src/modules/billing/plans.ts (a test checks).
 export const PLANS: Plan[] = [
-  { id: 'basic', name: 'Basic', first: 1_499, extra: 400, emailsPerDay: 350, whatsappPerDay: 350, aiPerLogin: 0, domains: 1, forWho: 'Trips, payments and broadcasts, without the extras.' },
+  { id: 'basic', name: 'Basic', first: 1_499, extra: 400, emailsPerDay: 350, whatsappPerDay: 350, aiPerLogin: 20, domains: 1, forWho: 'Trips, payments, broadcasts and Drona AI to start.' },
   { id: 'professional', name: 'Professional', first: 2_999, extra: 600, emailsPerDay: 600, whatsappPerDay: 500, aiPerLogin: 40, domains: 3, forWho: 'Drona AI, automatic messages and group departures.', popular: true },
   { id: 'ultra', name: 'Ultra Premium', first: 4_999, extra: 900, emailsPerDay: 1_000, whatsappPerDay: 750, aiPerLogin: 100, domains: 10, forWho: 'Everything, with the most room and help first.' },
 ];
@@ -58,7 +58,7 @@ export const PLAN_FEATURES: { label: string; values: Record<PlanId, boolean | st
   { label: 'Emails a day', values: { basic: (n) => (350 * n).toLocaleString('en-IN'), professional: (n) => (600 * n).toLocaleString('en-IN'), ultra: (n) => (1_000 * n).toLocaleString('en-IN') } },
   { label: 'WhatsApp messages a day', values: { basic: (n) => (350 * n).toLocaleString('en-IN'), professional: (n) => (500 * n).toLocaleString('en-IN'), ultra: (n) => (750 * n).toLocaleString('en-IN') } },
   { label: 'Your own sending domains', values: { basic: '1', professional: '3', ultra: '10' } },
-  { label: 'Drona AI: replies and quote drafts', values: { basic: false, professional: (n) => `${40 * n} a day`, ultra: (n) => `${100 * n} a day` } },
+  { label: 'Drona AI: replies, Autopilot and quote drafts', values: { basic: (n) => `${20 * n} a day`, professional: (n) => `${40 * n} a day`, ultra: (n) => `${100 * n} a day` } },
   { label: 'Automatic messages on any date', values: { basic: false, professional: true, ultra: true } },
   { label: 'Group departures with seat and room lists', values: { basic: false, professional: true, ultra: true } },
   { label: 'Leads API for website forms and call agents', values: { basic: false, professional: false, ultra: true } },

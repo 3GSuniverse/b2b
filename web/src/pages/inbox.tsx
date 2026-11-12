@@ -358,7 +358,7 @@ function Conversation({ id, onBack }: { id: string; onBack: () => void }) {
             to="/agency/billing"
             className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1.5 text-[12.5px] font-semibold text-accent transition-colors hover:bg-accent hover:text-white"
           >
-            <Sparkles className="h-3.5 w-3.5" /> Drona AI writes replies like these on the Professional plan
+            <Sparkles className="h-3.5 w-3.5" /> Drona AI writes replies like these on any paid plan
           </Link>
         )}
         {t.chat.handoff && !text.trim() && (
