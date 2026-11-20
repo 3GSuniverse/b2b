@@ -161,3 +161,16 @@ Off-server backups: create a Cloud Storage bucket, set `BACKUP_BUCKET=gs://your-
 - **`drona deploy` says the app didn't become healthy**: it prints the last logs. A bad value in `.env` shows up as `Invalid environment configuration` with the setting's name. Fix it and run `drona deploy` again. If a database change failed, the app isn't started at all, and the backup taken just before is in `deploy/backups/`.
 - **WhatsApp says "Waiting for scan" forever**: `drona logs worker`. The VM needs outbound internet access to WhatsApp, which Google Cloud allows by default.
 - **Emails stuck as "Sending"**: `drona logs worker`. Usually missing or wrong AWS keys, or SES still in the sandbox (it only sends to verified addresses until production access is approved).
+
+
+## Running on Windows (Docker Desktop)
+
+The same setup runs on a Windows PC. Everything happens inside WSL (Ubuntu), and Docker Desktop runs the containers.
+
+1. Install **WSL** (`wsl --install` in an admin PowerShell, then restart) and **Docker Desktop** (Settings: "Use the WSL 2 based engine", "Start Docker Desktop when you sign in", and Resources → WSL integration → Ubuntu on).
+2. In Ubuntu: `git clone https://github.com/3GSuniverse/b2b.git ~/drona`, copy your `deploy/.env` and `deploy/secrets/` there, then `cd ~/drona/deploy && ./drona install`.
+3. Restore your data: `drona restore deploy/backups/drona-YYYYMMDD-HHMMSS.sql.gz`.
+4. Point the existing Cloudflare tunnel at this PC: install `cloudflared` on Windows and run it as a service with the tunnel's token (`cloudflared service install <token>`). The app answers on `http://localhost:4000`.
+5. Set Windows to never sleep when plugged in. Nightly backups run inside Docker (02:30 IST, newest 3 in `deploy/backups`).
+
+Vertex AI and the Google voice only work on a Google Cloud VM: on Windows set `AI_PROVIDER=gemini` with a `GEMINI_API_KEY`, and `CALL_VOICE=sarvam`.

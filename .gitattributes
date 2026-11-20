@@ -1,0 +1,5 @@
+# The deploy script and shell files must keep Linux line endings, even when cloned on Windows
+*.sh text eol=lf
+deploy/drona text eol=lf
+deploy/*.yml text eol=lf
+Dockerfile text eol=lf

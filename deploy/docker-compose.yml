@@ -1,4 +1,5 @@
-# Production: everything runs on one always-on VM, reachable only through the Cloudflare tunnel.
+# Production: everything runs on one always-on machine (a Linux VM, or Windows with Docker Desktop),
+# reachable only through the Cloudflare tunnel.
 # Used by deploy/drona (install, deploy, backup). Settings come from deploy/.env.
 name: drona
 
@@ -89,6 +90,40 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+
+  # Nightly database backup at 02:30 India time (21:00 UTC) into deploy/backups, keeping the newest 3.
+  # Runs inside Docker, so it works the same on a Linux VM and on Windows (Docker Desktop) without cron.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      KEEP_LOCAL: ${KEEP_LOCAL:-3}
+    volumes:
+      - ./backups:/backups
+    entrypoint: ['sh', '-c']
+    command:
+      - |
+        echo "Nightly backups at 21:00 UTC (02:30 IST) into deploy/backups"
+        while true; do
+          if [ "$$(date -u +%H%M)" = "2100" ]; then
+            f="/backups/drona-$$(date -u -d @$$(( $$(date +%s) + 19800 )) +%Y%m%d-%H%M%S 2>/dev/null || date -u +%Y%m%d-%H%M%S).sql.gz"
+            if pg_dump -h postgres -U drona --no-owner drona | gzip > "$$f.part" && [ -s "$$f.part" ]; then
+              mv "$$f.part" "$$f" && echo "Backup: $$f"
+              ls -1t /backups/drona-*.sql.gz | tail -n +$$(( KEEP_LOCAL + 1 )) | xargs -r rm -f
+            else
+              rm -f "$$f.part"; echo "Backup FAILED"
+            fi
+            sleep 60
+          fi
+          sleep 30
+        done
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: 1m, max-file: '2' }
 
 volumes:
   pgdata:

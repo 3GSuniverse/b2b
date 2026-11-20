@@ -22,7 +22,7 @@ REPO_DIR="$(dirname "$DEPLOY_DIR")"
 ENV_FILE="$DEPLOY_DIR/.env"
 BACKUP_DIR="$DEPLOY_DIR/backups"
 # Backups kept on the VM: each one carries every photo and file, so they're big. Older ones live in BACKUP_BUCKET.
-KEEP_LOCAL=3
+KEEP_LOCAL="${KEEP_LOCAL:-3}"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 ok() { printf '\033[32m✓\033[0m %s\n' "$*"; }
@@ -156,16 +156,11 @@ cmd_install() {
   sudo ln -sf "$DEPLOY_DIR/drona" /usr/local/bin/drona
   ok "The 'drona' command is installed"
 
-  # Nightly backup at 02:30 server time (a VM with no crontab yet is normal, not an error)
-  if command -v crontab >/dev/null 2>&1; then
-    local line="30 2 * * * $DEPLOY_DIR/drona backup >> $BACKUP_DIR/backup.log 2>&1"
-    local current
-    current="$(crontab -l 2>/dev/null || true)"
-    { printf '%s\n' "$current" | grep -v 'drona backup' | grep -v '^$' || true; echo "$line"; } | crontab -
-    ok "Nightly database backup scheduled (02:30)"
-  else
-    warn "cron isn't installed, so there's no nightly backup. Install it with: sudo apt install -y cron, then run 'drona install' again."
+  # Nightly backups run inside Docker (the 'backup' service), so no cron is needed. Remove the old cron line if any.
+  if command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -q 'drona backup'; then
+    crontab -l 2>/dev/null | grep -v 'drona backup' | crontab - || true
   fi
+  ok "Nightly database backup runs inside Docker (02:30 IST, newest 3 kept)"
 
   bold "Building and starting (the first build takes a few minutes)…"
   compose build
@@ -344,11 +339,6 @@ cmd_move_from_hayate() {
   # 6. The command and the nightly backup under the new name
   sudo ln -sf "$DEPLOY_DIR/drona" /usr/local/bin/drona
   sudo rm -f /usr/local/bin/hayate
-  if command -v crontab >/dev/null 2>&1; then
-    local line="30 2 * * * $DEPLOY_DIR/drona backup >> $BACKUP_DIR/backup.log 2>&1" current
-    current="$(crontab -l 2>/dev/null || true)"
-    { printf '%s\n' "$current" | grep -v -E '(hayate|drona) backup' | grep -v '^$' || true; echo "$line"; } | crontab -
-  fi
   ok "The 'drona' command and the nightly backup are set up"
 
   # 7. Only now remove the old containers. Their data volumes stay, just in case.
