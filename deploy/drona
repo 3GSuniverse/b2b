@@ -7,7 +7,8 @@
 #   drona env               add settings that are new since install to .env (to fill in)
 #   drona logs [api|worker] follow the logs (Ctrl+C to stop)
 #   drona restart | stop    restart or stop everything
-#   drona backup            back up the database now
+#   drona backup            back up the database now (the nightly one also frees disk space)
+#   drona clean             free disk space: old Docker layers, build cache, system logs
 #   drona restore <file>    put a backup back (asks first)
 #   drona plan <owner email> [basic|professional|ultra <logins> [days] | paid [emails] | trial <days>]
 #   drona feature whatsapp-web <owner email> on|off
@@ -211,8 +212,30 @@ cmd_deploy() {
     fi
     die "The app didn't become healthy. The logs above show why."
   fi
-  docker image prune -f >/dev/null 2>&1 || true
+  cmd_clean quiet
   bold "Deployed."
+}
+
+# Frees disk space: every build leaves old image layers and build cache behind, and a full disk
+# takes down the database and even SSH. Keeps drona:latest and drona:previous (for rollback).
+cmd_clean() {
+  docker image prune -f >/dev/null 2>&1 || true
+  docker builder prune -f --filter until=24h >/dev/null 2>&1 || true
+  docker container prune -f >/dev/null 2>&1 || true
+  sudo journalctl --vacuum-size=200M >/dev/null 2>&1 || true
+  [[ "${1:-}" == quiet ]] || ok "Cleaned up old Docker layers, build cache and system logs"
+  disk_check
+}
+
+# Warns early, long before the disk is full
+disk_check() {
+  local free_mb
+  free_mb="$(df -Pm / | awk 'NR==2 {print $4}')"
+  if (( free_mb < 2048 )); then
+    warn "Only ${free_mb} MB of disk left. Run 'drona clean', or grow the disk: gcloud compute disks resize <vm> --size 30GB"
+  else
+    ok "Disk: $(( free_mb / 1024 )) GB free"
+  fi
 }
 
 cmd_backup() {
@@ -368,7 +391,8 @@ case "${1:-help}" in
     wait_healthy
     ;;
   stop) compose stop ;;
-  backup) cmd_backup ;;
+  backup) cmd_backup && cmd_clean quiet ;;
+  clean) cmd_clean ;;
   restore)
     shift
     cmd_restore "${1:-}"
