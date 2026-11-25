@@ -3,3 +3,4 @@
 deploy/drona text eol=lf
 deploy/*.yml text eol=lf
 Dockerfile text eol=lf
+deploy/windows-setup.sh text eol=lf
