@@ -7,18 +7,22 @@ DEPLOY="$(cd "$(dirname "$0")" && pwd)"
 ok() { printf '\033[32m✓\033[0m %s\n' "$*"; }
 die() { printf '\033[31m✗ %s\033[0m\n' "$*"; exit 1; }
 
-# 1. Find the Downloads folder that has the backup
+# 1. Find the backup: Downloads, Desktop or Documents of any Windows user (browsers sometimes rename it)
 DL=""
-for d in /mnt/c/Users/*/Downloads; do
-  ls "$d"/drona-*.sql.gz >/dev/null 2>&1 && DL="$d" && break
+for d in /mnt/c/Users/*/Downloads /mnt/c/Users/*/Desktop /mnt/c/Users/*/Documents /mnt/c/Users/*/OneDrive/Desktop /mnt/c/Users/*/OneDrive/Documents; do
+  ls "$d"/*drona*.sql* >/dev/null 2>&1 && DL="$d" && break
 done
-[[ -n "$DL" ]] || die "No drona-….sql.gz backup found in any Windows Downloads folder"
+if [[ -z "$DL" ]]; then
+  echo "Files called 'drona…' on this PC:"
+  find /mnt/c/Users -maxdepth 4 -iname '*drona*' 2>/dev/null | head -20 || true
+  die "No drona backup (.sql.gz) found on this PC. Copy it into this PC's Downloads folder (UltraViewer → File transfer), then run this again."
+fi
 ok "Found your files in $DL"
 
 # 2. Backup: the biggest drona-*.sql.gz (the complete one)
 mkdir -p "$DEPLOY/backups" "$DEPLOY/secrets"
-BACKUP="$(ls -S "$DL"/drona-*.sql.gz | head -1)"
-NAME="$(basename "$BACKUP")"
+BACKUP="$(ls -S "$DL"/*drona*.sql* | head -1)"
+NAME="drona-restore.sql.gz"
 if [[ ! -f "$DEPLOY/backups/$NAME" ]] || [[ "$(stat -c %s "$BACKUP")" != "$(stat -c %s "$DEPLOY/backups/$NAME")" ]]; then
   echo "Copying $NAME ($(du -h "$BACKUP" | cut -f1)), this takes a minute…"
   cp "$BACKUP" "$DEPLOY/backups/"
