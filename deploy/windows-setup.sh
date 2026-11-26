@@ -25,7 +25,7 @@ BACKUP="$(ls -S "$DL"/*drona*.sql* | head -1)"
 NAME="drona-restore.sql.gz"
 if [[ ! -f "$DEPLOY/backups/$NAME" ]] || [[ "$(stat -c %s "$BACKUP")" != "$(stat -c %s "$DEPLOY/backups/$NAME")" ]]; then
   echo "Copying $NAME ($(du -h "$BACKUP" | cut -f1)), this takes a minute…"
-  cp "$BACKUP" "$DEPLOY/backups/"
+  cp "$BACKUP" "$DEPLOY/backups/$NAME"
 fi
 gzip -t "$DEPLOY/backups/$NAME" || die "The backup file is damaged (the download probably broke). Download it again."
 ok "Backup ready: $NAME"
