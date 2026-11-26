@@ -42,14 +42,17 @@ sed -i 's/\r$//' "$DEPLOY/.env"
 # Vertex AI and Google voice only work on a Google Cloud VM
 sed -i 's/^AI_PROVIDER=vertex/AI_PROVIDER=gemini/; /^CALL_VOICE=google/d' "$DEPLOY/.env"
 if ! grep -qE '^GEMINI_API_KEY=.+' "$DEPLOY/.env"; then
-  read -r -s -p "Paste your Gemini API key (from aistudio.google.com) and press Enter: " key
+  read -r -s -p "Paste your Gemini API key (from aistudio.google.com), or just press Enter to skip for now: " key
   echo
-  [[ -n "$key" ]] || die "No key given"
-  sed -i '/^GEMINI_API_KEY=/d' "$DEPLOY/.env"
-  echo "GEMINI_API_KEY=$key" >>"$DEPLOY/.env"
+  if [[ -n "$key" ]]; then
+    sed -i '/^GEMINI_API_KEY=/d' "$DEPLOY/.env"
+    echo "GEMINI_API_KEY=$key" >>"$DEPLOY/.env"
+  else
+    printf '\033[33m! Skipped: Drona AI stays off until you add GEMINI_API_KEY to deploy/.env and run: drona restart\033[0m\n'
+  fi
 fi
 grep -q '^AI_PROVIDER=' "$DEPLOY/.env" || echo "AI_PROVIDER=gemini" >>"$DEPLOY/.env"
-ok "Settings ready (AI: Gemini)"
+ok "Settings ready"
 
 # 4. Gmail connect file, if you downloaded it
 for n in google-oauth.json client_secret*.json; do
