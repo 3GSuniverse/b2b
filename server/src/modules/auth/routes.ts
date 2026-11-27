@@ -5,13 +5,13 @@ import { z } from 'zod';
 import { BUSINESS_VALUES } from '../../lib/business.js';
 import { env } from '../../config/env.js';
 import { planDto, whatsappWebAllowed } from '../plans/entitlements.js';
-import { sessions, tenants, users } from '../../db/schema.js';
+import { auditLogs, sessions, tenants, users } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError, parseBody } from '../../lib/http.js';
 import { requireAuth } from './guard.js';
 import { freeLoginCode, LOGIN_CODE, USERNAME } from '../team/service.js';
 import { dummyHash, hashPassword, verifyPassword } from './password.js';
-import { clearSessionCookie, createSession, deleteSession, hashToken, setSessionCookie } from './sessions.js';
+import { clearSessionCookie, createSession, deleteSession, findSession, hashToken, setSessionCookie } from './sessions.js';
 
 const email = z
   .string()
@@ -129,7 +129,11 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRouteOptions) {
 
   app.post('/api/auth/logout', async (req, reply) => {
     const token = req.cookies.sid;
-    if (token) await deleteSession(token);
+    if (token) {
+      const s = await findSession(token);
+      if (s?.careStaffId) await db.insert(auditLogs).values({ tenantId: s.tenantId, userId: s.userId, action: 'support.close', meta: { careStaffId: s.careStaffId } });
+      await deleteSession(token);
+    }
     clearSessionCookie(reply);
     return { ok: true };
   });
@@ -148,6 +152,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRouteOptions) {
   app.get('/api/auth/me', { preHandler: requireAuth }, async (req) => {
     const user = await db.query.users.findFirst({ where: eq(users.id, req.auth!.userId), with: { tenant: true } });
     if (!user) throw new AppError(401, 'not_signed_in', 'Please sign in');
-    return { user: publicUser(user), tenant: await publicTenant(user.tenant) };
+    const s = req.auth!.support;
+    return { user: publicUser(user), tenant: await publicTenant(user.tenant), support: s ? { name: s.name, reason: s.reason, endsAt: s.endsAt } : null };
   });
 }

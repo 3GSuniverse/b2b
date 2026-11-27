@@ -431,6 +431,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-6 px-4 pb-16 pt-5 sm:px-6 lg:px-10 lg:pt-7">
           <TopBar onSearch={() => setPalette(true)} onMenu={() => setMobileNav(true)} />
+          <SupportBanner />
           <TrialBanner />
           <PausedBanner />
           <main ref={main} id="main" className="flex flex-col gap-6">
@@ -449,6 +450,31 @@ export function AppShell({ children }: { children?: ReactNode }) {
           </div>
         </div>
       </Sheet>
+    </div>
+  );
+}
+
+/** Shown while Dhrona customer care is working inside this account. */
+function SupportBanner() {
+  const { support } = useSession();
+  if (!support) return null;
+  const end = async () => {
+    await api.post('/api/auth/logout').catch(() => undefined);
+    window.close();
+    window.location.href = '/care';
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-[16px] bg-[linear-gradient(120deg,#1d1a4d,#4a3fd1)] px-4 py-3 text-white shadow-[var(--panel-shadow)]">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[12px] bg-white/15">🎧</span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <b className="text-[13.5px]">Support session: {support.name} from Dhrona care</b>
+        <span className="truncate text-[12.5px] text-white/75">
+          {support.reason ? `${support.reason} · ` : ''}ends at {new Date(support.endsAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })} · payments are locked · every change is logged
+        </span>
+      </span>
+      <button type="button" onClick={() => void end()} className="rounded-full bg-white px-3.5 py-1.5 text-[12.5px] font-bold text-[#2e2580]">
+        End session
+      </button>
     </div>
   );
 }

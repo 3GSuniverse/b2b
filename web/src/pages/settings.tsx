@@ -580,6 +580,7 @@ export function Senders() {
 interface Account {
   name: string;
   postalAddress: string | null;
+  supportAccess: boolean;
   timezone: string;
   monthlyQuota: number;
 }
@@ -627,6 +628,7 @@ function Company() {
           </Button>
         </div>
       </Panel>
+      {user.role === 'OWNER' && <SupportAccess on={a.supportAccess} />}
       <Panel className="grid grid-cols-[minmax(0,1fr)] gap-4 p-5 text-[13px] sm:grid-cols-3 sm:p-6">
         <div className="flex flex-col gap-1">
           <span className="text-muted">Plan</span>
@@ -697,5 +699,30 @@ export function SettingsPage() {
         <div className="min-w-0">{content[section as Section]}</div>
       </div>
     </>
+  );
+}
+
+/** The owner decides whether Dhrona customer care may open the account to help. */
+function SupportAccess({ on }: { on: boolean }) {
+  const qc = useQueryClient();
+  const flip = useMutation({
+    mutationFn: (v: boolean) => api.patch<{ account: Account }>('/api/account', { supportAccess: v }),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['account'] });
+      toast.success(r.account.supportAccess ? 'Dhrona support can now help inside your account' : 'Support access switched off');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <Panel className="flex items-start gap-4 p-5 sm:p-6">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[linear-gradient(135deg,#ecebfd,#ddf5ea)] text-[18px]">🎧</span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="text-[14px] font-semibold">Let Dhrona support help inside your account</span>
+        <span className="text-[13px] leading-relaxed text-ink-2">
+          When you call or message us, our team can add or fix customers, employees, trips and WhatsApp for you. You get a notification each time, every change shows their name in your history, and they can never make payments or change your password.
+        </span>
+      </div>
+      <Switch label="Support access" checked={on} disabled={flip.isPending} onCheckedChange={(v) => flip.mutate(v)} />
+    </Panel>
   );
 }

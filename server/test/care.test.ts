@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
-import { careStaff, notifications } from '../src/db/schema.js';
+import { auditLogs, careStaff, notifications } from '../src/db/schema.js';
 import { closeDatabase, db } from '../src/lib/db.js';
 import { closeRedis } from '../src/lib/redis.js';
 import { hashPassword } from '../src/modules/auth/password.js';
@@ -96,6 +96,51 @@ describe('customer care', () => {
     // Replying to a solved request opens it again
     await a.post(`/api/support/tickets/${id}/messages`, { body: 'It happened again.' });
     expect((await a.get(`/api/support/tickets/${id}`)).json().ticket.status).toBe('OPEN');
+  });
+
+  it('opens an agency’s account to help: works as the owner, payments stay locked, the owner is told, every change is logged', async () => {
+    const owner = await signup(app, { companyName: 'Kurukshetra Travels' });
+    const tenantId = owner.json.tenant.id as string;
+    const { c } = await careLogin('Priya Sharma');
+    expect((await c.post(`/api/care/agencies/${tenantId}/open`, { reason: 'x' })).statusCode).toBe(400); // a real reason is needed
+
+    const res = await c.post(`/api/care/agencies/${tenantId}/open`, { reason: 'Add their new customers from the call' });
+    expect(res.statusCode).toBe(200);
+    const sid = res.cookies.find((x) => x.name === 'sid')!;
+    const s = api(app, `sid=${sid.value}`);
+
+    const me = (await s.get('/api/auth/me')).json();
+    expect(me.support).toMatchObject({ name: 'Priya Sharma', reason: 'Add their new customers from the call' });
+    expect(me.user.role).toBe('OWNER');
+
+    // Works inside the account like the owner
+    const added = await s.post('/api/contacts', { email: 'ravi@example.com', firstName: 'Ravi', phone: '+919848012345' });
+    expect(added.statusCode).toBeLessThan(300);
+    // …but can't pay, change the owner's password or switch off support access
+    expect((await s.post('/api/billing/orders', { planId: 'professional', seats: 2 })).statusCode).toBe(403);
+    expect((await s.post('/api/auth/password', { current: 'x', next: 'new-password-123' })).statusCode).toBe(403);
+    expect((await s.patch('/api/account', { supportAccess: false })).statusCode).toBe(403);
+
+    // The owner is told, and the history shows who did what
+    const [n] = await db.select().from(notifications).where(eq(notifications.type, 'support.open'));
+    expect(n!.title).toContain('Priya Sharma');
+    const history = await db.select().from(auditLogs).where(eq(auditLogs.tenantId, tenantId));
+    expect(history.some((h) => h.action === 'support.open')).toBe(true);
+    expect(history.some((h) => h.action === 'support.change' && (h.meta as { path: string; by: string }).path === '/api/contacts' && (h.meta as { by: string }).by === 'Priya Sharma')).toBe(true);
+
+    // Ending the session closes it for good
+    await s.post('/api/auth/logout');
+    expect((await s.get('/api/auth/me')).statusCode).toBe(401);
+  });
+
+  it('respects an agency that switched support access off', async () => {
+    const owner = await signup(app, { companyName: 'Private Tours' });
+    const a = api(app, owner.cookie);
+    expect((await a.patch('/api/account', { supportAccess: false })).statusCode).toBe(200);
+    const { c } = await careLogin();
+    const res = await c.post(`/api/care/agencies/${owner.json.tenant.id}/open`, { reason: 'Fix their WhatsApp' });
+    expect(res.statusCode).toBe(403);
+    expect((await c.get(`/api/care/agencies/${owner.json.tenant.id}`)).json().agency.supportAccess).toBe(false);
   });
 
   it('keeps the two sides apart', async () => {

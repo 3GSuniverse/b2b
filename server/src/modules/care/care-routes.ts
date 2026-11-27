@@ -4,7 +4,7 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { attachments, careStaff, supportMessages, supportTickets, tenants, users, whatsappSessions } from '../../db/schema.js';
+import { attachments, auditLogs, careStaff, supportMessages, supportTickets, tenants, users, whatsappSessions } from '../../db/schema.js';
 import { db } from '../../lib/db.js';
 import { AppError, parseBody } from '../../lib/http.js';
 import { BILLING_PLANS, isPlanId } from '../billing/plans.js';
@@ -12,6 +12,7 @@ import { notify } from '../notifications/service.js';
 import { agencyProfile, deviceName } from './profile.js';
 import { addMessage, CATEGORIES, lastMessages, messageText, PRIORITIES, STATUSES, thread, ticketOr404 } from './service.js';
 import { requireCare } from './staff.js';
+import { createSupportSession, setSessionCookie } from '../auth/sessions.js';
 
 const VIEWS = ['needs_reply', 'waiting', 'resolved', 'mine', 'unassigned', 'all'] as const;
 const listQuery = z.object({
@@ -28,6 +29,10 @@ const ticketPatch = z.object({
   assigneeId: z.string().max(40).nullable().optional(),
 });
 const agencyQuery = z.object({ q: z.string().trim().max(120).optional() });
+const openBody = z.object({
+  reason: z.string().trim().min(5, 'Say in a few words why you’re opening the account').max(200),
+  minutes: z.number().int().min(15).max(120).default(60),
+});
 
 const PRIORITY_RANK = sql`case ${supportTickets.priority} when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end`;
 
@@ -256,6 +261,34 @@ export async function careRoutes(app: FastifyInstance) {
   });
 
   app.get<{ Params: { id: string } }>('/api/care/agencies/:id', async (req) => agencyProfile(req.params.id));
+
+  /**
+   * "Open account": a short support session inside the agency's own dashboard, acting as the owner,
+   * so care can add or fix customers, employees, trips, WhatsApp… while talking to them. The owner
+   * is told, every change is logged with the care person's name, and payments and the owner's
+   * password stay locked. Only if the agency allows support access (on by default).
+   */
+  app.post<{ Params: { id: string } }>('/api/care/agencies/:id/open', async (req, reply) => {
+    const body = parseBody(openBody, req.body);
+    const t = await db.query.tenants.findFirst({ where: eq(tenants.id, req.params.id) });
+    if (!t) throw new AppError(404, 'agency_not_found', 'Agency not found');
+    if (!t.supportAccess) throw new AppError(403, 'support_access_off', 'This agency has switched off support access. Ask the owner to switch it on in Settings → Company, or to share their screen.');
+    const owner = await db.query.users.findFirst({ where: and(eq(users.tenantId, t.id), eq(users.role, 'OWNER'), isNull(users.disabledAt)) });
+    if (!owner) throw new AppError(409, 'no_owner', 'This agency has no active owner login to open.');
+    const { token, expiresAt } = await createSupportSession({ userId: owner.id, tenantId: t.id, careStaffId: req.care!.staffId, reason: body.reason, minutes: body.minutes });
+    setSessionCookie(reply, token, expiresAt);
+    await db.insert(auditLogs).values({ tenantId: t.id, userId: owner.id, action: 'support.open', meta: { by: req.care!.name, careStaffId: req.care!.staffId, reason: body.reason, until: expiresAt } });
+    const until = expiresAt.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: t.timezone });
+    await notify(t.id, {
+      userId: owner.id,
+      type: 'support.open',
+      level: 'INFO',
+      title: `${req.care!.name} from Dhrona support is in your account`,
+      body: `To help with: ${body.reason}. Their access ends by ${until}, and every change they make is in your history.`,
+      link: '/settings',
+    });
+    return { ok: true, expiresAt };
+  });
 
   // A file an agency attached to a request. Only files that are part of a request can be opened.
   app.get<{ Params: { id: string }; Querystring: { download?: string } }>('/api/care/attachments/:id', async (req, reply) => {

@@ -121,6 +121,8 @@ export const tenants = pgTable('tenants', {
   // The agency ID employees type to sign in (like an AWS account alias); the owner can change it
   loginCode: text().notNull().unique(),
   status: tenantStatus().notNull().default('ACTIVE'),
+  // The owner lets Dhrona customer care open this account to help (every visit is logged and the owner is told)
+  supportAccess: boolean().notNull().default(true),
   timezone: text().notNull().default('Asia/Kolkata'),
   monthlyQuota: integer().notNull().default(1000),
   pausedReason: text(),
@@ -208,6 +210,9 @@ export const sessions = pgTable(
     lastSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     userAgent: text(),
     ip: text(),
+    // Set when Dhrona customer care opened this agency's account to help (a short support session)
+    careStaffId: text().references(() => careStaff.id, { onDelete: 'cascade' }),
+    careReason: text(),
     createdAt: createdAt(),
   },
   (t) => [index().on(t.userId), index().on(t.expiresAt)],

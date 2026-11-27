@@ -32,8 +32,8 @@ export async function findSession(token: string) {
     with: { user: true, tenant: true },
   });
   if (!row) return null;
-  // Sliding expiry: active users stay logged in
-  if (Date.now() - row.lastSeenAt.getTime() > TOUCH_EVERY_MS) {
+  // Sliding expiry: active users stay logged in (a support session keeps its short, fixed end)
+  if (!row.careStaffId && Date.now() - row.lastSeenAt.getTime() > TOUCH_EVERY_MS) {
     await db
       .update(sessions)
       .set({ lastSeenAt: new Date(), expiresAt: new Date(Date.now() + SESSION_DAYS * 86_400_000) })
@@ -48,6 +48,14 @@ export async function deleteSession(token: string) {
 
 export async function deleteExpiredSessions() {
   await db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
+}
+
+/** A short session in an agency's account for a customer care person, acting as the owner. */
+export async function createSupportSession(input: { userId: string; tenantId: string; careStaffId: string; reason: string; minutes: number }) {
+  const token = randomBytes(32).toString('base64url');
+  const expiresAt = new Date(Date.now() + input.minutes * 60_000);
+  await db.insert(sessions).values({ tokenHash: hash(token), userId: input.userId, tenantId: input.tenantId, expiresAt, careStaffId: input.careStaffId, careReason: input.reason, userAgent: 'Dhrona customer care' });
+  return { token, expiresAt };
 }
 
 export function setSessionCookie(reply: FastifyReply, token: string, expiresAt: Date) {

@@ -6,6 +6,8 @@ export interface Me {
     features?: { whatsapp: boolean };
     plan?: { plan: 'TRIAL' | 'PAID'; planId: string | null; paidUntil: string | null; trialEndsAt: string | null; trialEnded: boolean; daysLeft: number | null; entitlements?: Entitlements; whatsapp: { perDay: number; sentToday: number } | null; emailLimit: number | null };
   };
+  /** Dhrona customer care working in this account */
+  support?: { name: string; reason: string | null; endsAt: string } | null;
 }
 
 /** What the agency's plan allows (server: modules/plans/entitlements.ts). */

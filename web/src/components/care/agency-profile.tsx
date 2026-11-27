@@ -24,6 +24,7 @@ import { Link } from 'react-router-dom';
 import { Avatar, Badge, CopyButton, Skeleton } from '@/components/ui/display';
 import { api } from '@/lib/api';
 import { CARE_STATUS, type AgencyProfile, type CareTicket } from '@/lib/care';
+import { OpenAccount } from './open-account';
 import { cn } from '@/lib/cn';
 import { ago, date, dateTime, inr, n, phone } from '@/lib/format';
 import { businessLabel, nb, txFor } from '../../lib/words';
@@ -227,6 +228,10 @@ export function AgencyPanel({ id, ticket, wide }: { id: string; ticket?: CareTic
               <span className="text-[11px] text-white/65">{x.v}</span>
             </span>
           ))}
+        </div>
+        <div className="relative mt-3 flex items-center justify-between gap-2">
+          <span className="text-[12px] text-white/65">Need to change something for them?</span>
+          <OpenAccount agencyId={p.agency.id} agencyName={p.agency.name} allowed={p.agency.supportAccess} ticketNumber={ticket?.ticket.number} />
         </div>
       </div>
 

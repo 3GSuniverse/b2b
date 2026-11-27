@@ -206,6 +206,7 @@ export async function agencyProfile(tenantId: string) {
       pausedReason: t.pausedReason,
       timezone: t.timezone,
       postalAddress: t.postalAddress,
+      supportAccess: t.supportAccess,
       createdAt: t.createdAt,
       owner: owner ? { name: owner.name, email: owner.email, lastLoginAt: owner.lastLoginAt } : null,
     },

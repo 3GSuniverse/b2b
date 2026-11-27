@@ -225,6 +225,13 @@
       "when": 1794470312812,
       "tag": "0031_autopilot_status",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795766152052,
+      "tag": "0032_support_access",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { eq } from 'drizzle-orm';
+import { careStaff } from '../../db/schema.js';
+import { db } from '../../lib/db.js';
 import { AppError } from '../../lib/http.js';
 import { findSession, SESSION_COOKIE } from './sessions.js';
 
@@ -9,7 +12,18 @@ export interface AuthContext {
   tenantId: string;
   role: Role;
   sessionToken: string;
+  /** Dhrona customer care working inside this account (a support session) */
+  support?: { staffId: string; name: string; reason: string | null; endsAt: Date };
 }
+
+/**
+ * What customer care may never do inside an agency's account, even as the owner: pay or change
+ * payments, or change the owner's password. Everything else works, and every change is logged.
+ */
+const SUPPORT_BLOCKED: [string, RegExp][] = [
+  ['POST', /^\/api\/billing\/(orders|verify)/],
+  ['POST', /^\/api\/auth\/password/],
+];
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -25,6 +39,15 @@ export async function requireAuth(req: FastifyRequest, _reply: FastifyReply) {
   if (!s) throw new AppError(401, 'session_expired', 'Your session has ended. Please sign in again');
   if (s.user.disabledAt) throw new AppError(401, 'login_disabled', 'Your login has been switched off. Ask your agency owner.');
   req.auth = { userId: s.userId, tenantId: s.tenantId, role: s.user.role, sessionToken: token };
+  if (s.careStaffId) {
+    const staff = await db.query.careStaff.findFirst({ where: eq(careStaff.id, s.careStaffId), columns: { name: true, disabledAt: true } });
+    if (!staff || staff.disabledAt) throw new AppError(401, 'session_expired', 'This support session has ended.');
+    req.auth.support = { staffId: s.careStaffId, name: staff.name, reason: s.careReason, endsAt: s.expiresAt };
+    const path = req.url.split('?')[0]!;
+    if (SUPPORT_BLOCKED.some(([m, re]) => m === req.method && re.test(path))) {
+      throw new AppError(403, 'support_not_allowed', 'Customer care can’t do this in an agency’s account. Ask the agency owner to do it.');
+    }
+  }
 }
 
 const RANK: Record<Role, number> = { MEMBER: 1, ADMIN: 2, OWNER: 3 };

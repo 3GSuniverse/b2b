@@ -7,6 +7,8 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
 import { env, isProd } from './config/env.js';
+import { auditLogs } from './db/schema.js';
+import { db } from './lib/db.js';
 import { AppError, registerErrorHandler } from './lib/http.js';
 import { accountRoutes } from './modules/account/routes.js';
 import { authRoutes } from './modules/auth/routes.js';
@@ -113,6 +115,16 @@ export async function buildApp(opts: AppOptions = {}) {
     if (hasBody && !type.startsWith('application/json') && !uploadOk) {
       throw new AppError(415, 'json_required', 'Send the request body as JSON');
     }
+  });
+
+  // Every change customer care makes inside an agency's account is written to the agency's history
+  app.addHook('onResponse', async (req, reply) => {
+    const support = req.auth?.support;
+    if (!support || !MUTATING.has(req.method) || reply.statusCode >= 400) return;
+    await db
+      .insert(auditLogs)
+      .values({ tenantId: req.auth!.tenantId, userId: req.auth!.userId, action: 'support.change', meta: { by: support.name, careStaffId: support.staffId, method: req.method, path: req.url.split('?')[0], reason: support.reason } })
+      .catch((err) => req.log.warn(err, 'support audit failed'));
   });
 
   await app.register(healthRoutes);
